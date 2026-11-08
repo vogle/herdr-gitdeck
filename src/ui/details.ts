@@ -1,9 +1,10 @@
 // Below the graph: the selected commit (or the work tree's changes), its files,
 // and one file's diff.
 
-import { div, type Context, type Element } from "gpui-kit";
+import { div, image, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex, v_virtual_list, Scrollbar } from "gpui-base";
 import type { DiffRow } from "../core/git/diff.ts";
+import type { ImagePair } from "../core/imageDiff.ts";
 import type { CommitFile } from "../core/git/show.ts";
 import type { RepoStatus, StatusEntry } from "../core/git/status.ts";
 import { UNCOMMITTED, type HistoryView } from "../core/historyView.ts";
@@ -128,6 +129,22 @@ function diffRow(r: DiffRow, p: Palette): Element {
     .child(div().flex_1().min_w_0().truncate().text_color(color).child(r.text === "" ? " " : r.text));
 }
 
+function side(label: string, path: string | null, p: Palette): Element {
+  return v_flex()
+    .flex_1()
+    .min_w_0()
+    .gap(4)
+    .items_center()
+    .child(div().text_xs().text_color(p.dim).child(label))
+    .child(path === null ? div().text_xs().text_color(p.dim).child("(none)") : image(path).max_w(360).max_h(240));
+}
+
+/** A changed image's before and after, or why they can't be drawn. */
+function imagePair(pair: ImagePair, p: Palette): Element {
+  const box = h_flex().flex_shrink_0().p(8).gap(12).border_b_1().border_color(p.border).bg(p.chrome);
+  return pair.note !== null ? box.child(div().text_xs().text_color(p.dim).child(pair.note)) : box.child(side("Before", pair.old, p)).child(side("After", pair.new, p));
+}
+
 function diffView(view: HistoryView, p: Palette, actions: DetailActions): Element {
   const diff = view.diff;
   const rows = diff ? [...diff.rows, ...(diff.truncated ? [{ kind: "note", old: null, new: null, text: "Diff cut short: too many lines" } as DiffRow] : [])] : [];
@@ -148,6 +165,7 @@ function diffView(view: HistoryView, p: Palette, actions: DetailActions): Elemen
         textButton("diff-close", "×", p, actions.close),
       ),
     )
+    .when(Boolean(diff?.images), (el) => el.child(diff?.images ? imagePair(diff.images, p) : div()))
     .child(
       diff
         ? div()

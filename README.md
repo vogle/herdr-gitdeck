@@ -48,6 +48,11 @@ one you're in, with its branch and where it stands.
   each branch on it: switch to, merge, rebase onto, delete. A stash offers
   apply, pop and drop. A merge, rebase, cherry-pick or revert that stops on
   conflicts shows a banner with Continue, Skip and Abort.
+- **Image diff.** A commit's changed PNG, JPEG, GIF, WebP, BMP or ICO shows
+  its before and after side by side above the diff. Each version is written
+  from git's objects (`git cat-file`, so no filter runs) into
+  `mods/githerd/.cache/images/`, named by its object id, up to 20 MB. Repos on
+  this machine only.
 - **Looking closer.** A committed file's diff has **Blame** (each line's
   commit, author and age) and **History** (the commits that changed it,
   following renames). **Reflog** lists where HEAD has been. A click on any of
@@ -135,5 +140,5 @@ the rules a Herdr mod has to follow.
 | **M1** | Commit graph, commit details and diff, branches/tags/stashes sidebar, search ✅ |
 | **M2** | Staging by file, hunk and line; commit and amend; discard ✅ |
 | **M3** | Checkout, merge, rebase, cherry-pick, revert, reset, stash; fetch/pull/push ✅ |
-| **M4** | Blame, file history, reflog, take ours/theirs, block-by-block conflict resolver, files at a commit, interactive rebase ✅; image diff (Herdr has no image element yet) |
+| **M4** | Blame, file history, reflog, take ours/theirs, block-by-block conflict resolver, files at a commit, interactive rebase, image diff ✅ |
 | **M5** | Repository statistics, git-flow start, GitHub pull requests (read-only), submodules and Git LFS shown read-only ✅. Updating submodules and fetching LFS content are left out: both run programs a repo names |

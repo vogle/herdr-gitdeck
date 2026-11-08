@@ -3,12 +3,16 @@
 
 import { View, div, type AsyncContext, type Context, type Element } from "gpui-kit";
 import { v_flex, InputState, VirtualListScrollHandle } from "gpui-base";
-import { exec, focused, home, nextCommand, panes, shared, spaces } from "herdr";
+import { appHome, exec, focused, home, nextCommand, panes, shared, spaces } from "herdr";
 import { ChangesPanel } from "./changes.ts";
 import { loadBlame, loadFileLog, loadReflog, type InspectView } from "./core/inspect.ts";
 import { loadBlob, loadTree } from "./core/tree.ts";
 import { loadStats } from "./core/stats.ts";
 import { loadPrs } from "./core/github.ts";
+import { loadImagePair } from "./core/imageDiff.ts";
+
+/** Image diffs are written here (hidden, so writing doesn't reload the mod), under the app folder `image()` reads from. */
+const IMAGE_CACHE = "mods/githerd/.cache/images";
 import { NET_ENV } from "./core/ops.ts";
 import { OpsPanel } from "./ops.ts";
 import { contextOf, sameContext } from "./core/context.ts";
@@ -299,7 +303,13 @@ export default class Githerd extends View {
     if (!source || !target) return;
     this.view = openFile(this.view, path);
     cx.spawn(async (cx) => {
-      this.view = withDiff(this.view, path, await loadDiff(this.git, target, source));
+      const [diff, images] = await Promise.all([
+        loadDiff(this.git, target, source),
+        source.kind === "commit"
+          ? loadImagePair(this.git, exec, target, source, { abs: `${appHome()}/${IMAGE_CACHE}`, rel: IMAGE_CACHE })
+          : Promise.resolve(null),
+      ]);
+      this.view = withDiff(this.view, path, { ...diff, images });
       cx.notify();
     });
     cx.notify();

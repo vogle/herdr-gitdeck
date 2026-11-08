@@ -1,5 +1,7 @@
 // A unified diff as rows the diff view can draw, with line numbers.
 
+import type { ImagePair } from "../imageDiff.ts";
+
 export type DiffKind = "hunk" | "ctx" | "add" | "del" | "note";
 
 export interface DiffRow {
@@ -13,6 +15,8 @@ export interface Diff {
   rows: readonly DiffRow[];
   /** More rows than the cap: the rest were dropped. */
   truncated: boolean;
+  /** A changed image's two versions, drawn above the (binary) diff. */
+  images?: ImagePair | null;
 }
 
 const HUNK = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;

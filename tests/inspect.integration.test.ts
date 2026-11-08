@@ -124,3 +124,29 @@ test("an LFS pointer and a submodule at a commit are described, never fetched or
     await rm(t.cwd, { recursive: true, force: true });
   }
 });
+
+test("an image diff writes both versions byte for byte, once each", async () => {
+  const { loadImagePair } = await import("../src/core/imageDiff.ts");
+  const t = { cwd: await realpath(await mkdtemp(join(tmpdir(), "githerd-img-"))), on: null as string | null };
+  const cacheDir = await mkdtemp(join(tmpdir(), "githerd-cache-"));
+  try {
+    for (const a of [["init", "-q", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "Tess"], ["config", "commit.gpgsign", "false"]]) await git(t, a);
+    const v1 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff, 0x00, 0x01]);
+    const v2 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xfe, 0x80, 0x02, 0x03]);
+    await writeFile(join(t.cwd, "pic.png"), v1);
+    await git(t, ["add", "pic.png"]);
+    await git(t, ["commit", "-q", "-m", "one"]);
+    const parent = (await git(t, ["rev-parse", "HEAD"])).trim();
+    await writeFile(join(t.cwd, "pic.png"), v2);
+    await git(t, ["commit", "-q", "-am", "two"]);
+    const hash = (await git(t, ["rev-parse", "HEAD"])).trim();
+    const pair = await loadImagePair(git, exec, t, { hash, parents: [parent], path: "pic.png", oldPath: null }, { abs: cacheDir, rel: "rel" });
+    assert.equal(pair?.note, null);
+    const file = (p: string | null | undefined) => join(cacheDir, (p ?? "").slice("rel/".length));
+    assert.deepEqual(await readFile(file(pair?.old)), v1);
+    assert.deepEqual(await readFile(file(pair?.new)), v2);
+  } finally {
+    await rm(t.cwd, { recursive: true, force: true });
+    await rm(cacheDir, { recursive: true, force: true });
+  }
+});
