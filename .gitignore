@@ -1,0 +1,6 @@
+node_modules/
+dist/
+coverage/
+# Written by the Herdr app for the installed version; `pnpm types` copies them here.
+types/
+.DS_Store
