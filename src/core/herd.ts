@@ -11,6 +11,8 @@ export interface HerdRepo extends Repo {
 export interface StatusResult {
   status: RepoStatus | null;
   error: string | null;
+  /** The repo's own config names these filter programs: status wasn't read, it needs the person's trust. */
+  untrusted?: readonly string[];
 }
 
 export interface HerdState {

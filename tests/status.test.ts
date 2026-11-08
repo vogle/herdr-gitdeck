@@ -8,6 +8,10 @@ test("STATUS_ARGS asks for porcelain v2 with branch, stash and NUL separators", 
   for (const flag of ["--porcelain=v2", "--branch", "--show-stash", "-z"]) assert.ok(STATUS_ARGS.includes(flag), flag);
 });
 
+test("STATUS_ARGS never recurses into submodules (their own config could run programs)", () => {
+  assert.ok(STATUS_ARGS.includes("--ignore-submodules=all"));
+});
+
 test("parses branch headers, upstream and ahead/behind", () => {
   const s = parseStatus(
     z("# branch.oid 1234abcd", "# branch.head main", "# branch.upstream origin/main", "# branch.ab +3 -2", "# stash 4"),

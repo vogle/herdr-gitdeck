@@ -85,12 +85,29 @@ function fileList(s: RepoStatus, p: Palette): Element[] {
   ];
 }
 
+/** The repo's own config could make `git status` run a program: say so instead of reading it. */
+function trustNeeded(path: string, filters: readonly string[], p: Palette): Element {
+  return v_flex()
+    .flex_1()
+    .p(14)
+    .gap(8)
+    .child(div().text_color(p.changed).font_medium().child("Needs your trust before githerd reads it"))
+    .child(
+      div()
+        .text_color(p.muted)
+        .child("This repository's own git config names filter programs, which git status would run. githerd left it unread."),
+    )
+    .children(filters.map((f) => div().text_xs().text_color(p.foreground).child(f)))
+    .child(div().text_xs().text_color(p.dim).child(`Check ${path}/.git/config. If you trust it, run git status there in a terminal.`));
+}
+
 export function summary(state: HerdState, p: Palette, searching: boolean): Element {
   const repo = selectedRepo(state);
   if (!repo && searching) return centered(p, "Looking for repositories…");
   if (!repo) return centered(p, "No git repository here", div().text_xs().child(state.root ?? "Focus a terminal in a repo"));
   const result = state.statuses[repo.path];
   if (!result) return centered(p, "Reading…");
+  if (result.untrusted) return trustNeeded(repo.path, result.untrusted, p);
   if (!result.status) return v_flex().flex_1().p(14).text_color(p.removed).child(result.error ?? "git status failed");
   return v_flex().flex_1().min_h_0().child(facts(repo.path, result.status, p)).children(fileList(result.status, p));
 }

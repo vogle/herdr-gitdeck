@@ -10,6 +10,8 @@ const gitFor = (toplevels: Record<string, string>, status = "# branch.head main\
     return `${top}\n`;
   }
   if (args[0] === "status") return status;
+  // `git config --get-regexp` exits 1 when nothing matches: no filters of the repo's own.
+  if (args[0] === "config") throw new GitError("", args, 1, "");
   throw new Error(`unexpected git ${args.join(" ")}`);
 };
 
@@ -84,4 +86,48 @@ test("loadStatus parses status, or reports the error", async () => {
     throw "weird";
   };
   assert.deepEqual(await loadStatus(throwsPlain, { cwd: "/r", on: null }), { status: null, error: "weird" });
+});
+
+const recording = (config: () => Promise<string>) => {
+  const calls: string[] = [];
+  const git: Git = async (_target, args) => {
+    calls.push(args[0] ?? "");
+    if (args[0] === "config") return config();
+    if (args[0] === "status") return "# branch.head main\0";
+    throw new Error(`unexpected git ${args.join(" ")}`);
+  };
+  return { git, calls };
+};
+
+test("loadStatus checks the repo's own filters before reading its status", async () => {
+  const { git, calls } = recording(async () => {
+    throw new GitError("", [], 1, "");
+  });
+  const r = await loadStatus(git, { cwd: "/r", on: null });
+  assert.deepEqual(calls, ["config", "status"]);
+  assert.equal(r.status?.branch, "main");
+  assert.equal(r.untrusted, undefined);
+});
+
+test("loadStatus never runs status in a repo whose own config names a filter program", async () => {
+  const { git, calls } = recording(async () => "global\tfilter.lfs.clean git-lfs clean -- %f\nlocal\tfilter.evil.clean touch /tmp/x\n");
+  const r = await loadStatus(git, { cwd: "/r", on: null });
+  assert.deepEqual(calls, ["config"]);
+  assert.deepEqual(r, { status: null, error: null, untrusted: ["filter.evil.clean"] });
+});
+
+test("loadStatus reads status when the only filters are the person's own (global)", async () => {
+  const { git, calls } = recording(async () => "global\tfilter.lfs.process git-lfs filter-process\n");
+  const r = await loadStatus(git, { cwd: "/r", on: null });
+  assert.deepEqual(calls, ["config", "status"]);
+  assert.equal(r.untrusted, undefined);
+});
+
+test("loadStatus fails closed when the filter check itself fails", async () => {
+  const { git, calls } = recording(async () => {
+    throw new GitError("fatal: bad config line 3", [], 128, "");
+  });
+  const r = await loadStatus(git, { cwd: "/r", on: null });
+  assert.deepEqual(calls, ["config"]);
+  assert.deepEqual(r, { status: null, error: "fatal: bad config line 3" });
 });

@@ -1,6 +1,15 @@
 // `git status --porcelain=v2`: the branch and every changed path, in one call.
 
-export const STATUS_ARGS: readonly string[] = ["status", "--porcelain=v2", "--branch", "--show-stash", "-z", "--untracked-files=normal"];
+/** Submodules are never entered: each has its own config, which could run programs (see trust.ts). */
+export const STATUS_ARGS: readonly string[] = [
+  "status",
+  "--porcelain=v2",
+  "--branch",
+  "--show-stash",
+  "-z",
+  "--untracked-files=normal",
+  "--ignore-submodules=all",
+];
 
 export type EntryKind = "changed" | "renamed" | "conflict" | "untracked" | "ignored";
 

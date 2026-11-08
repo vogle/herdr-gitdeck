@@ -23,7 +23,9 @@ export function statusBadges(result: StatusResult | undefined, p: Palette): Elem
 function repoRow(repo: HerdRepo, state: HerdState, p: Palette, onPick: (path: string, cx: Context) => void): Element {
   const result = state.statuses[repo.path];
   const here = repo.path === state.selected;
-  const branch = result?.status ? (result.status.branch ?? "detached") : result?.error ? "error" : "…";
+  const untrusted = Boolean(result?.untrusted);
+  const branch = result?.status ? (result.status.branch ?? "detached") : untrusted ? "needs trust" : result?.error ? "error" : "…";
+  const tip = untrusted ? `Not read: this repo's own config names ${result?.untrusted?.join(", ")}` : (result?.error ?? "");
   return h_flex()
     .id(`repo:${repo.path}`)
     .h(30)
@@ -49,10 +51,10 @@ function repoRow(repo: HerdRepo, state: HerdState, p: Palette, onPick: (path: st
         .items_center()
         .min_w_0()
         .flex_1()
-        .text_color(p.dim)
+        .text_color(untrusted ? p.changed : p.dim)
         .child(icon(ICONS.branch, p.dim, 12))
         .child(div().truncate().child(branch))
-        .when(Boolean(result?.error), (el) => el.tooltip(result?.error ?? "")),
+        .when(tip !== "", (el) => el.tooltip(tip)),
     )
     .child(h_flex().gap(8).items_center().flex_shrink_0().text_xs().text_color(p.muted).children(statusBadges(result, p)));
 }

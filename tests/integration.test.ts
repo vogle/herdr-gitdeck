@@ -3,12 +3,13 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, mkdir, writeFile, rm, realpath } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm, realpath, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createGit, type Exec } from "../src/core/git/runner.ts";
 import { parseStatus, summarize, STATUS_ARGS } from "../src/core/git/status.ts";
 import { findArgs, parseFound, findHerdRoot } from "../src/core/repos/discover.ts";
+import { loadStatus } from "../src/core/scan.ts";
 
 // Herdr's exec, played by Node: an argument array, never a shell.
 const exec: Exec = (command, args, options) =>
@@ -94,5 +95,79 @@ test("git outside a repo fails with a GitError, and findHerdRoot treats it as no
     assert.deepEqual(r, { root: outside, focused: null });
   } finally {
     await rm(outside, { recursive: true, force: true });
+  }
+});
+
+// A repo out of a downloaded archive: its own .git/config names a clean filter
+// that leaves a marker file, and .gitattributes routes a tracked, changed file
+// through it. Same size, new content: git must re-read the file, so plain
+// `git status` would run the filter.
+const exists = (path: string) => access(path).then(() => true, () => false);
+
+async function trap(path: string, marker: string, how: "direct" | "include"): Promise<void> {
+  await mkdir(path, { recursive: true });
+  const at = { cwd: path, on: null };
+  await git(at, ["init", "-q", "-b", "main"]);
+  await writeFile(join(path, ".gitattributes"), "bait.txt filter=evil\n");
+  await writeFile(join(path, "bait.txt"), "hi\n");
+  await git(at, ["add", "."]);
+  await git(at, ["-c", "user.email=t@example.com", "-c", "user.name=t", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "init"]);
+  if (how === "direct") await git(at, ["config", "filter.evil.clean", `touch ${marker}`]);
+  else {
+    // Hidden one step away: `git config --local` alone doesn't follow includes.
+    await writeFile(join(path, ".git", "extra.cfg"), `[filter "evil"]\n\tclean = touch ${marker}\n`);
+    await git(at, ["config", "include.path", "extra.cfg"]);
+  }
+  await writeFile(join(path, "bait.txt"), "ho\n");
+}
+
+for (const how of ["direct", "include"] as const) {
+  test(`a repo whose own config names a filter (${how}) is never given to git status`, async () => {
+    const path = join(herd, `trap-${how}`);
+    const marker = join(herd, `pwned-${how}`);
+    await trap(path, marker, how);
+    try {
+      const r = await loadStatus(git, { cwd: path, on: null });
+      assert.deepEqual(r, { status: null, error: null, untrusted: ["filter.evil.clean"] });
+      assert.equal(await exists(marker), false, "the filter ran");
+      // The trap is real: plain status does run it.
+      await git({ cwd: path, on: null }, ["status", "--porcelain=v2"]);
+      assert.equal(await exists(marker), true, "the trap didn't fire; the test proves nothing");
+    } finally {
+      await rm(path, { recursive: true, force: true });
+      await rm(marker, { force: true });
+    }
+  });
+}
+
+test("status never enters a submodule, so a trap inside one stays shut", async () => {
+  const outer = join(herd, "with-sub");
+  const inner = join(herd, "sub-src");
+  const marker = join(herd, "pwned-sub");
+  // The submodule's source routes bait.txt through "evil"; only the checked-out copy defines it.
+  await repo(inner);
+  await writeFile(join(inner, ".gitattributes"), "bait.txt filter=evil\n");
+  await writeFile(join(inner, "bait.txt"), "hi\n");
+  await git({ cwd: inner, on: null }, ["add", "."]);
+  await git({ cwd: inner, on: null }, ["commit", "-q", "-m", "bait"]);
+  await repo(outer);
+  const at = { cwd: outer, on: null };
+  try {
+    await git(at, ["-c", "protocol.file.allow=always", "submodule", "add", "-q", inner, "sub"]);
+    await git(at, ["-c", "user.email=t@example.com", "-c", "user.name=t", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "sub"]);
+    const sub = join(outer, "sub");
+    await git({ cwd: sub, on: null }, ["config", "filter.evil.clean", `touch ${marker}`]);
+    await writeFile(join(sub, "bait.txt"), "ho\n");
+    const r = await loadStatus(git, at);
+    assert.ok(r.status, r.error ?? "no status");
+    assert.equal(r.untrusted, undefined);
+    assert.equal(await exists(marker), false, "the submodule's filter ran");
+    // The trap is real: status that recurses into the submodule runs it.
+    await git(at, ["status", "--porcelain=v2"]);
+    assert.equal(await exists(marker), true, "the trap didn't fire; the test proves nothing");
+  } finally {
+    await rm(outer, { recursive: true, force: true });
+    await rm(inner, { recursive: true, force: true });
+    await rm(marker, { force: true });
   }
 });
