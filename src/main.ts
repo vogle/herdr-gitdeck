@@ -2,16 +2,22 @@
 // (src/core, tested without Herdr) and the views (src/ui).
 
 import { View, div, type AsyncContext, type Context, type Element } from "gpui-kit";
-import { v_flex } from "gpui-base";
+import { v_flex, InputState, VirtualListScrollHandle } from "gpui-base";
 import { exec, focused, home, nextCommand, panes, shared, spaces } from "herdr";
 import { contextOf, sameContext } from "./core/context.ts";
 import { createGit, type Target } from "./core/git/runner.ts";
-import { closePicker, emptyHerd, select, togglePicker, withRepos, withStatus, type HerdState } from "./core/herd.ts";
+import { closePicker, emptyHerd, select, selectedRepo, togglePicker, withRepos, withStatus, type HerdState } from "./core/herd.ts";
+import { loadCommit, loadDiff, loadHistory, type DiffSource } from "./core/history.ts";
+import {
+  closeFile, emptyView, forRepo, jumpTo, openFile, rebuild, scrolled, selectCommit, setQuery, showMore,
+  toggleSidebar, withCommit, withDiff, withHistory, UNCOMMITTED, type HistoryView,
+} from "./core/historyView.ts";
 import { mapLimit } from "./core/pool.ts";
 import { loadStatus, scanHerd } from "./core/scan.ts";
 import { Signal } from "./core/signal.ts";
 import { MAX_REPOS } from "./core/repos/discover.ts";
 import { header } from "./ui/header.ts";
+import { historyPane, type HistoryActions } from "./ui/historyPane.ts";
 import { repoList } from "./ui/repoList.ts";
 import { palette } from "./ui/style.ts";
 import { summary } from "./ui/summary.ts";
@@ -49,8 +55,25 @@ export default class Githerd extends View {
   /** Remote machines' home folders, by machine. */
   readonly homes = new Map<string, string>();
   readonly git = createGit(exec);
+  view: HistoryView = emptyView();
+  /** Wakes the task that reads the shown repo's history. */
+  readonly historyWake = new Signal();
+  search!: InputState;
+  scroll!: VirtualListScrollHandle;
 
   override init(_props: unknown, cx: AsyncContext): void {
+    this.search = InputState.new({ placeholder: "Search subject, author, branch, hash" });
+    this.search.on("change", (_e, cx) => {
+      this.view = setQuery(this.view, this.search.value());
+      cx.notify();
+    });
+    this.scroll = VirtualListScrollHandle.new();
+    cx.spawn(async (cx) => {
+      for (;;) {
+        await this.historyWake.wait();
+        await this.readHistory(cx);
+      }
+    });
     // The only task that runs git. render() and the timers just wake it.
     cx.spawn(async (cx) => {
       for (;;) {
@@ -64,6 +87,7 @@ export default class Githerd extends View {
         const command = await nextCommand();
         if (command === "picker") this.togglePicker(cx);
         else if (command === "refresh") this.refresh(cx);
+        else if (command === "search") this.search.focus();
       }
     });
     cx.timer.every(CONTEXT_EVERY_MS, () => this.notice());
@@ -136,6 +160,8 @@ export default class Githerd extends View {
       const result = await loadStatus(this.git, { cwd: path, on: target.on });
       if (stale()) return;
       this.herd = withStatus(this.herd, path, result);
+      // The shown repo's status is fresh: read its history again too.
+      if (path === first) this.historyWake.fire();
       done += 1;
       if (path === first || done % NOTIFY_EVERY === 0) cx.notify();
     });
@@ -143,7 +169,115 @@ export default class Githerd extends View {
 
   pick(path: string, cx: Context): void {
     this.herd = select(this.herd, path);
+    this.historyWake.fire();
     cx.notify();
+  }
+
+  /** Where the shown repo's git runs. */
+  repoTarget(): Target | null {
+    const repo = this.herd.selected;
+    return repo ? { cwd: repo, on: this.shown?.on ?? null } : null;
+  }
+
+  /** The uncommitted row follows the shown repo's status (never for a repo awaiting trust). */
+  syncRows(): void {
+    const result = this.herd.selected ? this.herd.statuses[this.herd.selected] : undefined;
+    const status = result?.untrusted ? null : (result?.status ?? null);
+    const changes = status ? status.entries.filter((e) => e.kind !== "ignored").length : 0;
+    this.view = rebuild(this.view, status?.oid ?? null, changes);
+  }
+
+  async readHistory(cx: AsyncContext): Promise<void> {
+    this.view = forRepo(this.view, this.herd.selected);
+    const target = this.repoTarget();
+    this.syncRows();
+    cx.notify();
+    if (!target) return;
+    const history = await loadHistory(this.git, target, this.view.limit);
+    this.view = withHistory(this.view, target.cwd, history);
+    this.syncRows();
+    cx.notify();
+  }
+
+  pickCommit(hash: string, cx: Context): void {
+    this.view = selectCommit(this.view, hash);
+    this.readCommit(cx);
+    cx.notify();
+  }
+
+  readCommit(cx: Context): void {
+    const hash = this.view.selected;
+    const target = this.repoTarget();
+    const commit = this.view.rows.find((r) => r.hash === hash) ?? this.view.history?.commits.find((r) => r.hash === hash);
+    if (!hash || hash === UNCOMMITTED || !target || !commit) return;
+    cx.spawn(async (cx) => {
+      this.view = withCommit(this.view, hash, await loadCommit(this.git, target, hash, commit.parents));
+      cx.notify();
+    });
+  }
+
+  diffSource(path: string): DiffSource | null {
+    const hash = this.view.selected;
+    if (hash === UNCOMMITTED) {
+      const result = this.herd.selected ? this.herd.statuses[this.herd.selected] : undefined;
+      // A work-tree diff runs the repo's clean filters: never without its trust.
+      if (!result?.status || result.untrusted) return null;
+      const entry = result.status.entries.find((e) => e.path === path);
+      if (!entry) return null;
+      return entry.kind === "untracked" ? { kind: "untracked", path } : { kind: "worktree", path, hasHead: result.status.oid !== null };
+    }
+    const commit = this.view.rows.find((r) => r.hash === hash) ?? this.view.history?.commits.find((r) => r.hash === hash);
+    const file = this.view.commit?.files.find((f) => f.path === path);
+    if (!hash || !commit || !file) return null;
+    return { kind: "commit", hash, parents: commit.parents, path, oldPath: file.oldPath };
+  }
+
+  openFile(path: string, cx: Context): void {
+    const source = this.diffSource(path);
+    const target = this.repoTarget();
+    if (!source || !target) return;
+    this.view = openFile(this.view, path);
+    cx.spawn(async (cx) => {
+      this.view = withDiff(this.view, path, await loadDiff(this.git, target, source));
+      cx.notify();
+    });
+    cx.notify();
+  }
+
+  jump(hash: string, cx: Context): void {
+    this.view = jumpTo(this.view, hash);
+    if (this.search.value() !== "") this.search.set_value("");
+    if (this.view.scrollTo !== null) {
+      this.scroll.scroll_to_item(this.view.scrollTo, "center");
+      this.view = scrolled(this.view);
+    }
+    this.readCommit(cx);
+    cx.notify();
+  }
+
+  historyActions(): HistoryActions {
+    return {
+      pick: (hash, cx) => this.pickCommit(hash, cx),
+      more: (cx) => {
+        this.view = showMore(this.view);
+        this.historyWake.fire();
+        cx.notify();
+      },
+      openFile: (path, cx) => this.openFile(path, cx),
+      closeFile: (cx) => {
+        this.view = closeFile(this.view);
+        cx.notify();
+      },
+      close: (cx) => {
+        if (this.view.selected) this.view = selectCommit(this.view, this.view.selected);
+        cx.notify();
+      },
+      toggleSidebar: (cx) => {
+        this.view = toggleSidebar(this.view);
+        cx.notify();
+      },
+      jump: (hash, cx) => this.jump(hash, cx),
+    };
   }
 
   togglePicker(cx: Context): void {
@@ -161,9 +295,17 @@ export default class Githerd extends View {
   override render(_cx: Context): Element {
     this.notice();
     const p = palette();
+    const repo = selectedRepo(this.herd);
+    const result = repo ? this.herd.statuses[repo.path] : undefined;
     const body = this.herd.picking
       ? repoList(this.herd, p, (path, cx) => this.pick(path, cx))
-      : summary(this.herd, p, this.busy && this.herd.root === null);
+      : repo && this.view.repo === repo.path
+        ? historyPane(
+            { view: this.view, status: result?.status ?? null, untrusted: result?.untrusted ?? null, search: this.search, scroll: this.scroll },
+            p,
+            this.historyActions(),
+          )
+        : summary(this.herd, p, this.busy && this.herd.root === null);
     return v_flex()
       .id("githerd")
       .size_full()

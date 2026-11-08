@@ -41,13 +41,16 @@ export class GitError extends Error {
   /** The exit code, or -1 when git couldn't start (not installed, folder gone, machine unreachable). */
   readonly code: number;
   readonly stderr: string;
+  /** What git printed anyway: `diff --no-index` exits 1 with the diff on stdout. */
+  readonly stdout: string;
 
-  constructor(message: string, args: readonly string[], code: number, stderr: string) {
+  constructor(message: string, args: readonly string[], code: number, stderr: string, stdout = "") {
     super(message);
     this.name = "GitError";
     this.args = args;
     this.code = code;
     this.stderr = stderr;
+    this.stdout = stdout;
   }
 }
 
@@ -62,7 +65,7 @@ export function createGit(exec: Exec): Git {
     }
     if (result.code !== 0) {
       const first = result.stderr.split("\n").find((line) => line.trim() !== "");
-      throw new GitError(first?.trim() ?? `git ${args.join(" ")} exited ${result.code}`, args, result.code, result.stderr);
+      throw new GitError(first?.trim() ?? `git ${args.join(" ")} exited ${result.code}`, args, result.code, result.stderr, result.stdout);
     }
     return result.stdout;
   };

@@ -1,5 +1,5 @@
 // The shown repo: where it stands against its upstream, and its changed files.
-// M1 puts the commit graph here; for now this is the working tree at a glance.
+// Shown before a repo's history is ready, or when there is no repo.
 
 import { div, type Element } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";

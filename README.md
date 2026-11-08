@@ -8,8 +8,9 @@ githerd follows the terminal you're focused on. It climbs to the outermost
 repository around that folder, lists every repository below it, and shows the
 one you're in, with its branch and where it stands.
 
-> Status: **M0**. Repo discovery, the repo picker and per-repo status. The
-> commit graph, staging and branch work come next (see [Roadmap](#roadmap)).
+> Status: **M1**. Repo discovery, the repo picker, and a read-only history:
+> commit graph, commit details and diffs, refs sidebar and search. Staging
+> and branch work come next (see [Roadmap](#roadmap)).
 
 ## What it does now
 
@@ -25,10 +26,21 @@ one you're in, with its branch and where it stands.
   untracked, `↑` to push, `↓` to pull. ⟳ scans again.
 - **Picker.** Every repo grouped by folder, the root first, each with its
   branch and counts. Click one to show it.
-- **Summary.** The shown repo's folder, HEAD, upstream and changed files.
+- **History.** The shown repo's commit graph over every branch, remote branch
+  and tag (500 commits, then "Show older commits"), with uncommitted changes
+  as a dashed row on top. Click a commit for its message and changed files,
+  a file for its diff. **Refs** opens a sidebar of branches (with ↑↓ against
+  their upstream), remote branches, tags and stashes; a click jumps to the
+  commit. The search box filters by subject, author, branch, tag or hash.
 
-It only reads: `git status`, `git rev-parse` and `find`. Nothing is written to
-your repositories, and nothing goes over the network.
+It only reads: `git status`, `git log`, `git show -s`, `git diff-tree`,
+`git diff`, `git for-each-ref`, `git stash list`, `git rev-parse` and `find`.
+Nothing is written to your repositories, and nothing goes over the network.
+
+A repository's own `.git/config` can name programs for git to run. githerd
+never lets it: no fsmonitor, no signature checks (`gpg.program`), no external
+diff or textconv, no submodules, and a repo whose config names filter programs
+gets no status or work-tree diff until you've looked at it yourself.
 
 ## Commands
 
@@ -38,6 +50,7 @@ Bind them in `keys.json` or run them with `herdr-app do`:
 |---|---|
 | `githerd.picker` | open or close the repo picker |
 | `githerd.refresh` | scan the herd again |
+| `githerd.search` | put the keyboard in the history search box |
 
 ## Install (development)
 
@@ -61,7 +74,7 @@ the rules a Herdr mod has to follow.
 | | |
 |---|---|
 | **M0** | Foundation: TS build, tests, install, git layer, herd discovery, picker ✅ |
-| **M1** | Commit graph, commit details and diff, branches/tags/stashes sidebar, search |
+| **M1** | Commit graph, commit details and diff, branches/tags/stashes sidebar, search ✅ |
 | **M2** | Staging by file, hunk and line; commit and amend; discard; recent messages |
 | **M3** | Checkout, merge, rebase, cherry-pick, revert, reset, stash; fetch/pull/push |
 | **M4** | Interactive rebase, conflict resolver, blame, file history, tree at a commit, reflog, image diff |
