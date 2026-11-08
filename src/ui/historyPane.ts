@@ -19,6 +19,7 @@ export interface HistoryActions extends GraphActions, DetailActions {
   jump: (hash: string, cx: Context) => void;
   reflog: (cx: Context) => void;
   stats: (cx: Context) => void;
+  prs: (cx: Context) => void;
   closeInspect: (cx: Context) => void;
   treeFile: (index: number | null, cx: Context) => void;
 }
@@ -52,6 +53,7 @@ function toolbar(parts: HistoryParts, p: Palette, actions: HistoryActions): Elem
     .child(textButton("toggle-sidebar", "Refs", p, actions.toggleSidebar, view.sidebar))
     .child(textButton("open-reflog", "Reflog", p, actions.reflog, parts.inspect?.kind === "reflog"))
     .child(textButton("open-stats", "Stats", p, actions.stats, parts.inspect?.kind === "stats"))
+    .child(textButton("open-prs", "PRs", p, actions.prs, parts.inspect?.kind === "prs"))
     .child(
       div()
         .flex_1()

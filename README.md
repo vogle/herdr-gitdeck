@@ -8,10 +8,11 @@ githerd follows the terminal you're focused on. It climbs to the outermost
 repository around that folder, lists every repository below it, and shows the
 one you're in, with its branch and where it stands.
 
-> Status: **M5 (part)**. Repo discovery, the repo picker, the history (commit graph,
+> Status: **M5**. Repo discovery, the repo picker, the history (commit graph,
 > commit details and diffs, refs sidebar, search), staging and committing, and
 > branch work and sync, blame, file history, the reflog, the files at a commit
-> interactive rebase, statistics and git-flow branches (see [Roadmap](#roadmap)).
+> interactive rebase, statistics, git-flow branches and GitHub pull requests
+> (see [Roadmap](#roadmap)).
 
 ## What it does now
 
@@ -66,6 +67,11 @@ one you're in, with its branch and where it stands.
   **+ release** start `feature/<name>` or `release/<name>` from `develop`; with
   `main` or `master`, **+ hotfix** starts `hotfix/<name>` from it. No git-flow
   tool is needed; finishing one is an ordinary merge.
+- **GitHub.** **PRs** in the toolbar lists the repo's pull requests (open,
+  merged and closed, the latest 100) through the `gh` CLI, read-only. A click
+  jumps to the PR's head commit. githerd reads `owner/repo` from `origin` and
+  runs `gh --repo owner/repo` outside the repo, so gh never reads the work
+  tree; sign in once with `gh auth login`.
 
 Reading uses `git status`, `git log`, `git show -s`, `git diff-tree`,
 `git diff`, `git for-each-ref`, `git stash list`, `git rev-parse`, `git blame`
@@ -82,7 +88,7 @@ commands never ask for a password (`GIT_TERMINAL_PROMPT=0`): use an SSH key or
 a credential helper. Nothing is ever force-pushed. Paths are
 always literal (`--literal-pathspecs`): a file named `:(glob)*` is just that
 file. The patch file gets a fresh name each time and is deleted after use.
-Only Fetch, Pull and Push go over the network.
+Only Fetch, Pull, Push and the PRs list go over the network.
 
 Partial staging (hunks and lines) works for repos on this machine only: a
 remote machine's repo can still stage whole files and commit.
@@ -128,4 +134,4 @@ the rules a Herdr mod has to follow.
 | **M2** | Staging by file, hunk and line; commit and amend; discard ✅ |
 | **M3** | Checkout, merge, rebase, cherry-pick, revert, reset, stash; fetch/pull/push ✅ |
 | **M4** | Blame, file history, reflog, take ours/theirs, block-by-block conflict resolver, files at a commit, interactive rebase ✅; image diff (Herdr has no image element yet) |
-| **M5** | Repository statistics, git-flow start ✅; submodules and LFS (left out: they run programs a repo names), GitHub integration |
+| **M5** | Repository statistics, git-flow start, GitHub pull requests (read-only) ✅; submodules and LFS left out: they run programs a repo names |

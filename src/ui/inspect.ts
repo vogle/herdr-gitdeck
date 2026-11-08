@@ -60,6 +60,20 @@ function rowsOf(v: InspectView, p: Palette, now: number): Row[] {
     }));
   }
   if (v.kind === "stats") return statsRows(v.data, p, now);
+  if (v.kind === "prs") {
+    const color = (s: string) => (s === "OPEN" ? p.added : s === "MERGED" ? p.info : p.dim);
+    return (v.data?.items ?? []).map((pr) => ({
+      hash: pr.head,
+      cells: [
+        dim(`#${pr.number}`, 50),
+        div().w(60).flex_shrink_0().text_color(color(pr.state)).child(pr.draft ? "DRAFT" : pr.state),
+        div().flex_1().min_w_0().truncate().child(pr.title),
+        dim(pr.branch, 140),
+        dim(pr.author, 90),
+        dim(ago(now, pr.updated), 60),
+      ],
+    }));
+  }
   return (v.data?.items ?? []).map((e) => ({
     hash: e.hash,
     cells: [dim(e.name, 80), dim(e.hash.slice(0, 7), 60), div().flex_1().min_w_0().truncate().child(e.action), dim(ago(now, e.time), 60)],
@@ -95,6 +109,7 @@ function title(v: InspectView): string {
   if (v.kind === "blame") return `Blame: ${v.path} at ${v.rev.slice(0, 10)}`;
   if (v.kind === "file-log") return `History: ${v.path}`;
   if (v.kind === "stats") return "Repository statistics";
+  if (v.kind === "prs") return `Pull requests${v.data?.repo ? ` of ${v.data.repo}` : ""} (via gh, read-only): a click jumps to the head commit`;
   if (v.kind === "tree") return v.file ? `${v.file.path} at ${v.rev.slice(0, 10)}` : `Files at ${v.rev.slice(0, 10)} (${v.data?.items.length ?? 0})`;
   return "Reflog: where HEAD has been";
 }
@@ -107,7 +122,9 @@ export function inspectPane(v: InspectView, p: Palette, a: InspectActions): Elem
       ? div().p(12).text_color(p.dim).child("Reading…")
       : error !== null
         ? div().p(12).text_color(p.removed).child(error)
-        : div()
+        : rows.length === 0
+          ? div().p(12).text_color(p.dim).child("Nothing to show")
+          : div()
             .relative()
             .flex_1()
             .min_h_0()

@@ -5,6 +5,7 @@ import { logArgs, parseLog, type Commit } from "./git/log.ts";
 import type { Git, Target } from "./git/runner.ts";
 import type { BlobView, TreeFile } from "./tree.ts";
 import type { Stats } from "./stats.ts";
+import type { PrList } from "./github.ts";
 
 /** A commit's version of the file: the work-tree one would run clean filters. */
 export const blameArgs = (rev: string, path: string): string[] =>
@@ -114,4 +115,5 @@ export type InspectView =
   | { kind: "file-log"; path: string; rev: string; data: Loaded<Commit> | null }
   | { kind: "reflog"; data: Loaded<ReflogEntry> | null }
   | { kind: "stats"; data: Stats | null }
+  | { kind: "prs"; data: PrList | null }
   | { kind: "tree"; rev: string; data: Loaded<TreeFile> | null; file: TreeFile | null; blob: BlobView | null };
