@@ -51,7 +51,9 @@ one you're in, with its branch and where it stands.
   commit, author and age) and **History** (the commits that changed it,
   following renames). **Reflog** lists where HEAD has been. A click on any of
   their rows jumps to that commit. A conflicted file can **Take ours** or
-  **Take theirs** whole. **Files at commit** lists every file as it was at the
+  **Take theirs** whole, or **Resolve…** it block by block: each conflict
+  shows both sides and keeps Ours, Theirs or Both, then Save writes the file
+  (only if it hasn't changed since) and stages it. **Files at commit** lists every file as it was at the
   selected commit; click one to read it (raw, from git's objects).
 - **Editing history.** "Edit commits after this" opens the commits between
   the selected one and HEAD, oldest first. Click a step to cycle pick →
@@ -119,5 +121,5 @@ the rules a Herdr mod has to follow.
 | **M1** | Commit graph, commit details and diff, branches/tags/stashes sidebar, search ✅ |
 | **M2** | Staging by file, hunk and line; commit and amend; discard ✅ |
 | **M3** | Checkout, merge, rebase, cherry-pick, revert, reset, stash; fetch/pull/push ✅ |
-| **M4** | Blame, file history, reflog, take ours/theirs, files at a commit, interactive rebase ✅; line-level conflict resolver, image diff |
+| **M4** | Blame, file history, reflog, take ours/theirs, block-by-block conflict resolver, files at a commit, interactive rebase ✅; image diff (Herdr has no image element yet) |
 | **M5** | Submodules, git-flow, LFS, GitHub integration, repository statistics |

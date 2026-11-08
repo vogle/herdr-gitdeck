@@ -5,7 +5,7 @@ import type { AsyncContext, Context } from "gpui-kit";
 import { TextareaState } from "gpui-base";
 import { exec, readTextFile, writeTextFile } from "herdr";
 import {
-  askConfirm, closeSide, emptyChanges, forRepoChanges, hunkPick, openSide, picks, setAmend, setBusy, togglePick,
+  askConfirm, chooseBlock, closeSide, startResolving, emptyChanges, forRepoChanges, hunkPick, openSide, picks, setAmend, setBusy, togglePick,
   withResult, withStageDiff, type ChangesView,
 } from "./core/changesView.ts";
 import type { Git, Target } from "./core/git/runner.ts";
@@ -16,6 +16,7 @@ import {
   applyPicks, commitChanges, takeSide, discardFiles, loadStageDiff, readLastMessage, splitChanges, stageFiles, unstageFiles,
   type ChangeFile, type Changes, type Files,
 } from "./core/staging.ts";
+import { allChosen, parseConflicts, resolveFile } from "./core/conflict.ts";
 import type { ChangesActions, ChangesParts } from "./ui/changes.ts";
 
 export const files: Files = {
@@ -118,6 +119,30 @@ export class ChangesPanel {
           return;
         }
         this.act(cx, (git, target) => discardFiles(git, target, [file]));
+      },
+      resolve: (file, cx) => {
+        const target = this.host.target();
+        if (!target) return;
+        cx.spawn(async (cx) => {
+          const text = await readTextFile(`${target.cwd}/${file.path}`);
+          this.view = text === null ? withResult(this.view, `Can't read ${file.path}`) : startResolving(this.view, { path: file.path, original: text, segments: parseConflicts(text) });
+          cx.notify();
+        });
+      },
+      chooseBlock: (i, choice, cx) => {
+        this.view = chooseBlock(this.view, i, choice);
+        cx.notify();
+      },
+      closeResolve: (cx) => {
+        this.view = startResolving(this.view, null);
+        cx.notify();
+      },
+      saveResolved: (cx) => {
+        const r = this.view.resolving;
+        if (!r || !allChosen(r.segments)) return;
+        this.act(cx, (git, target) => resolveFile(git, files, target, r.path, r.original, r.segments), () => {
+          this.view = startResolving(this.view, null);
+        });
       },
       takeSide: (file, side, cx) => this.act(cx, (git, target) => takeSide(git, target, [file.path], side)),
       diffClick: (row, cx) => {

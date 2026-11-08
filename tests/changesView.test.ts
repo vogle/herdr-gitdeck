@@ -68,3 +68,14 @@ test("another repo starts over; the same repo keeps its state", () => {
   assert.equal(forRepoChanges(v, "/s").amend, false);
   assert.equal(forRepoChanges(v, "/s").repo, "/s");
 });
+
+test("resolving a conflict: open, choose a block, close", async () => {
+  const { startResolving, chooseBlock } = await import("../src/core/changesView.ts");
+  const { parseConflicts } = await import("../src/core/conflict.ts");
+  const text = "<<<<<<< a\nx\n=======\ny\n>>>>>>> b";
+  const v = startResolving(emptyChanges("/r"), { path: "f", original: text, segments: parseConflicts(text) });
+  const chosen = chooseBlock(v, 0, "theirs");
+  assert.equal(chosen.resolving?.segments[0]?.kind === "conflict" && chosen.resolving.segments[0].choice, "theirs");
+  assert.equal(chooseBlock(emptyChanges("/r"), 0, "ours").resolving, null);
+  assert.equal(startResolving(chosen, null).resolving, null);
+});

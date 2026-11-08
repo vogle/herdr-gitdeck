@@ -4,6 +4,7 @@
 import type { Pick } from "./stage.ts";
 import { lineRef } from "./stage.ts";
 import type { StageDiff } from "./staging.ts";
+import { choose, type Choice, type Segment } from "./conflict.ts";
 
 export interface OpenSide {
   path: string;
@@ -23,12 +24,21 @@ export interface ChangesView {
   amend: boolean;
   busy: boolean;
   error: string | null;
+  /** A conflicted file being resolved block by block. */
+  resolving: Resolving | null;
+}
+
+export interface Resolving {
+  path: string;
+  /** The file as read: the write is refused if it changed since. */
+  original: string;
+  segments: readonly Segment[];
 }
 
 const NONE: ReadonlySet<number> = new Set();
 
 export const emptyChanges = (repo: string | null): ChangesView => ({
-  repo, open: null, diff: null, picked: NONE, confirm: null, amend: false, busy: false, error: null,
+  repo, open: null, diff: null, picked: NONE, confirm: null, amend: false, busy: false, error: null, resolving: null,
 });
 
 export const forRepoChanges = (v: ChangesView, repo: string | null): ChangesView => (v.repo === repo ? v : emptyChanges(repo));
@@ -77,3 +87,9 @@ export const setBusy = (v: ChangesView, busy: boolean): ChangesView => ({ ...v, 
 /** An action finished: its error (or none), and the picks it used are spent. */
 export const withResult = (v: ChangesView, error: string | null): ChangesView =>
   ({ ...v, busy: false, error, confirm: null, picked: NONE });
+
+export const startResolving = (v: ChangesView, r: Resolving | null): ChangesView => ({ ...v, resolving: r, open: null, diff: null, picked: NONE });
+
+export function chooseBlock(v: ChangesView, index: number, choice: Choice): ChangesView {
+  return v.resolving ? { ...v, resolving: { ...v.resolving, segments: choose(v.resolving.segments, index, choice) } } : v;
+}

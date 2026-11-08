@@ -75,3 +75,19 @@ test("the tree at a commit lists its files and reads one as stored", async () =>
   assert.ok(file);
   assert.deepEqual(await loadBlob(git, at, rev, file), { lines: ["main"], note: null });
 });
+
+test("a conflict resolved block by block is written and staged", async () => {
+  const { parseConflicts, choose, resolveFile } = await import("../src/core/conflict.ts");
+  const files = {
+    read: (p: string) => readFile(p, "utf8"),
+    write: async (p: string, text: string) => writeFile(p, text),
+    remove: async () => null,
+  };
+  await assert.rejects(git(at, ["merge", "--no-edit", "side"]));
+  const original = await readFile(join(at.cwd, "b.txt"), "utf8");
+  const segs = choose(parseConflicts(original), 0, "both");
+  assert.equal(await resolveFile(git, files, at, "b.txt", original, segs), null);
+  assert.equal(await readFile(join(at.cwd, "b.txt"), "utf8"), "main\nside\n");
+  assert.equal((await git(at, ["diff", "--name-only", "--diff-filter=U"])).trim(), "", "no file left unmerged");
+  await git(at, ["merge", "--abort"]);
+});

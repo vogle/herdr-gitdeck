@@ -3,7 +3,8 @@
 
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex, v_virtual_list, Scrollbar, Textarea, type TextareaState } from "gpui-base";
-import type { ChangesView } from "../core/changesView.ts";
+import type { ChangesView, Resolving } from "../core/changesView.ts";
+import { allChosen, type Choice } from "../core/conflict.ts";
 import type { DiffRow } from "../core/git/diff.ts";
 import type { ChangeFile, Changes } from "../core/staging.ts";
 import { monoFont, textButton, type Palette } from "./style.ts";
@@ -20,6 +21,11 @@ export interface ChangesActions {
   discard: (file: ChangeFile, cx: Context) => void;
   /** A conflicted file: keep one side whole, and stage it. */
   takeSide: (file: ChangeFile, side: "ours" | "theirs", cx: Context) => void;
+  /** Resolve a conflicted file block by block. */
+  resolve: (file: ChangeFile, cx: Context) => void;
+  chooseBlock: (index: number, choice: Choice, cx: Context) => void;
+  saveResolved: (cx: Context) => void;
+  closeResolve: (cx: Context) => void;
   /** A diff row was clicked: a hunk header stages the hunk, a line toggles its pick. */
   diffClick: (row: number, cx: Context) => void;
   applyPicked: (cx: Context) => void;
@@ -85,6 +91,7 @@ function fileLists(parts: ChangesParts, p: Palette, a: ChangesActions): Element[
     ]);
   });
   const conflicts = changes.conflicts.map((f, i) => fileRow(`cf:${i}`, f, p, (cx) => a.open(f, false, cx), [
+    ...(parts.local ? [textButton(`cr:${i}`, "Resolve…", p, (cx) => a.resolve(f, cx))] : []),
     textButton(`co:${i}`, "Take ours", p, (cx) => a.takeSide(f, "ours", cx)),
     textButton(`ct:${i}`, "Take theirs", p, (cx) => a.takeSide(f, "theirs", cx)),
     textButton(`cs:${i}`, "Mark resolved", p, (cx) => a.stage([f.path], cx)),
@@ -179,6 +186,58 @@ function diffPane(parts: ChangesParts, p: Palette, a: ChangesActions): Element {
     );
 }
 
+function side(label: string, lines: readonly string[], color: Palette["added"], p: Palette): Element {
+  return v_flex()
+    .flex_1()
+    .min_w_0()
+    .child(div().text_color(p.dim).child(label))
+    .children(lines.slice(0, 40).map((l) => div().truncate().text_color(color).child(l === "" ? " " : l)))
+    .when(lines.length > 40, (el) => el.child(div().text_color(p.dim).child(`… ${lines.length - 40} more lines`)));
+}
+
+/** Each conflict side by side, with Ours / Theirs / Both. */
+function resolvePane(r: Resolving, p: Palette, a: ChangesActions): Element {
+  let n = -1;
+  const blocks = r.segments.flatMap((s) => {
+    if (s.kind !== "conflict") return [];
+    n += 1;
+    const i = n;
+    const pick = (c: Choice, label: string) => textButton(`rb:${i}:${c}`, label, p, (cx) => a.chooseBlock(i, c, cx), s.choice === c);
+    return [
+      v_flex()
+        .p(6)
+        .gap(4)
+        .border_b_1()
+        .border_color(p.border)
+        .child(h_flex().gap(4).items_center().child(div().flex_1().text_color(p.muted).child(`Conflict ${i + 1}`)).child(pick("ours", "Ours")).child(pick("theirs", "Theirs")).child(pick("both", "Both")))
+        .child(h_flex().gap(8).items_start().child(side(`ours (${s.oursLabel || "HEAD"})`, s.ours, p.removed, p)).child(side(`theirs (${s.theirsLabel || "incoming"})`, s.theirs, p.added, p))),
+    ];
+  });
+  const total = n + 1;
+  const done = allChosen(r.segments);
+  return v_flex()
+    .flex_1()
+    .min_h_0()
+    .child(
+      h_flex()
+        .h(28)
+        .px(8)
+        .gap(6)
+        .items_center()
+        .flex_shrink_0()
+        .border_b_1()
+        .border_color(p.border)
+        .child(textButton("resolve-back", "← Files", p, a.closeResolve))
+        .child(div().flex_1().min_w_0().truncate().text_xs().text_color(p.muted).child(`${r.path}: ${total} conflict${total === 1 ? "" : "s"}`))
+        .child(textButton("resolve-save", "Save and mark resolved", p, a.saveResolved, done)),
+    )
+    .child(
+      total === 0
+        ? div().p(12).text_color(p.dim).child("No conflict markers in this file: edit it, or mark it resolved.")
+        : v_flex().id("githerd-resolve").flex_1().min_h_0().overflow_y_scrollbar().font_family(monoFont()).text_xs().children(blocks),
+    );
+}
+
 export function changesPane(parts: ChangesParts, p: Palette, a: ChangesActions): Element {
   const { view } = parts;
   const top = h_flex()
@@ -201,7 +260,9 @@ export function changesPane(parts: ChangesParts, p: Palette, a: ChangesActions):
     .child(top)
     .when(error !== null, (el) => el.child(error ?? div()))
     .child(
-      view.open
+      view.resolving
+        ? resolvePane(view.resolving, p, a)
+        : view.open
         ? diffPane(parts, p, a)
         : v_flex().id("changes-files").flex_1().min_h_0().overflow_y_scrollbar().pb(6).children(fileLists(parts, p, a)),
     )
