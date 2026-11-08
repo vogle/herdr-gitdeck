@@ -5,6 +5,8 @@ import { View, div, type AsyncContext, type Context, type Element } from "gpui-k
 import { v_flex, InputState, VirtualListScrollHandle } from "gpui-base";
 import { exec, focused, home, nextCommand, panes, shared, spaces } from "herdr";
 import { ChangesPanel } from "./changes.ts";
+import { NET_ENV } from "./core/ops.ts";
+import { OpsPanel } from "./ops.ts";
 import { contextOf, sameContext } from "./core/context.ts";
 import { createGit, type Target } from "./core/git/runner.ts";
 import type { RepoStatus } from "./core/git/status.ts";
@@ -66,6 +68,15 @@ export default class Githerd extends View {
     status: () => this.trustedStatus(),
     changed: (cx) => this.reloadShown(cx),
   });
+  readonly opsPanel = new OpsPanel({
+    git: this.git,
+    net: createGit(exec, NET_ENV),
+    target: () => (this.trustedStatus() ? this.repoTarget() : null),
+    status: () => this.trustedStatus(),
+    history: () => (this.view.repo === this.herd.selected ? this.view.history : null),
+    selected: () => this.selectedCommit(),
+    changed: (cx) => this.reloadShown(cx),
+  });
   search!: InputState;
   scroll!: VirtualListScrollHandle;
 
@@ -77,6 +88,7 @@ export default class Githerd extends View {
     });
     this.scroll = VirtualListScrollHandle.new();
     this.changesPanel.init();
+    this.opsPanel.init();
     cx.spawn(async (cx) => {
       for (;;) {
         await this.historyWake.wait();
@@ -216,18 +228,29 @@ export default class Githerd extends View {
   async readHistory(cx: AsyncContext): Promise<void> {
     this.view = forRepo(this.view, this.herd.selected);
     this.changesPanel.forRepo(this.herd.selected);
+    this.opsPanel.forRepo(this.herd.selected);
     const target = this.repoTarget();
     this.syncRows();
     cx.notify();
     if (!target) return;
+    if (this.trustedStatus()) await this.opsPanel.readOperation(cx);
     const history = await loadHistory(this.git, target, this.view.limit);
     this.view = withHistory(this.view, target.cwd, history);
     this.syncRows();
     cx.notify();
   }
 
+  /** The selected commit with its parent count; none for the uncommitted row. */
+  selectedCommit(): { hash: string; parents: number } | null {
+    const hash = this.view.selected;
+    if (!hash || hash === UNCOMMITTED) return null;
+    const commit = this.view.rows.find((r) => r.hash === hash) ?? this.view.history?.commits.find((r) => r.hash === hash);
+    return commit ? { hash, parents: commit.parents.length } : null;
+  }
+
   pickCommit(hash: string, cx: Context): void {
     this.view = selectCommit(this.view, hash);
+    this.opsPanel.reselected();
     this.readCommit(cx);
     cx.notify();
   }
@@ -273,6 +296,7 @@ export default class Githerd extends View {
 
   jump(hash: string, cx: Context): void {
     this.view = jumpTo(this.view, hash);
+    this.opsPanel.reselected();
     if (this.search.value() !== "") this.search.set_value("");
     if (this.view.scrollTo !== null) {
       this.scroll.scroll_to_item(this.view.scrollTo, "center");
@@ -335,6 +359,7 @@ export default class Githerd extends View {
               search: this.search,
               scroll: this.scroll,
               changes: this.trustedStatus() ? { parts: this.changesPanel.parts(), actions: this.changesPanel.actions() } : null,
+              ops: this.trustedStatus() ? { parts: this.opsPanel.parts(), actions: this.opsPanel.actions() } : null,
             },
             p,
             this.historyActions(),

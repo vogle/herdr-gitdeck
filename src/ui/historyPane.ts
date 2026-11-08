@@ -8,6 +8,7 @@ import { UNCOMMITTED, type HistoryView } from "../core/historyView.ts";
 import { changesPane, type ChangesActions, type ChangesParts } from "./changes.ts";
 import { details, type DetailActions } from "./details.ts";
 import { graphList, type GraphActions } from "./graph.ts";
+import { commitBar, syncBar, type OpsActions, type OpsParts } from "./ops.ts";
 import { sidebar } from "./sidebar.ts";
 import { textButton, type Palette } from "./style.ts";
 
@@ -25,6 +26,8 @@ export interface HistoryParts {
   scroll: VirtualListScrollHandle;
   /** The staging panel, shown for the uncommitted row. */
   changes: { parts: ChangesParts; actions: ChangesActions } | null;
+  /** Branch and sync actions; null while the repo awaits trust. */
+  ops: { parts: OpsParts; actions: OpsActions } | null;
 }
 
 function toolbar(parts: HistoryParts, p: Palette, actions: HistoryActions): Element {
@@ -70,16 +73,19 @@ export function historyPane(parts: HistoryParts, p: Palette, actions: HistoryAct
     parts.view.selected === UNCOMMITTED && parts.changes
       ? changesPane(parts.changes.parts, p, parts.changes.actions)
       : details(parts.view, parts.status, p, actions);
+  const commitActions = parts.ops && parts.view.selected !== UNCOMMITTED && parts.view.file === null ? commitBar(parts.ops.parts, p, parts.ops.actions) : null;
   const main = v_flex()
     .flex_1()
     .min_w_0()
     .min_h_0()
     .child(graphList(parts.view, p, parts.scroll, actions))
+    .when(commitActions !== null, (el) => el.child(commitActions ?? div()))
     .when(below !== null, (el) => el.child(below ?? div()));
   return v_flex()
     .flex_1()
     .min_h_0()
     .child(toolbar(parts, p, actions))
+    .children(parts.ops ? syncBar(parts.ops.parts, p, parts.ops.actions) : [])
     .when(parts.untrusted !== null, (el) => el.child(trustBanner(parts.untrusted ?? [], p)))
     .child(
       h_flex()

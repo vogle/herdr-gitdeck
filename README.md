@@ -8,9 +8,10 @@ githerd follows the terminal you're focused on. It climbs to the outermost
 repository around that folder, lists every repository below it, and shows the
 one you're in, with its branch and where it stands.
 
-> Status: **M2**. Repo discovery, the repo picker, the history (commit graph,
-> commit details and diffs, refs sidebar, search) and staging and committing.
-> Branch work and sync come next (see [Roadmap](#roadmap)).
+> Status: **M3**. Repo discovery, the repo picker, the history (commit graph,
+> commit details and diffs, refs sidebar, search), staging and committing, and
+> branch work and sync. Interactive rebase, blame and the like come next (see
+> [Roadmap](#roadmap)).
 
 ## What it does now
 
@@ -38,17 +39,29 @@ one you're in, with its branch and where it stands.
   stage (or unstage) that hunk, or pick lines and stage just those. Write a
   message and Commit, or tick Amend to rewrite the last commit (its message
   is filled in). Conflicted files can be marked resolved.
+- **Branches and sync.** A bar above the graph: Fetch (every remote), Pull,
+  Push (a branch without an upstream goes to `origin` and tracks it), and
+  Stash (every change, untracked files too). Select a commit for its actions:
+  check it out, new branch or tag here, cherry-pick, revert, merge or rebase
+  onto it, reset to it (soft, mixed, or hard after a second click), and for
+  each branch on it: switch to, merge, rebase onto, delete. A stash offers
+  apply, pop and drop. A merge, rebase, cherry-pick or revert that stops on
+  conflicts shows a banner with Continue, Skip and Abort.
 
 Reading uses `git status`, `git log`, `git show -s`, `git diff-tree`,
 `git diff`, `git for-each-ref`, `git stash list`, `git rev-parse` and `find`.
 Only the buttons you click write: `git add`, `git restore`, `git rm --cached`,
 `git clean` (discarding an untracked file), `git apply --cached` (hunks and
 lines, from a patch file githerd writes into the repo's `.git` folder) and
-`git commit`. A commit runs your repo's own hooks and signing program, as git
-always does, so commit only in repos whose `.git` folder you trust. Paths are
+`git commit`, and the branch and sync buttons run `git switch`, `branch`,
+`tag`, `merge`, `rebase`, `cherry-pick`, `revert`, `reset`, `stash`, `fetch`,
+`pull` and `push`. These run your repo's own hooks and signing program, as git
+always does, so use them only in repos whose `.git` folder you trust. Network
+commands never ask for a password (`GIT_TERMINAL_PROMPT=0`): use an SSH key or
+a credential helper. Nothing is ever force-pushed. Paths are
 always literal (`--literal-pathspecs`): a file named `:(glob)*` is just that
 file. The patch file gets a fresh name each time and is deleted after use.
-Nothing goes over the network.
+Only Fetch, Pull and Push go over the network.
 
 Partial staging (hunks and lines) works for repos on this machine only: a
 remote machine's repo can still stage whole files and commit.
@@ -92,6 +105,6 @@ the rules a Herdr mod has to follow.
 | **M0** | Foundation: TS build, tests, install, git layer, herd discovery, picker ✅ |
 | **M1** | Commit graph, commit details and diff, branches/tags/stashes sidebar, search ✅ |
 | **M2** | Staging by file, hunk and line; commit and amend; discard ✅ |
-| **M3** | Checkout, merge, rebase, cherry-pick, revert, reset, stash; fetch/pull/push |
+| **M3** | Checkout, merge, rebase, cherry-pick, revert, reset, stash; fetch/pull/push ✅ |
 | **M4** | Interactive rebase, conflict resolver, blame, file history, tree at a commit, reflog, image diff |
 | **M5** | Submodules, git-flow, LFS, GitHub integration, repository statistics |
