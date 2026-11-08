@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  backStep, findViewerTab, isWide, viewerFocused, parseViewer, viewerBack, viewerKey, viewerShow, viewerTitle, WIDE_PX,
+  backStep, findViewerTab, isWide, staleViewerTab, viewerFocused, VIEWER_TAB_NAME, parseViewer, viewerBack, viewerKey, viewerShow, viewerTitle, WIDE_PX,
   type ViewerRequest,
 } from "../src/core/panel.ts";
 
@@ -92,4 +92,13 @@ test("viewerFocused: focus in the viewer's tab keeps the panel on its repo", () 
   assert.equal(viewerFocused({ tab: "t3" }, panes), true);
   assert.equal(viewerFocused({ tab: "t1" }, panes), false);
   assert.equal(viewerFocused(null, panes), false);
+});
+
+test("staleViewerTab finds a viewer tab still under the old lowercase name", () => {
+  const panes = [{ mod: "githerd", tab: "t3" }, { tab: "t1" }];
+  const spaces = (name: string) => [{ tabs: [{ id: "t1", name: "1" }, { id: "t3", name }] }];
+  assert.equal(staleViewerTab(spaces("githerd"), panes), "t3");
+  assert.equal(staleViewerTab(spaces(VIEWER_TAB_NAME), panes), null);
+  assert.equal(staleViewerTab(spaces("my diff"), panes), null);
+  assert.equal(staleViewerTab(spaces("githerd"), [{ tab: "t1" }]), null);
 });

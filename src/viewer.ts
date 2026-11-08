@@ -4,14 +4,14 @@
 
 import { div, type AsyncContext, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { appHome, exec, panes, run, setShared, shared } from "herdr";
+import { appHome, exec, panes, run, setShared, shared, spaces } from "herdr";
 import type { Diff } from "./core/git/diff.ts";
 import type { Git, Target } from "./core/git/runner.ts";
 import { loadDiff } from "./core/history.ts";
 import { loadImagePair } from "./core/imageDiff.ts";
 import { loadBlame, loadFileLog, type InspectView } from "./core/inspect.ts";
 import {
-  findViewerTab, parseViewer, viewerBack, viewerKey, viewerShow, viewerTitle, VIEWER_KEY,
+  findViewerTab, parseViewer, staleViewerTab, VIEWER_TAB_NAME, viewerBack, viewerKey, viewerShow, viewerTitle, VIEWER_KEY,
   type ViewerNav, type ViewerRequest,
 } from "./core/panel.ts";
 import { loadStatus } from "./core/scan.ts";
@@ -29,7 +29,7 @@ export function openViewer(request: ViewerRequest): void {
   setShared(VIEWER_KEY, request);
   const tab = findViewerTab(panes());
   if (tab) run("tab.select", { id: tab });
-  else run("tab.new", { name: "GitHerd", mod: "githerd", props: { viewer: true } });
+  else run("tab.new", { name: VIEWER_TAB_NAME, mod: "githerd", props: { viewer: true } });
 }
 
 type Shown = { kind: "diff"; diff: Diff } | { kind: "inspect"; view: InspectView } | { kind: "note"; text: string };
@@ -54,6 +54,8 @@ export class Viewer {
         await this.load(cx);
       }
     });
+    const stale = staleViewerTab(spaces(), panes());
+    if (stale) run("tab.rename", { id: stale, name: VIEWER_TAB_NAME });
     this.notice();
   }
 

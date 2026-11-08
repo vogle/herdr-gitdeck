@@ -104,3 +104,18 @@ export function findViewerTab(panes: readonly { mod?: string; tab: string }[]): 
 export function viewerFocused(focus: { tab: string } | null, panes: readonly { mod?: string; tab: string }[]): boolean {
   return focus !== null && panes.some((p) => p.tab === focus.tab && p.mod === "githerd");
 }
+
+/** The viewer tab's name. */
+export const VIEWER_TAB_NAME = "GitHerd";
+/** What the viewer tab was named before. */
+const OLD_VIEWER_TAB_NAME = "githerd";
+
+/** A viewer tab opened under the old lowercase name, to rename (one the person renamed is left alone). */
+export function staleViewerTab(
+  spaces: readonly { tabs: readonly { id: string; name: string }[] }[],
+  panes: readonly { mod?: string; tab: string }[],
+): string | null {
+  const viewer = findViewerTab(panes);
+  const tab = spaces.flatMap((s) => s.tabs).find((t) => t.id === viewer);
+  return tab?.name === OLD_VIEWER_TAB_NAME ? tab.id : null;
+}
