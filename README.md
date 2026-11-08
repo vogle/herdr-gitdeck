@@ -55,7 +55,9 @@ one you're in, with its branch and where it stands.
   **Take theirs** whole, or **Resolve…** it block by block: each conflict
   shows both sides and keeps Ours, Theirs or Both, then Save writes the file
   (only if it hasn't changed since) and stages it. **Files at commit** lists every file as it was at the
-  selected commit; click one to read it (raw, from git's objects).
+  selected commit; click one to read it (raw, from git's objects). A Git LFS
+  file shows its real size and object id; a submodule shows the commit it
+  records and its URL (from that commit's `.gitmodules`, read as plain text).
 - **Editing history.** "Edit commits after this" opens the commits between
   the selected one and HEAD, oldest first. Click a step to cycle pick →
   squash → fixup → drop, move it with ↑ ↓, then Run. githerd writes git's todo
@@ -134,4 +136,4 @@ the rules a Herdr mod has to follow.
 | **M2** | Staging by file, hunk and line; commit and amend; discard ✅ |
 | **M3** | Checkout, merge, rebase, cherry-pick, revert, reset, stash; fetch/pull/push ✅ |
 | **M4** | Blame, file history, reflog, take ours/theirs, block-by-block conflict resolver, files at a commit, interactive rebase ✅; image diff (Herdr has no image element yet) |
-| **M5** | Repository statistics, git-flow start, GitHub pull requests (read-only) ✅; submodules and LFS left out: they run programs a repo names |
+| **M5** | Repository statistics, git-flow start, GitHub pull requests (read-only), submodules and Git LFS shown read-only ✅. Updating submodules and fetching LFS content are left out: both run programs a repo names |

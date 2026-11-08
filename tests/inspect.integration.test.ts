@@ -102,3 +102,25 @@ test("stats count the commits, the author and the files", async () => {
   assert.equal(s.files, 1);
   assert.equal(s.months.reduce((n, m) => n + m.count, 0), 4);
 });
+
+test("an LFS pointer and a submodule at a commit are described, never fetched or entered", async () => {
+  const { loadTree, loadBlob } = await import("../src/core/tree.ts");
+  const t = { cwd: await realpath(await mkdtemp(join(tmpdir(), "githerd-lfs-"))), on: null as string | null };
+  try {
+    for (const a of [["init", "-q", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "Tess"], ["config", "commit.gpgsign", "false"]]) await git(t, a);
+    await writeFile(join(t.cwd, "big.bin"), `version https://git-lfs.github.com/spec/v1\noid sha256:${"d".repeat(64)}\nsize 999\n`);
+    await writeFile(join(t.cwd, ".gitmodules"), '[submodule "lib"]\n\tpath = lib\n\turl = https://example.com/lib.git\n');
+    await git(t, ["add", "big.bin", ".gitmodules"]);
+    await git(t, ["update-index", "--add", "--cacheinfo", `160000,${"e".repeat(40)},lib`]);
+    await git(t, ["commit", "-q", "-m", "lfs and submodule"]);
+    const files = (await loadTree(git, t, "HEAD")).files;
+    const big = files.find((f) => f.path === "big.bin");
+    const lib = files.find((f) => f.path === "lib");
+    assert.ok(big && lib);
+    assert.equal(lib.kind, "submodule");
+    assert.match((await loadBlob(git, t, "HEAD", big)).note ?? "", /Git LFS file: 999 bytes/);
+    assert.match((await loadBlob(git, t, "HEAD", lib)).note ?? "", /eeeeeeeeee, from https:\/\/example\.com\/lib\.git/);
+  } finally {
+    await rm(t.cwd, { recursive: true, force: true });
+  }
+});
