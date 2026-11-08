@@ -4,8 +4,10 @@
 import { View, div, type AsyncContext, type Context, type Element } from "gpui-kit";
 import { v_flex, InputState, VirtualListScrollHandle } from "gpui-base";
 import { exec, focused, home, nextCommand, panes, shared, spaces } from "herdr";
+import { ChangesPanel } from "./changes.ts";
 import { contextOf, sameContext } from "./core/context.ts";
 import { createGit, type Target } from "./core/git/runner.ts";
+import type { RepoStatus } from "./core/git/status.ts";
 import { closePicker, emptyHerd, select, selectedRepo, togglePicker, withRepos, withStatus, type HerdState } from "./core/herd.ts";
 import { loadCommit, loadDiff, loadHistory, type DiffSource } from "./core/history.ts";
 import {
@@ -58,6 +60,12 @@ export default class Githerd extends View {
   view: HistoryView = emptyView();
   /** Wakes the task that reads the shown repo's history. */
   readonly historyWake = new Signal();
+  readonly changesPanel = new ChangesPanel({
+    git: this.git,
+    target: () => (this.trustedStatus() ? this.repoTarget() : null),
+    status: () => this.trustedStatus(),
+    changed: (cx) => this.reloadShown(cx),
+  });
   search!: InputState;
   scroll!: VirtualListScrollHandle;
 
@@ -68,6 +76,7 @@ export default class Githerd extends View {
       cx.notify();
     });
     this.scroll = VirtualListScrollHandle.new();
+    this.changesPanel.init();
     cx.spawn(async (cx) => {
       for (;;) {
         await this.historyWake.wait();
@@ -181,14 +190,32 @@ export default class Githerd extends View {
 
   /** The uncommitted row follows the shown repo's status (never for a repo awaiting trust). */
   syncRows(): void {
-    const result = this.herd.selected ? this.herd.statuses[this.herd.selected] : undefined;
-    const status = result?.untrusted ? null : (result?.status ?? null);
+    const status = this.trustedStatus();
     const changes = status ? status.entries.filter((e) => e.kind !== "ignored").length : 0;
     this.view = rebuild(this.view, status?.oid ?? null, changes);
   }
 
+  /** The shown repo's status, unless it is waiting for trust. */
+  trustedStatus(): RepoStatus | null {
+    const result = this.herd.selected ? this.herd.statuses[this.herd.selected] : undefined;
+    return result?.untrusted ? null : (result?.status ?? null);
+  }
+
+  /** After a change made here: the shown repo's status, then its history. */
+  async reloadShown(cx: AsyncContext): Promise<void> {
+    const target = this.repoTarget();
+    if (!target) return;
+    const result = await loadStatus(this.git, target);
+    if (this.herd.selected !== target.cwd) return;
+    this.herd = withStatus(this.herd, target.cwd, result);
+    this.syncRows();
+    this.historyWake.fire();
+    cx.notify();
+  }
+
   async readHistory(cx: AsyncContext): Promise<void> {
     this.view = forRepo(this.view, this.herd.selected);
+    this.changesPanel.forRepo(this.herd.selected);
     const target = this.repoTarget();
     this.syncRows();
     cx.notify();
@@ -301,7 +328,14 @@ export default class Githerd extends View {
       ? repoList(this.herd, p, (path, cx) => this.pick(path, cx))
       : repo && this.view.repo === repo.path
         ? historyPane(
-            { view: this.view, status: result?.status ?? null, untrusted: result?.untrusted ?? null, search: this.search, scroll: this.scroll },
+            {
+              view: this.view,
+              status: result?.status ?? null,
+              untrusted: result?.untrusted ?? null,
+              search: this.search,
+              scroll: this.scroll,
+              changes: this.trustedStatus() ? { parts: this.changesPanel.parts(), actions: this.changesPanel.actions() } : null,
+            },
             p,
             this.historyActions(),
           )

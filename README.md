@@ -8,9 +8,9 @@ githerd follows the terminal you're focused on. It climbs to the outermost
 repository around that folder, lists every repository below it, and shows the
 one you're in, with its branch and where it stands.
 
-> Status: **M1**. Repo discovery, the repo picker, and a read-only history:
-> commit graph, commit details and diffs, refs sidebar and search. Staging
-> and branch work come next (see [Roadmap](#roadmap)).
+> Status: **M2**. Repo discovery, the repo picker, the history (commit graph,
+> commit details and diffs, refs sidebar, search) and staging and committing.
+> Branch work and sync come next (see [Roadmap](#roadmap)).
 
 ## What it does now
 
@@ -32,10 +32,23 @@ one you're in, with its branch and where it stands.
   a file for its diff. **Refs** opens a sidebar of branches (with ↑↓ against
   their upstream), remote branches, tags and stashes; a click jumps to the
   commit. The search box filters by subject, author, branch, tag or hash.
+- **Staging.** Click the uncommitted row: staged and unstaged files, each with
+  Stage / Unstage, and Discard (a second click confirms; an untracked file is
+  deleted). Click a file for one side of its diff: click a hunk header to
+  stage (or unstage) that hunk, or pick lines and stage just those. Write a
+  message and Commit, or tick Amend to rewrite the last commit (its message
+  is filled in). Conflicted files can be marked resolved.
 
-It only reads: `git status`, `git log`, `git show -s`, `git diff-tree`,
+Reading uses `git status`, `git log`, `git show -s`, `git diff-tree`,
 `git diff`, `git for-each-ref`, `git stash list`, `git rev-parse` and `find`.
-Nothing is written to your repositories, and nothing goes over the network.
+Only the buttons you click write: `git add`, `git restore`, `git rm --cached`,
+`git clean` (discarding an untracked file), `git apply --cached` (hunks and
+lines, from a patch file githerd writes into the repo's `.git` folder) and
+`git commit`. A commit runs your repo's own hooks, as git always does.
+Nothing goes over the network.
+
+Partial staging (hunks and lines) works for repos on this machine only: a
+remote machine's repo can still stage whole files and commit.
 
 A repository's own `.git/config` can name programs for git to run. githerd
 never lets it: no fsmonitor, no signature checks (`gpg.program`), no external
@@ -75,7 +88,7 @@ the rules a Herdr mod has to follow.
 |---|---|
 | **M0** | Foundation: TS build, tests, install, git layer, herd discovery, picker ✅ |
 | **M1** | Commit graph, commit details and diff, branches/tags/stashes sidebar, search ✅ |
-| **M2** | Staging by file, hunk and line; commit and amend; discard; recent messages |
+| **M2** | Staging by file, hunk and line; commit and amend; discard ✅ |
 | **M3** | Checkout, merge, rebase, cherry-pick, revert, reset, stash; fetch/pull/push |
 | **M4** | Interactive rebase, conflict resolver, blame, file history, tree at a commit, reflog, image diff |
 | **M5** | Submodules, git-flow, LFS, GitHub integration, repository statistics |

@@ -4,7 +4,8 @@
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex, Input, type InputState, type VirtualListScrollHandle } from "gpui-base";
 import type { RepoStatus } from "../core/git/status.ts";
-import type { HistoryView } from "../core/historyView.ts";
+import { UNCOMMITTED, type HistoryView } from "../core/historyView.ts";
+import { changesPane, type ChangesActions, type ChangesParts } from "./changes.ts";
 import { details, type DetailActions } from "./details.ts";
 import { graphList, type GraphActions } from "./graph.ts";
 import { sidebar } from "./sidebar.ts";
@@ -22,6 +23,8 @@ export interface HistoryParts {
   untrusted: readonly string[] | null;
   search: InputState;
   scroll: VirtualListScrollHandle;
+  /** The staging panel, shown for the uncommitted row. */
+  changes: { parts: ChangesParts; actions: ChangesActions } | null;
 }
 
 function toolbar(parts: HistoryParts, p: Palette, actions: HistoryActions): Element {
@@ -63,7 +66,10 @@ function trustBanner(filters: readonly string[], p: Palette): Element {
 }
 
 export function historyPane(parts: HistoryParts, p: Palette, actions: HistoryActions): Element {
-  const below = details(parts.view, parts.status, p, actions);
+  const below =
+    parts.view.selected === UNCOMMITTED && parts.changes
+      ? changesPane(parts.changes.parts, p, parts.changes.actions)
+      : details(parts.view, parts.status, p, actions);
   const main = v_flex()
     .flex_1()
     .min_w_0()
