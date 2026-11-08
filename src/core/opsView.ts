@@ -4,6 +4,10 @@
 import type { Ref } from "./git/refs.ts";
 import type { Operation } from "./ops.ts";
 import type { RebasePlan } from "./rebase.ts";
+import type { FlowKind } from "./flow.ts";
+
+/** A branch or tag at a commit, or a git-flow branch from its base. */
+export type NameKind = "branch" | "tag" | FlowKind;
 
 export interface OpsView {
   repo: string | null;
@@ -14,7 +18,7 @@ export interface OpsView {
   /** The action waiting for its second click. */
   confirm: string | null;
   /** A new branch or tag being named, at this commit. */
-  naming: { kind: "branch" | "tag"; at: string } | null;
+  naming: { kind: NameKind; at: string } | null;
   operation: Operation | null;
   /** An interactive rebase being edited before it runs. */
   plan: RebasePlan | null;
@@ -34,7 +38,7 @@ export const finished = (v: OpsView, error: string | null, notice: string | null
   ({ ...v, busy: null, error, notice: error === null ? notice : null, confirm: null });
 
 export const confirmOps = (v: OpsView, key: string | null): OpsView => ({ ...v, confirm: key });
-export const startNaming = (v: OpsView, kind: "branch" | "tag", at: string): OpsView => ({ ...v, naming: { kind, at }, confirm: null });
+export const startNaming = (v: OpsView, kind: NameKind, at: string): OpsView => ({ ...v, naming: { kind, at }, confirm: null });
 export const stopNaming = (v: OpsView): OpsView => ({ ...v, naming: null });
 export const withPlan = (v: OpsView, plan: RebasePlan | null): OpsView => ({ ...v, plan, confirm: null });
 export const withOperation = (v: OpsView, operation: Operation | null): OpsView => ({ ...v, operation });

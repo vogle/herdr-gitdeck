@@ -17,6 +17,7 @@ import {
   type CommitAction, type OpsView,
 } from "./core/opsView.ts";
 import { files } from "./changes.ts";
+import { FLOW_KINDS, flowBase, flowBranch } from "./core/flow.ts";
 import { cycleStep, loadPlan, moveStep, runPlan, type RebasePlan } from "./core/rebase.ts";
 import { actionKey, needsConfirm, type OpsActions, type OpsParts } from "./ui/ops.ts";
 
@@ -84,7 +85,9 @@ export class OpsPanel {
 
   parts(): OpsParts {
     const status = this.host.status();
-    return { view: this.view, ahead: status?.ahead ?? 0, behind: status?.behind ?? 0, commit: this.commitList(), name: this.name };
+    const branches = (this.host.history()?.refs ?? []).filter((r) => r.kind === "branch").map((r) => r.name);
+    const flow = FLOW_KINDS.filter((k) => flowBase(k, branches) !== null);
+    return { view: this.view, ahead: status?.ahead ?? 0, behind: status?.behind ?? 0, commit: this.commitList(), name: this.name, flow };
   }
 
   /** Runs one action; `done` names it in the notice. */
@@ -211,7 +214,10 @@ export class OpsPanel {
         }
         this.view = stopNaming(this.view);
         if (naming.kind === "tag") this.git(cx, "Tagging", `Tagged ${name}`, tagArgs(name, naming.at));
-        else this.git(cx, "Creating branch", `On new branch ${name}`, createBranchArgs(name, naming.at, true));
+        else if (naming.kind !== "branch") {
+          const branch = flowBranch(naming.kind, name);
+          this.git(cx, "Creating branch", `On ${branch}, from ${naming.at}`, createBranchArgs(branch, naming.at, true));
+        } else this.git(cx, "Creating branch", `On new branch ${name}`, createBranchArgs(name, naming.at, true));
       },
       cancelName: (cx) => {
         this.view = stopNaming(this.view);
@@ -225,6 +231,15 @@ export class OpsPanel {
         if (!plan) return;
         this.run(cx, "Rebasing", `Rewrote ${plan.steps.length} commits`, (target) => runPlan(this.host.git, files, target, plan));
         this.view = withPlan(this.view, null);
+        cx.notify();
+      },
+      startFlow: (kind, cx) => {
+        const branches = (this.host.history()?.refs ?? []).filter((r) => r.kind === "branch").map((r) => r.name);
+        const base = flowBase(kind, branches);
+        if (base === null) return;
+        this.view = startNaming(this.view, kind, base);
+        this.name.set_value("");
+        this.name.focus();
         cx.notify();
       },
       dismiss: (cx) => {

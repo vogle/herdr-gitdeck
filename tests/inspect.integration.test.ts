@@ -91,3 +91,14 @@ test("a conflict resolved block by block is written and staged", async () => {
   assert.equal((await git(at, ["diff", "--name-only", "--diff-filter=U"])).trim(), "", "no file left unmerged");
   await git(at, ["merge", "--abort"]);
 });
+
+test("stats count the commits, the author and the files", async () => {
+  const { loadStats } = await import("../src/core/stats.ts");
+  const s = await loadStats(git, at);
+  assert.equal(s.error, null);
+  // first, second, rename, main: "side" is on another branch, not in HEAD.
+  assert.equal(s.commits, 4);
+  assert.deepEqual(s.authors.map((a) => [a.name, a.count]), [["Tess", 4]]);
+  assert.equal(s.files, 1);
+  assert.equal(s.months.reduce((n, m) => n + m.count, 0), 4);
+});

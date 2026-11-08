@@ -7,6 +7,7 @@ import { exec, focused, home, nextCommand, panes, shared, spaces } from "herdr";
 import { ChangesPanel } from "./changes.ts";
 import { loadBlame, loadFileLog, loadReflog, type InspectView } from "./core/inspect.ts";
 import { loadBlob, loadTree } from "./core/tree.ts";
+import { loadStats } from "./core/stats.ts";
 import { NET_ENV } from "./core/ops.ts";
 import { OpsPanel } from "./ops.ts";
 import { contextOf, sameContext } from "./core/context.ts";
@@ -318,7 +319,9 @@ export default class Githerd extends View {
             ? { ...v, data: await loadFileLog(this.git, target, v.rev, v.path) }
             : v.kind === "reflog"
               ? { ...v, data: await loadReflog(this.git, target) }
-              : { ...v, data: await treeLoaded(this.git, target, v.rev) };
+              : v.kind === "stats"
+                ? { ...v, data: await loadStats(this.git, target) }
+                : { ...v, data: await treeLoaded(this.git, target, v.rev) };
       if (this.inspect?.view === view) this.inspect = { repo: target.cwd, view: done };
       cx.notify();
     });
@@ -388,6 +391,13 @@ export default class Githerd extends View {
           return cx.notify();
         }
         this.openInspect({ kind: "reflog", data: null }, cx);
+      },
+      stats: (cx) => {
+        if (this.inspect?.view.kind === "stats") {
+          this.inspect = null;
+          return cx.notify();
+        }
+        this.openInspect({ kind: "stats", data: null }, cx);
       },
       treeFile: (index, cx) => this.treeFile(index, cx),
       browseTree: (cx) => {

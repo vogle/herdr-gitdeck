@@ -18,6 +18,7 @@ export interface HistoryActions extends GraphActions, DetailActions {
   toggleSidebar: (cx: Context) => void;
   jump: (hash: string, cx: Context) => void;
   reflog: (cx: Context) => void;
+  stats: (cx: Context) => void;
   closeInspect: (cx: Context) => void;
   treeFile: (index: number | null, cx: Context) => void;
 }
@@ -50,6 +51,7 @@ function toolbar(parts: HistoryParts, p: Palette, actions: HistoryActions): Elem
     .border_color(p.border)
     .child(textButton("toggle-sidebar", "Refs", p, actions.toggleSidebar, view.sidebar))
     .child(textButton("open-reflog", "Reflog", p, actions.reflog, parts.inspect?.kind === "reflog"))
+    .child(textButton("open-stats", "Stats", p, actions.stats, parts.inspect?.kind === "stats"))
     .child(
       div()
         .flex_1()

@@ -8,10 +8,10 @@ githerd follows the terminal you're focused on. It climbs to the outermost
 repository around that folder, lists every repository below it, and shows the
 one you're in, with its branch and where it stands.
 
-> Status: **M4**. Repo discovery, the repo picker, the history (commit graph,
+> Status: **M5 (part)**. Repo discovery, the repo picker, the history (commit graph,
 > commit details and diffs, refs sidebar, search), staging and committing, and
 > branch work and sync, blame, file history, the reflog, the files at a commit
-> and interactive rebase (see [Roadmap](#roadmap)).
+> interactive rebase, statistics and git-flow branches (see [Roadmap](#roadmap)).
 
 ## What it does now
 
@@ -60,10 +60,16 @@ one you're in, with its branch and where it stands.
   squash → fixup → drop, move it with ↑ ↓, then Run. githerd writes git's todo
   list itself (no editor opens) and a squash keeps both messages. Ranges with
   a merge commit are refused. Repos on this machine only.
+- **Statistics.** **Stats** in the toolbar: commits (no merges) on HEAD, files,
+  authors by commit count, and commits per month, each with a bar.
+- **git-flow.** In a repo with a `develop` branch, **+ feature** and
+  **+ release** start `feature/<name>` or `release/<name>` from `develop`; with
+  `main` or `master`, **+ hotfix** starts `hotfix/<name>` from it. No git-flow
+  tool is needed; finishing one is an ordinary merge.
 
 Reading uses `git status`, `git log`, `git show -s`, `git diff-tree`,
 `git diff`, `git for-each-ref`, `git stash list`, `git rev-parse`, `git blame`
-(of a commit, never the work tree), `git ls-tree`, `git cat-file` and `find`.
+(of a commit, never the work tree), `git ls-tree`, `git cat-file`, `git ls-files` and `find`.
 Only the buttons you click write: `git add`, `git restore`, `git rm --cached`,
 `git clean` (discarding an untracked file), `git apply --cached` (hunks and
 lines, from a patch file githerd writes into the repo's `.git` folder) and
@@ -122,4 +128,4 @@ the rules a Herdr mod has to follow.
 | **M2** | Staging by file, hunk and line; commit and amend; discard ✅ |
 | **M3** | Checkout, merge, rebase, cherry-pick, revert, reset, stash; fetch/pull/push ✅ |
 | **M4** | Blame, file history, reflog, take ours/theirs, block-by-block conflict resolver, files at a commit, interactive rebase ✅; image diff (Herdr has no image element yet) |
-| **M5** | Submodules, git-flow, LFS, GitHub integration, repository statistics |
+| **M5** | Repository statistics, git-flow start ✅; submodules and LFS (left out: they run programs a repo names), GitHub integration |

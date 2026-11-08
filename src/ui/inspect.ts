@@ -4,6 +4,7 @@
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex, v_virtual_list, Scrollbar } from "gpui-base";
 import type { InspectView } from "../core/inspect.ts";
+import { MAX_STATS, type Stats } from "../core/stats.ts";
 import { ago } from "../core/time.ts";
 import { monoFont, textButton, type Palette } from "./style.ts";
 
@@ -58,15 +59,42 @@ function rowsOf(v: InspectView, p: Palette, now: number): Row[] {
       cells: [div().flex_1().min_w_0().truncate().child(f.path), dim(f.kind === "file" ? `${f.size} B` : f.kind, 80)],
     }));
   }
+  if (v.kind === "stats") return statsRows(v.data, p, now);
   return (v.data?.items ?? []).map((e) => ({
     hash: e.hash,
     cells: [dim(e.name, 80), dim(e.hash.slice(0, 7), 60), div().flex_1().min_w_0().truncate().child(e.action), dim(ago(now, e.time), 60)],
   }));
 }
 
+function bar(count: number, most: number, p: Palette): Element {
+  const width = most === 0 ? 0 : Math.max(2, Math.round((count / most) * 160));
+  return div().w(160).flex_shrink_0().child(div().h(8).w(width).rounded(2).bg(p.accent));
+}
+
+/** Totals, then authors and months, each with a bar against the largest. */
+function statsRows(s: Stats | null, p: Palette, now: number): Row[] {
+  if (!s) return [];
+  const text = (t: string, color = p.foreground) => ({ hash: "", cells: [div().flex_1().min_w_0().truncate().text_color(color).child(t)] });
+  const span = s.first !== null && s.last !== null ? `, first ${ago(now, s.first)}, last ${ago(now, s.last)}` : "";
+  const mostAuthor = s.authors[0]?.count ?? 0;
+  const mostMonth = Math.max(0, ...s.months.map((m) => m.count));
+  const months = s.months.slice(-24);
+  return [
+    text(`${s.commits}${s.commits >= MAX_STATS ? "+" : ""} commits (no merges) by ${s.authors.length} authors, ${s.files} files${span}`),
+    text(`Authors`, p.muted),
+    ...s.authors.slice(0, 50).map((a) => ({
+      hash: "",
+      cells: [div().w(200).flex_shrink_0().truncate().child(`${a.name} <${a.email}>`), bar(a.count, mostAuthor, p), div().text_color(p.dim).child(String(a.count))],
+    })),
+    text(months.length < s.months.length ? "Commits per month (last 24)" : "Commits per month", p.muted),
+    ...months.map((m) => ({ hash: "", cells: [div().w(200).flex_shrink_0().child(m.month), bar(m.count, mostMonth, p), div().text_color(p.dim).child(String(m.count))] })),
+  ];
+}
+
 function title(v: InspectView): string {
   if (v.kind === "blame") return `Blame: ${v.path} at ${v.rev.slice(0, 10)}`;
   if (v.kind === "file-log") return `History: ${v.path}`;
+  if (v.kind === "stats") return "Repository statistics";
   if (v.kind === "tree") return v.file ? `${v.file.path} at ${v.rev.slice(0, 10)}` : `Files at ${v.rev.slice(0, 10)} (${v.data?.items.length ?? 0})`;
   return "Reflog: where HEAD has been";
 }
@@ -92,6 +120,7 @@ export function inspectPane(v: InspectView, p: Palette, a: InspectActions): Elem
                 ),
               )
                 .on_item_click((key, cx) => {
+                  if (v.kind === "stats") return;
                   if (v.kind === "tree") return v.file === null ? a.openTreeFile(Number(key), cx) : undefined;
                   const row = rows[Number(key)];
                   if (row) a.jump(row.hash, cx);
