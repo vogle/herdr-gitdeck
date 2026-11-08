@@ -25,11 +25,14 @@ export type Git = (target: Target, args: string[]) => Promise<string>;
  * - plain output: no colors, paths unquoted (UTF-8 names stay readable);
  * - no fsmonitor: githerd reads every repo `find` turns up, and a repo's own
  *   `.git/config` could name a program as its fsmonitor and have it run;
+ * - literal paths: a file named `:(glob)*` means that file, not a pattern
+ *   (discarding it must never reach other files);
  * - no signature checks: a repo's `log.showSignature` would make every
  *   log-like command (log, show, stash list) run its `gpg.program`.
  */
 export const GIT_FLAGS: readonly string[] = [
   "--no-optional-locks",
+  "--literal-pathspecs",
   "-c",
   "color.ui=false",
   "-c",
@@ -58,11 +61,15 @@ export class GitError extends Error {
   }
 }
 
-export function createGit(exec: Exec): Git {
+/** `env` settings (NAME=value) put git through `env`: Herdr's exec takes none of its own. */
+export function createGit(exec: Exec, env: readonly string[] = []): Git {
   return async (target, args) => {
     let result: ExecResult;
+    const command = [...GIT_FLAGS, ...args];
     try {
-      result = await exec("git", [...GIT_FLAGS, ...args], { cwd: target.cwd, on: target.on });
+      result = await (env.length > 0
+        ? exec("env", [...env, "git", ...command], { cwd: target.cwd, on: target.on })
+        : exec("git", command, { cwd: target.cwd, on: target.on }));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new GitError(message, args, -1, "");

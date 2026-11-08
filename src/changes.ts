@@ -3,7 +3,7 @@
 
 import type { AsyncContext, Context } from "gpui-kit";
 import { TextareaState } from "gpui-base";
-import { readTextFile, writeTextFile } from "herdr";
+import { exec, readTextFile, writeTextFile } from "herdr";
 import {
   askConfirm, closeSide, emptyChanges, forRepoChanges, hunkPick, openSide, picks, setAmend, setBusy, togglePick,
   withResult, withStageDiff, type ChangesView,
@@ -21,6 +21,7 @@ import type { ChangesActions, ChangesParts } from "./ui/changes.ts";
 const files: Files = {
   read: (path) => readTextFile(path),
   write: (path, text, expected) => writeTextFile(path, text, expected),
+  remove: (path) => exec("rm", ["-f", "--", path]),
 };
 
 export interface ChangesHost {

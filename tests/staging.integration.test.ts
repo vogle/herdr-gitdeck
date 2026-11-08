@@ -6,7 +6,7 @@ import { mkdtemp, writeFile, readFile, rm, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createGit, type Exec } from "../src/core/git/runner.ts";
-import { applyPicks, commitChanges, loadStageDiff, stageFiles, unstageFiles } from "../src/core/staging.ts";
+import { applyPicks, commitChanges, discardFiles, loadStageDiff, stageFiles, unstageFiles } from "../src/core/staging.ts";
 
 const exec: Exec = (command, args, options) =>
   new Promise((resolve, reject) => {
@@ -18,7 +18,8 @@ const exec: Exec = (command, args, options) =>
 const git = createGit(exec);
 const files = {
   read: (p: string) => readFile(p, "utf8").catch(() => null),
-  write: (p: string, text: string) => writeFile(p, text),
+  write: (p: string, text: string, expected: string | null) => writeFile(p, text, { flag: expected === null ? "wx" : "w" }),
+  remove: (p: string) => rm(p, { force: true }),
 };
 
 let at = { cwd: "", on: null as string | null };
@@ -63,4 +64,22 @@ test("a single removed line stages without its added partner", async () => {
   assert.doesNotMatch(staged, /\+ONE/);
   assert.equal(await unstageFiles(git, at, ["f.txt"], true), null);
   assert.equal(await cached(), "");
+});
+
+test("a file named like pathspec magic is only itself: discarding it deletes nothing else", async () => {
+  await writeFile(join(at.cwd, ":(glob)*"), "odd\n");
+  await writeFile(join(at.cwd, "keep.txt"), "keep\n");
+  assert.equal(await discardFiles(git, at, [{ path: ":(glob)*", untracked: true }]), null);
+  assert.equal(await readFile(join(at.cwd, ":(glob)*"), "utf8").catch(() => null), null);
+  assert.equal(await readFile(join(at.cwd, "keep.txt"), "utf8"), "keep\n");
+  await rm(join(at.cwd, "keep.txt"));
+});
+
+test("the patch file is new each time and gone afterwards", async () => {
+  const d = await loadStageDiff(git, at, "f.txt", false);
+  assert.equal(await applyPicks(git, files, at, d.raw, [{ hunk: 0, lines: null }], false), null);
+  const left = (await git(at, ["rev-parse", "--absolute-git-dir"])).trim();
+  const { readdir } = await import("node:fs/promises");
+  assert.deepEqual((await readdir(left)).filter((n) => n.startsWith("githerd")), []);
+  assert.equal(await unstageFiles(git, at, ["f.txt"], true), null);
 });

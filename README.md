@@ -44,7 +44,10 @@ Reading uses `git status`, `git log`, `git show -s`, `git diff-tree`,
 Only the buttons you click write: `git add`, `git restore`, `git rm --cached`,
 `git clean` (discarding an untracked file), `git apply --cached` (hunks and
 lines, from a patch file githerd writes into the repo's `.git` folder) and
-`git commit`. A commit runs your repo's own hooks, as git always does.
+`git commit`. A commit runs your repo's own hooks and signing program, as git
+always does, so commit only in repos whose `.git` folder you trust. Paths are
+always literal (`--literal-pathspecs`): a file named `:(glob)*` is just that
+file. The patch file gets a fresh name each time and is deleted after use.
 Nothing goes over the network.
 
 Partial staging (hunks and lines) works for repos on this machine only: a

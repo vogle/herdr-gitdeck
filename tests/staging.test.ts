@@ -69,23 +69,36 @@ test("applyPicks writes the patch into the git folder and applies it to the inde
   const raw = "diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1 @@\n-a\n+b\n";
   const r = recorder({ "rev-parse --absolute-git-dir": "/r/.git\n" });
   const writes: Array<[string, string]> = [];
+  const removed: string[] = [];
   const files = {
-    read: async (_p: string) => "old",
+    read: async (_p: string) => null,
     write: async (p: string, text: string, expected: string | null) => {
-      assert.equal(expected, "old");
+      assert.equal(expected, null, "a new file only");
       writes.push([p, text]);
+    },
+    remove: async (p: string) => {
+      removed.push(p);
     },
   };
   assert.equal(await applyPicks(r.git, files, at, raw, [{ hunk: 0, lines: null }], false), null);
-  assert.deepEqual(writes, [["/r/.git/githerd.patch", raw.replace("@@ -1 +1 @@", "@@ -1,1 +1,1 @@")]]);
-  assert.deepEqual(r.calls.at(-1), ["apply", "--cached", "--recount", "--whitespace=nowarn", "/r/.git/githerd.patch"]);
+  const [path = "", text] = writes[0] ?? [];
+  assert.match(path, /^\/r\/\.git\/githerd-[a-z0-9]+-[a-z0-9]+\.patch$/);
+  assert.equal(text, raw.replace("@@ -1 +1 @@", "@@ -1,1 +1,1 @@"));
+  assert.deepEqual(r.calls.at(-1), ["apply", "--cached", "--recount", "--whitespace=nowarn", path]);
+  assert.deepEqual(removed, [path], "removed after use");
 });
 
 test("applyPicks refuses a remote repo, an empty pick, and reports apply errors", async () => {
   const raw = "diff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1 @@\n-a\n+b\n";
-  const files = { read: async () => null, write: async () => undefined };
+  const files = { read: async () => null, write: async () => undefined, remove: async () => undefined };
   assert.match((await applyPicks(recorder().git, files, { cwd: "/r", on: "box" }, raw, [{ hunk: 0, lines: null }], false)) ?? "", /this machine/);
   assert.equal(await applyPicks(recorder().git, files, at, raw, [{ hunk: 0, lines: new Set([5]) }], false), "Nothing picked to change");
-  const r = recorder({ "rev-parse --absolute-git-dir": "/r/.git", "apply --cached --recount --whitespace=nowarn --reverse /r/.git/githerd.patch": new GitError("patch does not apply", [], 1, "patch does not apply") });
-  assert.equal(await applyPicks(r.git, files, at, raw, [{ hunk: 0, lines: null }], true), "patch does not apply");
+  const failing: Git = async (_t, args) => {
+    if (args[0] === "rev-parse") return "/r/.git";
+    throw new GitError("patch does not apply", args, 1, "patch does not apply");
+  };
+  const removed: string[] = [];
+  const tracked = { ...files, remove: async (p: string) => void removed.push(p) };
+  assert.equal(await applyPicks(failing, tracked, at, raw, [{ hunk: 0, lines: null }], true), "patch does not apply");
+  assert.equal(removed.length, 1, "removed even when apply fails");
 });

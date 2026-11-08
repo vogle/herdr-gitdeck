@@ -96,11 +96,15 @@ export async function loadStageDiff(git: Git, target: Target, path: string, stag
   }
 }
 
-/** Herdr's file calls, injected: read, and write only over what was read. */
+/** Herdr's file calls, injected. `write` with expected null creates a new file only. */
 export interface Files {
   read: (path: string) => Promise<string | null>;
   write: (path: string, text: string, expected: string | null) => Promise<unknown>;
+  remove: (path: string) => Promise<unknown>;
 }
+
+/** A name nothing can have placed in advance (a link there would redirect the write). */
+const patchName = (): string => `githerd-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}.patch`;
 
 /**
  * Stages (or, reversed, unstages) the picked hunks and lines. git applies a
@@ -111,13 +115,17 @@ export async function applyPicks(git: Git, files: Files, target: Target, raw: st
   if (target.on !== null) return "Staging parts of a file works only for repos on this machine";
   const patch = buildPatch(raw, picks, reverse);
   if (patch === null) return "Nothing picked to change";
+  let file: string | null = null;
   try {
     const gitDir = (await git(target, ["rev-parse", "--absolute-git-dir"])).trim();
-    const file = `${gitDir}/githerd.patch`;
-    await files.write(file, patch, await files.read(file));
-    await git(target, applyArgs(file, reverse));
+    const name = `${gitDir}/${patchName()}`;
+    await files.write(name, patch, null);
+    file = name;
+    await git(target, applyArgs(name, reverse));
     return null;
   } catch (error) {
     return message(error);
+  } finally {
+    if (file !== null) await files.remove(file).catch(() => undefined);
   }
 }
