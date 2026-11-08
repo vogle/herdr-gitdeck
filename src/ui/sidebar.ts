@@ -34,7 +34,8 @@ function track(r: Ref): string {
   return [r.ahead > 0 ? `↑${r.ahead}` : "", r.behind > 0 ? `↓${r.behind}` : ""].filter(Boolean).join(" ");
 }
 
-export function sidebar(history: History | null, p: Palette, onPick: (hash: string, cx: Context) => void): Element {
+/** `full`: fills its column (the panel's Branches tab) instead of a fixed-width rail. */
+export function sidebar(history: History | null, p: Palette, onPick: (hash: string, cx: Context) => void, full = false): Element {
   const refs = history?.refs ?? [];
   const of = (kind: Ref["kind"]) => refs.filter((r) => r.kind === kind);
   const refItems = (list: readonly Ref[], prefix: string) =>
@@ -44,8 +45,8 @@ export function sidebar(history: History | null, p: Palette, onPick: (hash: stri
   const [branches, remotes, tags] = [of("branch"), of("remote"), of("tag")];
   return v_flex()
     .id("githerd-sidebar")
-    .w(190)
-    .flex_shrink_0()
+    .when(full, (el) => el.flex_1().min_w_0())
+    .when(!full, (el) => el.w(190).flex_shrink_0())
     .h_full()
     .overflow_y_scrollbar()
     .pb(8)

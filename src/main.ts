@@ -1,28 +1,25 @@
 // githerd: a git client for Herdr. This file wires Herdr's live data to the core
 // (src/core, tested without Herdr) and the views (src/ui).
 
-import { View, div, type AsyncContext, type Context, type Element } from "gpui-kit";
+import { View, div, type AsyncContext, type Context, type Element, type FocusHandle } from "gpui-kit";
 import { v_flex, InputState, VirtualListScrollHandle } from "gpui-base";
-import { appHome, exec, focused, home, nextCommand, panes, shared, spaces } from "herdr";
+import { exec, focused, home, nextCommand, panes, props, run, shared, spaces } from "herdr";
 import { ChangesPanel } from "./changes.ts";
-import { loadBlame, loadFileLog, loadReflog, type InspectView } from "./core/inspect.ts";
+import { loadReflog, type InspectView } from "./core/inspect.ts";
 import { loadBlob, loadTree } from "./core/tree.ts";
-import { loadStats } from "./core/stats.ts";
 import { loadPrs } from "./core/github.ts";
-import { loadImagePair } from "./core/imageDiff.ts";
-
-/** Image diffs are written here (hidden, so writing doesn't reload the mod), under the app folder `image()` reads from. */
-const IMAGE_CACHE = "mods/githerd/.cache/images";
+import { backStep, isWide, viewerFocused, type PanelTab } from "./core/panel.ts";
+import { openViewer, Viewer } from "./viewer.ts";
 import { NET_ENV } from "./core/ops.ts";
 import { OpsPanel } from "./ops.ts";
 import { contextOf, sameContext } from "./core/context.ts";
 import { createGit, type Git, type Target } from "./core/git/runner.ts";
 import type { RepoStatus } from "./core/git/status.ts";
 import { closePicker, emptyHerd, select, selectedRepo, togglePicker, withRepos, withStatus, type HerdState } from "./core/herd.ts";
-import { loadCommit, loadDiff, loadHistory, type DiffSource } from "./core/history.ts";
+import { loadCommit, loadHistory, type DiffSource } from "./core/history.ts";
 import {
-  closeFile, emptyView, forRepo, jumpTo, openFile, rebuild, scrolled, selectCommit, setQuery, showMore,
-  toggleSidebar, withCommit, withDiff, withHistory, UNCOMMITTED, type HistoryView,
+  closeFile, emptyView, forRepo, jumpTo, rebuild, scrolled, selectCommit, setQuery, showMore,
+  withCommit, withHistory, UNCOMMITTED, type HistoryView,
 } from "./core/historyView.ts";
 import { mapLimit } from "./core/pool.ts";
 import { loadStatus, scanHerd } from "./core/scan.ts";
@@ -94,8 +91,23 @@ export default class Githerd extends View {
   inspect: { repo: string; view: InspectView } | null = null;
   search!: InputState;
   scroll!: VirtualListScrollHandle;
+  /** The panel's open tab. */
+  tab: PanelTab = "history";
+  /** Wide enough for the list and the commit side by side. */
+  wide = false;
+  /** Takes the keyboard so Esc goes back one level. */
+  focus!: FocusHandle;
+  /** Set in a viewer tab (props {viewer: true}): that copy only shows the viewer. */
+  viewer: Viewer | null = null;
 
   override init(_props: unknown, cx: AsyncContext): void {
+    if ((props() as { viewer?: unknown } | null)?.viewer === true) {
+      this.viewer = new Viewer(this.git);
+      this.viewer.init(cx);
+      cx.notify();
+      return;
+    }
+    this.focus = cx.focus_handle();
     this.search = InputState.new({ placeholder: "Search subject, author, branch, hash" });
     this.search.on("change", (_e, cx) => {
       this.view = setQuery(this.view, this.search.value());
@@ -133,7 +145,9 @@ export default class Githerd extends View {
 
   /** Compares the focused folder with the one we follow; a change wakes the git task. */
   notice(): void {
-    const target = contextOf(focused(), panes(), spaces());
+    const focus = focused();
+    if (viewerFocused(focus, panes())) return;
+    const target = contextOf(focus, panes(), spaces());
     if (!sameContext(target, this.wanted)) {
       this.wanted = target;
       this.wake.fire();
@@ -264,6 +278,9 @@ export default class Githerd extends View {
   }
 
   pickCommit(hash: string, cx: Context): void {
+    this.focus.focus();
+    // The work tree's changes have their own tab, with staging.
+    if (hash === UNCOMMITTED) return this.selectTab("changes", cx);
     this.view = selectCommit(this.view, hash);
     this.opsPanel.reselected();
     this.readCommit(cx);
@@ -297,21 +314,26 @@ export default class Githerd extends View {
     return { kind: "commit", hash, parents: commit.parents, path, oldPath: file.oldPath };
   }
 
-  openFile(path: string, cx: Context): void {
+  /** A file's diff needs the width: it opens in the viewer tab. */
+  openFile(path: string): void {
     const source = this.diffSource(path);
     const target = this.repoTarget();
-    if (!source || !target) return;
-    this.view = openFile(this.view, path);
-    cx.spawn(async (cx) => {
-      const [diff, images] = await Promise.all([
-        loadDiff(this.git, target, source),
-        source.kind === "commit"
-          ? loadImagePair(this.git, exec, target, source, { abs: `${appHome()}/${IMAGE_CACHE}`, rel: IMAGE_CACHE })
-          : Promise.resolve(null),
-      ]);
-      this.view = withDiff(this.view, path, { ...diff, images });
-      cx.notify();
-    });
+    if (source && target) openViewer({ view: "diff", repo: target.cwd, on: target.on, source });
+  }
+
+  selectTab(tab: PanelTab, cx: Context): void {
+    this.tab = tab;
+    this.inspect = null;
+    this.focus.focus();
+    cx.notify();
+  }
+
+  /** Esc or ← Back: closes the innermost level open. */
+  back(cx: Context): void {
+    const step = backStep({ inspect: this.inspect !== null, file: this.view.file, selected: this.view.selected });
+    if (step === "inspect") this.inspect = null;
+    else if (step === "file") this.view = closeFile(this.view);
+    else if (step === "commit" && this.view.selected) this.view = selectCommit(this.view, this.view.selected);
     cx.notify();
   }
 
@@ -323,18 +345,15 @@ export default class Githerd extends View {
     cx.notify();
     cx.spawn(async (cx) => {
       const v = view;
+      // Blame, a file's history and the statistics open in the viewer tab instead.
       const done: InspectView =
-        v.kind === "blame"
-          ? { ...v, data: await loadBlame(this.git, target, v.rev, v.path) }
-          : v.kind === "file-log"
-            ? { ...v, data: await loadFileLog(this.git, target, v.rev, v.path) }
-            : v.kind === "reflog"
-              ? { ...v, data: await loadReflog(this.git, target) }
-              : v.kind === "stats"
-                ? { ...v, data: await loadStats(this.git, target) }
-                : v.kind === "prs"
-                ? { ...v, data: await loadPrs(this.git, exec, target, await this.homeFor(target)) }
-                : { ...v, data: await treeLoaded(this.git, target, v.rev) };
+        v.kind === "reflog"
+          ? { ...v, data: await loadReflog(this.git, target) }
+          : v.kind === "prs"
+            ? { ...v, data: await loadPrs(this.git, exec, target, await this.homeFor(target)) }
+            : v.kind === "tree"
+              ? { ...v, data: await treeLoaded(this.git, target, v.rev) }
+              : v;
       if (this.inspect?.view === view) this.inspect = { repo: target.cwd, view: done };
       cx.notify();
     });
@@ -358,12 +377,9 @@ export default class Githerd extends View {
     });
   }
 
-  inspectFile(kind: "blame" | "file-log", path: string, cx: Context): void {
-    const sel = this.selectedCommit();
-    if (sel) this.openInspect({ kind, path, rev: sel.hash, data: null }, cx);
-  }
-
   jump(hash: string, cx: Context): void {
+    this.tab = "history";
+    this.inspect = null;
     this.view = jumpTo(this.view, hash);
     this.opsPanel.reselected();
     if (this.search.value() !== "") this.search.set_value("");
@@ -383,21 +399,10 @@ export default class Githerd extends View {
         this.historyWake.fire();
         cx.notify();
       },
-      openFile: (path, cx) => this.openFile(path, cx),
-      closeFile: (cx) => {
-        this.view = closeFile(this.view);
-        cx.notify();
-      },
-      close: (cx) => {
-        if (this.view.selected) this.view = selectCommit(this.view, this.view.selected);
-        cx.notify();
-      },
-      toggleSidebar: (cx) => {
-        this.view = toggleSidebar(this.view);
-        cx.notify();
-      },
+      openFile: (path) => this.openFile(path),
+      close: (cx) => this.back(cx),
+      selectTab: (tab, cx) => this.selectTab(tab, cx),
       jump: (hash, cx) => this.jump(hash, cx),
-      inspectFile: (kind, path, cx) => this.inspectFile(kind, path, cx),
       reflog: (cx) => {
         if (this.inspect?.view.kind === "reflog") {
           this.inspect = null;
@@ -412,12 +417,9 @@ export default class Githerd extends View {
         }
         this.openInspect({ kind: "prs", data: null }, cx);
       },
-      stats: (cx) => {
-        if (this.inspect?.view.kind === "stats") {
-          this.inspect = null;
-          return cx.notify();
-        }
-        this.openInspect({ kind: "stats", data: null }, cx);
+      stats: () => {
+        const target = this.repoTarget();
+        if (target) openViewer({ view: "stats", repo: target.cwd, on: target.on });
       },
       treeFile: (index, cx) => this.treeFile(index, cx),
       browseTree: (cx) => {
@@ -444,8 +446,11 @@ export default class Githerd extends View {
   }
 
   override render(_cx: Context): Element {
-    this.notice();
     const p = palette();
+    if (this.viewer) {
+      return v_flex().id("githerd-viewer").size_full().bg(p.surface).text_size(13).text_color(p.foreground).child(this.viewer.render(p));
+    }
+    this.notice();
     const repo = selectedRepo(this.herd);
     const result = repo ? this.herd.statuses[repo.path] : undefined;
     const body = this.herd.picking
@@ -461,6 +466,8 @@ export default class Githerd extends View {
               changes: this.trustedStatus() ? { parts: this.changesPanel.parts(), actions: this.changesPanel.actions() } : null,
               inspect: this.inspect?.repo === repo.path ? this.inspect.view : null,
               ops: this.trustedStatus() ? { parts: this.opsPanel.parts(), actions: this.opsPanel.actions() } : null,
+              tab: this.tab,
+              wide: this.wide,
             },
             p,
             this.historyActions(),
@@ -469,6 +476,15 @@ export default class Githerd extends View {
     return v_flex()
       .id("githerd")
       .size_full()
+      .track_focus(this.focus)
+      .on_key_down((e, cx) => {
+        if (e.keystroke === "escape") this.back(cx);
+      })
+      .on_size_change((size, cx) => {
+        if (isWide(size.width) === this.wide) return;
+        this.wide = isWide(size.width);
+        cx.notify();
+      })
       .bg(p.surface)
       .text_size(13)
       .text_color(p.foreground)
@@ -476,6 +492,7 @@ export default class Githerd extends View {
         header(this.herd, this.busy, p, {
           togglePicker: (cx) => this.togglePicker(cx),
           refresh: (cx) => this.refresh(cx),
+          close: () => run("layout.hide", { id: "panel" }),
         }),
       )
       .when(this.error !== null, (el) =>
