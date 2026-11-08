@@ -7,7 +7,9 @@ import type { RepoStatus } from "../core/git/status.ts";
 import { UNCOMMITTED, type HistoryView } from "../core/historyView.ts";
 import { changesPane, type ChangesActions, type ChangesParts } from "./changes.ts";
 import { details, type DetailActions } from "./details.ts";
+import type { InspectView } from "../core/inspect.ts";
 import { graphList, type GraphActions } from "./graph.ts";
+import { inspectPane } from "./inspect.ts";
 import { commitBar, syncBar, type OpsActions, type OpsParts } from "./ops.ts";
 import { sidebar } from "./sidebar.ts";
 import { textButton, type Palette } from "./style.ts";
@@ -15,6 +17,8 @@ import { textButton, type Palette } from "./style.ts";
 export interface HistoryActions extends GraphActions, DetailActions {
   toggleSidebar: (cx: Context) => void;
   jump: (hash: string, cx: Context) => void;
+  reflog: (cx: Context) => void;
+  closeInspect: (cx: Context) => void;
 }
 
 export interface HistoryParts {
@@ -28,6 +32,8 @@ export interface HistoryParts {
   changes: { parts: ChangesParts; actions: ChangesActions } | null;
   /** Branch and sync actions; null while the repo awaits trust. */
   ops: { parts: OpsParts; actions: OpsActions } | null;
+  /** Blame, a file's history or the reflog, in place of the details. */
+  inspect: InspectView | null;
 }
 
 function toolbar(parts: HistoryParts, p: Palette, actions: HistoryActions): Element {
@@ -42,6 +48,7 @@ function toolbar(parts: HistoryParts, p: Palette, actions: HistoryActions): Elem
     .border_b_1()
     .border_color(p.border)
     .child(textButton("toggle-sidebar", "Refs", p, actions.toggleSidebar, view.sidebar))
+    .child(textButton("open-reflog", "Reflog", p, actions.reflog, parts.inspect?.kind === "reflog"))
     .child(
       div()
         .flex_1()
@@ -69,11 +76,12 @@ function trustBanner(filters: readonly string[], p: Palette): Element {
 }
 
 export function historyPane(parts: HistoryParts, p: Palette, actions: HistoryActions): Element {
-  const below =
-    parts.view.selected === UNCOMMITTED && parts.changes
+  const below = parts.inspect
+    ? inspectPane(parts.inspect, p, { jump: actions.jump, close: actions.closeInspect })
+    : parts.view.selected === UNCOMMITTED && parts.changes
       ? changesPane(parts.changes.parts, p, parts.changes.actions)
       : details(parts.view, parts.status, p, actions);
-  const commitActions = parts.ops && parts.view.selected !== UNCOMMITTED && parts.view.file === null ? commitBar(parts.ops.parts, p, parts.ops.actions) : null;
+  const commitActions = parts.ops && !parts.inspect && parts.view.selected !== UNCOMMITTED && parts.view.file === null ? commitBar(parts.ops.parts, p, parts.ops.actions) : null;
   const main = v_flex()
     .flex_1()
     .min_w_0()

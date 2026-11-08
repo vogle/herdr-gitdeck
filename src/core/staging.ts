@@ -1,6 +1,7 @@
 // Staging and committing against a repo: which files sit on which side, and
 // the git calls that move them. Every action answers with an error text or null.
 
+import { takeSideArgs } from "./inspect.ts";
 import { parseDiff, type DiffRow } from "./git/diff.ts";
 import type { Git, Target } from "./git/runner.ts";
 import type { StatusEntry } from "./git/status.ts";
@@ -128,4 +129,10 @@ export async function applyPicks(git: Git, files: Files, target: Target, raw: st
   } finally {
     if (file !== null) await files.remove(file).catch(() => undefined);
   }
+}
+
+/** Keeps one side of each conflicted file whole, then stages it as resolved. */
+export async function takeSide(git: Git, target: Target, paths: readonly string[], side: "ours" | "theirs"): Promise<string | null> {
+  if (paths.length === 0) return null;
+  return (await run(git, target, takeSideArgs(side, paths))) ?? stageFiles(git, target, paths);
 }

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { splitChanges, stageFiles, unstageFiles, discardFiles, commitChanges, readLastMessage, loadStageDiff, applyPicks } from "../src/core/staging.ts";
+import { takeSide, splitChanges, stageFiles, unstageFiles, discardFiles, commitChanges, readLastMessage, loadStageDiff, applyPicks } from "../src/core/staging.ts";
 import { GitError, type Git, type Target } from "../src/core/git/runner.ts";
 import type { StatusEntry } from "../src/core/git/status.ts";
 
@@ -101,4 +101,21 @@ test("applyPicks refuses a remote repo, an empty pick, and reports apply errors"
   const tracked = { ...files, remove: async (p: string) => void removed.push(p) };
   assert.equal(await applyPicks(failing, tracked, at, raw, [{ hunk: 0, lines: null }], true), "patch does not apply");
   assert.equal(removed.length, 1, "removed even when apply fails");
+});
+
+test("takeSide checks out one side, then stages it; an error stops before staging", async () => {
+  const at = { cwd: "/r", on: null };
+  const calls: string[][] = [];
+  const ok: Git = async (_t, args) => {
+    calls.push(args);
+    return "";
+  };
+  assert.equal(await takeSide(ok, at, ["f"], "theirs"), null);
+  assert.deepEqual(calls.map((c) => c[0]), ["checkout", "add"]);
+  assert.deepEqual(calls[0], ["checkout", "--theirs", "--", "f"]);
+  const failing: Git = async (_t, args) => {
+    throw new GitError("no theirs version", args, 1, "");
+  };
+  assert.equal(await takeSide(failing, at, ["f"], "ours"), "no theirs version");
+  assert.equal(await takeSide(ok, at, [], "ours"), null);
 });

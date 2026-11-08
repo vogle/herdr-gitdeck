@@ -5,6 +5,7 @@ import { View, div, type AsyncContext, type Context, type Element } from "gpui-k
 import { v_flex, InputState, VirtualListScrollHandle } from "gpui-base";
 import { exec, focused, home, nextCommand, panes, shared, spaces } from "herdr";
 import { ChangesPanel } from "./changes.ts";
+import { loadBlame, loadFileLog, loadReflog, type InspectView } from "./core/inspect.ts";
 import { NET_ENV } from "./core/ops.ts";
 import { OpsPanel } from "./ops.ts";
 import { contextOf, sameContext } from "./core/context.ts";
@@ -77,6 +78,8 @@ export default class Githerd extends View {
     selected: () => this.selectedCommit(),
     changed: (cx) => this.reloadShown(cx),
   });
+  /** Blame, a file's history or the reflog, for one repo. */
+  inspect: { repo: string; view: InspectView } | null = null;
   search!: InputState;
   scroll!: VirtualListScrollHandle;
 
@@ -294,6 +297,30 @@ export default class Githerd extends View {
     cx.notify();
   }
 
+  /** Opens the inspect pane and reads what it shows. */
+  openInspect(view: InspectView, cx: Context): void {
+    const target = this.repoTarget();
+    if (!target) return;
+    this.inspect = { repo: target.cwd, view };
+    cx.notify();
+    cx.spawn(async (cx) => {
+      const v = view;
+      const done: InspectView =
+        v.kind === "blame"
+          ? { ...v, data: await loadBlame(this.git, target, v.rev, v.path) }
+          : v.kind === "file-log"
+            ? { ...v, data: await loadFileLog(this.git, target, v.rev, v.path) }
+            : { ...v, data: await loadReflog(this.git, target) };
+      if (this.inspect?.view === view) this.inspect = { repo: target.cwd, view: done };
+      cx.notify();
+    });
+  }
+
+  inspectFile(kind: "blame" | "file-log", path: string, cx: Context): void {
+    const sel = this.selectedCommit();
+    if (sel) this.openInspect({ kind, path, rev: sel.hash, data: null }, cx);
+  }
+
   jump(hash: string, cx: Context): void {
     this.view = jumpTo(this.view, hash);
     this.opsPanel.reselected();
@@ -328,6 +355,18 @@ export default class Githerd extends View {
         cx.notify();
       },
       jump: (hash, cx) => this.jump(hash, cx),
+      inspectFile: (kind, path, cx) => this.inspectFile(kind, path, cx),
+      reflog: (cx) => {
+        if (this.inspect?.view.kind === "reflog") {
+          this.inspect = null;
+          return cx.notify();
+        }
+        this.openInspect({ kind: "reflog", data: null }, cx);
+      },
+      closeInspect: (cx) => {
+        this.inspect = null;
+        cx.notify();
+      },
     };
   }
 
@@ -359,6 +398,7 @@ export default class Githerd extends View {
               search: this.search,
               scroll: this.scroll,
               changes: this.trustedStatus() ? { parts: this.changesPanel.parts(), actions: this.changesPanel.actions() } : null,
+              inspect: this.inspect?.repo === repo.path ? this.inspect.view : null,
               ops: this.trustedStatus() ? { parts: this.opsPanel.parts(), actions: this.opsPanel.actions() } : null,
             },
             p,

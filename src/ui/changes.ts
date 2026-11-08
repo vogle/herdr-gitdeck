@@ -18,6 +18,8 @@ export interface ChangesActions {
   stage: (paths: string[], cx: Context) => void;
   unstage: (paths: string[], cx: Context) => void;
   discard: (file: ChangeFile, cx: Context) => void;
+  /** A conflicted file: keep one side whole, and stage it. */
+  takeSide: (file: ChangeFile, side: "ours" | "theirs", cx: Context) => void;
   /** A diff row was clicked: a hunk header stages the hunk, a line toggles its pick. */
   diffClick: (row: number, cx: Context) => void;
   applyPicked: (cx: Context) => void;
@@ -82,7 +84,11 @@ function fileLists(parts: ChangesParts, p: Palette, a: ChangesActions): Element[
       textButton(`st:${i}`, "Stage", p, (cx) => a.stage([f.path], cx)),
     ]);
   });
-  const conflicts = changes.conflicts.map((f, i) => fileRow(`cf:${i}`, f, p, (cx) => a.open(f, false, cx), [textButton(`cs:${i}`, "Mark resolved", p, (cx) => a.stage([f.path], cx))]));
+  const conflicts = changes.conflicts.map((f, i) => fileRow(`cf:${i}`, f, p, (cx) => a.open(f, false, cx), [
+    textButton(`co:${i}`, "Take ours", p, (cx) => a.takeSide(f, "ours", cx)),
+    textButton(`ct:${i}`, "Take theirs", p, (cx) => a.takeSide(f, "theirs", cx)),
+    textButton(`cs:${i}`, "Mark resolved", p, (cx) => a.stage([f.path], cx)),
+  ]));
   const all = (files: readonly ChangeFile[]) => files.map((f) => f.path);
   return [
     ...(conflicts.length > 0 ? [heading(`Conflicts ${conflicts.length}`, p, null), ...conflicts] : []),

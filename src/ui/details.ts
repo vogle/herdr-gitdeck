@@ -18,6 +18,8 @@ export interface DetailActions {
   openFile: (path: string, cx: Context) => void;
   closeFile: (cx: Context) => void;
   close: (cx: Context) => void;
+  /** A committed file's blame or history. */
+  inspectFile: (kind: "blame" | "file-log", path: string, cx: Context) => void;
 }
 
 function statusColor(letter: string, p: Palette) {
@@ -130,7 +132,20 @@ function diffView(view: HistoryView, p: Palette, actions: DetailActions): Elemen
   return v_flex()
     .flex_1()
     .min_h_0()
-    .child(bar(view.file ?? "", p, textButton("diff-back", "← Files", p, actions.closeFile), textButton("diff-close", "×", p, actions.close)))
+    .child(
+      bar(
+        view.file ?? "",
+        p,
+        textButton("diff-back", "← Files", p, actions.closeFile),
+        ...(view.selected !== UNCOMMITTED && view.file !== null
+          ? [
+              textButton("diff-blame", "Blame", p, (cx) => actions.inspectFile("blame", view.file ?? "", cx)),
+              textButton("diff-history", "History", p, (cx) => actions.inspectFile("file-log", view.file ?? "", cx)),
+            ]
+          : []),
+        textButton("diff-close", "×", p, actions.close),
+      ),
+    )
     .child(
       diff
         ? div()

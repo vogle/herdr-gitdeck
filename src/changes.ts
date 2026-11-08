@@ -13,7 +13,7 @@ import type { RepoStatus } from "./core/git/status.ts";
 import type { Pick } from "./core/stage.ts";
 import { remember } from "./core/stage.ts";
 import {
-  applyPicks, commitChanges, discardFiles, loadStageDiff, readLastMessage, splitChanges, stageFiles, unstageFiles,
+  applyPicks, commitChanges, takeSide, discardFiles, loadStageDiff, readLastMessage, splitChanges, stageFiles, unstageFiles,
   type ChangeFile, type Changes, type Files,
 } from "./core/staging.ts";
 import type { ChangesActions, ChangesParts } from "./ui/changes.ts";
@@ -119,6 +119,7 @@ export class ChangesPanel {
         }
         this.act(cx, (git, target) => discardFiles(git, target, [file]));
       },
+      takeSide: (file, side, cx) => this.act(cx, (git, target) => takeSide(git, target, [file.path], side)),
       diffClick: (row, cx) => {
         const hunk = hunkPick(this.view, row);
         if (hunk) return this.applyPicks(cx, [hunk]);

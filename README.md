@@ -47,9 +47,15 @@ one you're in, with its branch and where it stands.
   each branch on it: switch to, merge, rebase onto, delete. A stash offers
   apply, pop and drop. A merge, rebase, cherry-pick or revert that stops on
   conflicts shows a banner with Continue, Skip and Abort.
+- **Looking closer.** A committed file's diff has **Blame** (each line's
+  commit, author and age) and **History** (the commits that changed it,
+  following renames). **Reflog** lists where HEAD has been. A click on any of
+  their rows jumps to that commit. A conflicted file can **Take ours** or
+  **Take theirs** whole.
 
 Reading uses `git status`, `git log`, `git show -s`, `git diff-tree`,
-`git diff`, `git for-each-ref`, `git stash list`, `git rev-parse` and `find`.
+`git diff`, `git for-each-ref`, `git stash list`, `git rev-parse`, `git blame`
+(of a commit, never the work tree) and `find`.
 Only the buttons you click write: `git add`, `git restore`, `git rm --cached`,
 `git clean` (discarding an untracked file), `git apply --cached` (hunks and
 lines, from a patch file githerd writes into the repo's `.git` folder) and
@@ -106,5 +112,5 @@ the rules a Herdr mod has to follow.
 | **M1** | Commit graph, commit details and diff, branches/tags/stashes sidebar, search ✅ |
 | **M2** | Staging by file, hunk and line; commit and amend; discard ✅ |
 | **M3** | Checkout, merge, rebase, cherry-pick, revert, reset, stash; fetch/pull/push ✅ |
-| **M4** | Interactive rebase, conflict resolver, blame, file history, tree at a commit, reflog, image diff |
+| **M4** | Blame, file history, reflog, take ours/theirs ✅; interactive rebase, line-level conflict resolver, tree at a commit, image diff |
 | **M5** | Submodules, git-flow, LFS, GitHub integration, repository statistics |
