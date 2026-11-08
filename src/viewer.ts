@@ -29,7 +29,7 @@ export function openViewer(request: ViewerRequest): void {
   setShared(VIEWER_KEY, request);
   const tab = findViewerTab(panes());
   if (tab) run("tab.select", { id: tab });
-  else run("tab.new", { name: "githerd", mod: "githerd", props: { viewer: true } });
+  else run("tab.new", { name: "GitHerd", mod: "githerd", props: { viewer: true } });
 }
 
 type Shown = { kind: "diff"; diff: Diff } | { kind: "inspect"; view: InspectView } | { kind: "note"; text: string };
