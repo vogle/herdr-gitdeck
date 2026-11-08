@@ -31,6 +31,7 @@ test("parseLog skips junk and empty output", () => {
 
 test("parseStashes reads hash, name and subject", () => {
   assert.ok(STASH_ARGS.includes("list"));
+  assert.ok(STASH_ARGS.includes("--no-show-signature"), "stash list is a log: it checks signatures too");
   const out = `${H1}\x1fstash@{0}\x1fWIP on main: abc\n${H2}\x1fstash@{1}\x1fOn dev: try\n\n`;
   assert.deepEqual(parseStashes(out), [
     { hash: H1, name: "stash@{0}", subject: "WIP on main: abc" },

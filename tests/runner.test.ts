@@ -25,6 +25,7 @@ test("runs git with the safe flags, in the folder and on the machine given", asy
 test("a repo's own config can't make githerd run a program (fsmonitor off)", () => {
   const flags = GIT_FLAGS.join(" ");
   assert.match(flags, /-c core\.fsmonitor=false/);
+  assert.match(flags, /-c log\.showSignature=false/);
 });
 
 test("a nonzero exit becomes a GitError carrying stderr's first line", async () => {

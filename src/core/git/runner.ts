@@ -24,7 +24,9 @@ export type Git = (target: Target, args: string[]) => Promise<string>;
  * - no optional locks, so reading never blocks an agent's git in the same repo;
  * - plain output: no colors, paths unquoted (UTF-8 names stay readable);
  * - no fsmonitor: githerd reads every repo `find` turns up, and a repo's own
- *   `.git/config` could name a program as its fsmonitor and have it run.
+ *   `.git/config` could name a program as its fsmonitor and have it run;
+ * - no signature checks: a repo's `log.showSignature` would make every
+ *   log-like command (log, show, stash list) run its `gpg.program`.
  */
 export const GIT_FLAGS: readonly string[] = [
   "--no-optional-locks",
@@ -34,6 +36,8 @@ export const GIT_FLAGS: readonly string[] = [
   "core.quotepath=false",
   "-c",
   "core.fsmonitor=false",
+  "-c",
+  "log.showSignature=false",
 ];
 
 export class GitError extends Error {

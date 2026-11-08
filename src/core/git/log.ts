@@ -50,7 +50,7 @@ export function parseLog(output: string): Commit[] {
     .filter((c): c is Commit => c !== null);
 }
 
-export const STASH_ARGS: readonly string[] = ["stash", "list", `--format=%H${"%x1f"}%gd${"%x1f"}%s`];
+export const STASH_ARGS: readonly string[] = ["stash", "list", "--no-show-signature", `--format=%H${"%x1f"}%gd${"%x1f"}%s`];
 
 export interface Stash {
   hash: string;

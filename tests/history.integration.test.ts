@@ -45,6 +45,8 @@ before(async () => {
   await writeFile(join(dir, ".signed"), signed);
   const oid = (await git(at, ["hash-object", "-t", "commit", "-w", ".signed"])).trim();
   await git(at, ["update-ref", "refs/heads/main", oid]);
+  // A stash entry on that signed commit: `stash list` is a `log` and checks signatures too.
+  await git(at, ["update-ref", "--create-reflog", "-m", "On main: trap", "refs/stash", oid]);
   // The traps, in the repo's own config.
   for (const [k, v] of [["log.showSignature", "true"], ["gpg.program", trap], ["diff.external", trap], ["diff.evil.textconv", trap]]) {
     await git(at, ["config", k ?? "", v ?? ""]);
@@ -61,6 +63,7 @@ test("the history, a commit, its diff and a work-tree diff run none of the repo'
   const h = await loadHistory(git, at, 100);
   assert.equal(h.error, null);
   assert.deepEqual(h.commits.map((c) => c.subject), ["second", "first"]);
+  assert.deepEqual(h.stashes.map((x) => x.name), ["stash@{0}"]);
   const head = h.commits[0];
   assert.ok(head);
   const c = await loadCommit(git, at, head.hash, head.parents);
@@ -75,7 +78,8 @@ test("the history, a commit, its diff and a work-tree diff run none of the repo'
   assert.equal(await exists(marker), false, "a repo-configured program ran");
 });
 
-test("the trap is real: plain git log runs gpg.program", async () => {
-  await git(at, ["log", "-1"]);
+test("the trap is real: git without githerd's flags runs gpg.program from stash list", async () => {
+  // Straight to git, past createGit: proves the repo's config would run its program.
+  await exec("git", ["stash", "list"], { cwd: dir });
   assert.equal(await exists(marker), true);
 });
