@@ -6,10 +6,11 @@ import { v_flex, InputState, VirtualListScrollHandle } from "gpui-base";
 import { exec, focused, home, nextCommand, panes, shared, spaces } from "herdr";
 import { ChangesPanel } from "./changes.ts";
 import { loadBlame, loadFileLog, loadReflog, type InspectView } from "./core/inspect.ts";
+import { loadBlob, loadTree } from "./core/tree.ts";
 import { NET_ENV } from "./core/ops.ts";
 import { OpsPanel } from "./ops.ts";
 import { contextOf, sameContext } from "./core/context.ts";
-import { createGit, type Target } from "./core/git/runner.ts";
+import { createGit, type Git, type Target } from "./core/git/runner.ts";
 import type { RepoStatus } from "./core/git/status.ts";
 import { closePicker, emptyHerd, select, selectedRepo, togglePicker, withRepos, withStatus, type HerdState } from "./core/herd.ts";
 import { loadCommit, loadDiff, loadHistory, type DiffSource } from "./core/history.ts";
@@ -41,6 +42,11 @@ export const DEPTH_KEY = "githerd.depth";
 function depthSetting(): number {
   const value = Number(shared(DEPTH_KEY));
   return Number.isInteger(value) && value >= 1 && value <= 6 ? value : 3;
+}
+
+async function treeLoaded(git: Git, target: Target, rev: string) {
+  const t = await loadTree(git, target, rev);
+  return { items: t.files, error: t.error };
 }
 
 function errorText(error: unknown): string {
@@ -310,8 +316,28 @@ export default class Githerd extends View {
           ? { ...v, data: await loadBlame(this.git, target, v.rev, v.path) }
           : v.kind === "file-log"
             ? { ...v, data: await loadFileLog(this.git, target, v.rev, v.path) }
-            : { ...v, data: await loadReflog(this.git, target) };
+            : v.kind === "reflog"
+              ? { ...v, data: await loadReflog(this.git, target) }
+              : { ...v, data: await treeLoaded(this.git, target, v.rev) };
       if (this.inspect?.view === view) this.inspect = { repo: target.cwd, view: done };
+      cx.notify();
+    });
+  }
+
+  /** The tree pane: open one file, or go back to the list. */
+  treeFile(index: number | null, cx: Context): void {
+    const current = this.inspect;
+    const target = this.repoTarget();
+    if (current?.view.kind !== "tree" || !target) return;
+    const tree = current.view;
+    const file = index === null ? null : (tree.data?.items[index] ?? null);
+    const opened: InspectView = { ...tree, file, blob: null };
+    this.inspect = { ...current, view: opened };
+    cx.notify();
+    if (!file) return;
+    cx.spawn(async (cx) => {
+      const blob = await loadBlob(this.git, target, tree.rev, file);
+      if (this.inspect?.view === opened) this.inspect = { ...current, view: { ...opened, blob } };
       cx.notify();
     });
   }
@@ -362,6 +388,11 @@ export default class Githerd extends View {
           return cx.notify();
         }
         this.openInspect({ kind: "reflog", data: null }, cx);
+      },
+      treeFile: (index, cx) => this.treeFile(index, cx),
+      browseTree: (cx) => {
+        const sel = this.selectedCommit();
+        if (sel) this.openInspect({ kind: "tree", rev: sel.hash, data: null, file: null, blob: null }, cx);
       },
       closeInspect: (cx) => {
         this.inspect = null;

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { emptyOps, forRepoOps, started, finished, confirmOps, startNaming, stopNaming, withOperation, commitActions } from "../src/core/opsView.ts";
+import { emptyOps, forRepoOps, started, finished, confirmOps, startNaming, stopNaming, withOperation, withPlan, commitActions } from "../src/core/opsView.ts";
 import type { Ref } from "../src/core/git/refs.ts";
 
 const H = "a".repeat(40);
@@ -35,7 +35,7 @@ test("another repo starts over, and the operation under way is kept", () => {
 
 test("commitActions offers what fits the commit and the refs on it", () => {
   const plain = commitActions({ hash: H, parents: 1, refs: [], stash: null, head: "b".repeat(40), branch: "main" });
-  assert.deepEqual(plain.map((a) => a.kind), ["checkout-commit", "branch", "tag", "cherry-pick", "revert", "merge", "rebase", "reset"]);
+  assert.deepEqual(plain.map((a) => a.kind), ["checkout-commit", "branch", "tag", "cherry-pick", "revert", "merge", "rebase", "edit-after", "reset"]);
   const onHead = commitActions({ hash: H, parents: 1, refs: [ref("branch", "main", true)], stash: null, head: H, branch: "main" });
   assert.deepEqual(onHead.map((a) => a.kind), ["branch", "tag", "revert", "reset"], "HEAD itself: no checkout, pick, merge or rebase");
   const withRefs = commitActions({ hash: H, parents: 2, refs: [ref("branch", "dev"), ref("remote", "origin/x"), ref("tag", "v1")], stash: null, head: "b".repeat(40), branch: "main" });
@@ -47,4 +47,12 @@ test("commitActions offers what fits the commit and the refs on it", () => {
   assert.deepEqual(stash.map((a) => a.kind), ["stash-apply", "stash-pop", "stash-drop"]);
   const detached = commitActions({ hash: H, parents: 1, refs: [], stash: null, head: "b".repeat(40), branch: null });
   assert.ok(!detached.some((a) => a.kind === "merge" || a.kind === "rebase"), "no branch to merge into");
+});
+
+test("withPlan opens and closes the rebase editor and clears a pending click", () => {
+  const plan = { base: null, steps: [] };
+  const v = withPlan(confirmOps(emptyOps("/r"), "k"), plan);
+  assert.equal(v.plan, plan);
+  assert.equal(v.confirm, null);
+  assert.equal(withPlan(v, null).plan, null);
 });

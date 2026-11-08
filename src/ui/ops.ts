@@ -1,8 +1,9 @@
 // Branch and sync controls: a sync bar (fetch, pull, push, stash), the
 // operation under way with continue/abort, and the selected commit's actions.
 
+import { planProblem, type RebasePlan } from "../core/rebase.ts";
 import { div, type Context, type Element } from "gpui-kit";
-import { h_flex, Input, type InputState } from "gpui-base";
+import { h_flex, v_flex, Input, type InputState } from "gpui-base";
 import type { ActionKind, CommitAction, OpsView } from "../core/opsView.ts";
 import type { Operation } from "../core/ops.ts";
 import { textButton, type Palette } from "./style.ts";
@@ -19,6 +20,11 @@ export interface OpsActions {
   createName: (cx: Context) => void;
   cancelName: (cx: Context) => void;
   dismiss: (cx: Context) => void;
+  /** The interactive rebase editor. */
+  cycleStep: (index: number, cx: Context) => void;
+  moveStep: (index: number, by: -1 | 1, cx: Context) => void;
+  runPlan: (cx: Context) => void;
+  cancelPlan: (cx: Context) => void;
 }
 
 export interface OpsParts {
@@ -48,6 +54,7 @@ const LABEL: Record<ActionKind, string> = {
   revert: "Revert",
   merge: "Merge",
   rebase: "Rebase onto",
+  "edit-after": "Edit commits after this",
   reset: "Reset to here",
   "delete-branch": "Delete",
   "stash-apply": "Apply",
@@ -122,7 +129,44 @@ function namingRow(parts: OpsParts, p: Palette, a: OpsActions): Element {
 }
 
 /** The selected commit's actions, as a wrapping row of buttons. */
+const STEP_COLOR = { pick: "foreground", squash: "info", fixup: "info", drop: "removed" } as const;
+
+/** The steps of an interactive rebase, oldest first: click an action to change it. */
+function planEditor(plan: RebasePlan, p: Palette, a: OpsActions, busy: boolean): Element {
+  const problem = planProblem(plan);
+  const rows = plan.steps.map((s, i) =>
+    h_flex()
+      .h(22)
+      .px(8)
+      .gap(6)
+      .items_center()
+      .whitespace_nowrap()
+      .child(div().w(58).flex_shrink_0().child(textButton(`rs:${i}`, s.action, p, (cx) => a.cycleStep(i, cx))))
+      .child(div().w(60).flex_shrink_0().text_color(p.dim).child(s.hash.slice(0, 7)))
+      .child(div().flex_1().min_w_0().truncate().text_color(p[STEP_COLOR[s.action]]).when(s.action === "drop", (el) => el.line_through()).child(s.subject))
+      .child(textButton(`ru:${i}`, "↑", p, (cx) => a.moveStep(i, -1, cx)))
+      .child(textButton(`rd:${i}`, "↓", p, (cx) => a.moveStep(i, 1, cx))),
+  );
+  return v_flex()
+    .flex_shrink_0()
+    .border_t_1()
+    .border_color(p.border)
+    .text_xs()
+    .child(
+      h_flex()
+        .px(8)
+        .py(3)
+        .gap(6)
+        .items_center()
+        .child(div().flex_1().min_w_0().truncate().text_color(problem ? p.removed : p.muted).child(problem ?? `Rewrite ${plan.steps.length} commits, oldest first. squash/fixup join the one above; drop leaves it out.`))
+        .child(textButton("plan-run", busy ? "Rebasing…" : "Run", p, a.runPlan, problem === null))
+        .child(textButton("plan-cancel", "Cancel", p, a.cancelPlan)),
+    )
+    .child(v_flex().id("githerd-plan").max_h(220).overflow_y_scroll().children(rows));
+}
+
 export function commitBar(parts: OpsParts, p: Palette, a: OpsActions): Element | null {
+  if (parts.view.plan) return planEditor(parts.view.plan, p, a, parts.view.busy !== null);
   const actions = parts.commit;
   if (actions === null) return null;
   if (parts.view.naming) return namingRow(parts, p, a);

@@ -3,6 +3,7 @@
 
 import { logArgs, parseLog, type Commit } from "./git/log.ts";
 import type { Git, Target } from "./git/runner.ts";
+import type { BlobView, TreeFile } from "./tree.ts";
 
 /** A commit's version of the file: the work-tree one would run clean filters. */
 export const blameArgs = (rev: string, path: string): string[] =>
@@ -110,4 +111,5 @@ export const loadReflog = (git: Git, target: Target): Promise<Loaded<ReflogEntry
 export type InspectView =
   | { kind: "blame"; path: string; rev: string; data: Loaded<BlameLine> | null }
   | { kind: "file-log"; path: string; rev: string; data: Loaded<Commit> | null }
-  | { kind: "reflog"; data: Loaded<ReflogEntry> | null };
+  | { kind: "reflog"; data: Loaded<ReflogEntry> | null }
+  | { kind: "tree"; rev: string; data: Loaded<TreeFile> | null; file: TreeFile | null; blob: BlobView | null };

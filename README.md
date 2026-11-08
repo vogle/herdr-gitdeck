@@ -8,10 +8,10 @@ githerd follows the terminal you're focused on. It climbs to the outermost
 repository around that folder, lists every repository below it, and shows the
 one you're in, with its branch and where it stands.
 
-> Status: **M3**. Repo discovery, the repo picker, the history (commit graph,
+> Status: **M4**. Repo discovery, the repo picker, the history (commit graph,
 > commit details and diffs, refs sidebar, search), staging and committing, and
-> branch work and sync. Interactive rebase, blame and the like come next (see
-> [Roadmap](#roadmap)).
+> branch work and sync, blame, file history, the reflog, the files at a commit
+> and interactive rebase (see [Roadmap](#roadmap)).
 
 ## What it does now
 
@@ -51,17 +51,24 @@ one you're in, with its branch and where it stands.
   commit, author and age) and **History** (the commits that changed it,
   following renames). **Reflog** lists where HEAD has been. A click on any of
   their rows jumps to that commit. A conflicted file can **Take ours** or
-  **Take theirs** whole.
+  **Take theirs** whole. **Files at commit** lists every file as it was at the
+  selected commit; click one to read it (raw, from git's objects).
+- **Editing history.** "Edit commits after this" opens the commits between
+  the selected one and HEAD, oldest first. Click a step to cycle pick →
+  squash → fixup → drop, move it with ↑ ↓, then Run. githerd writes git's todo
+  list itself (no editor opens) and a squash keeps both messages. Ranges with
+  a merge commit are refused. Repos on this machine only.
 
 Reading uses `git status`, `git log`, `git show -s`, `git diff-tree`,
 `git diff`, `git for-each-ref`, `git stash list`, `git rev-parse`, `git blame`
-(of a commit, never the work tree) and `find`.
+(of a commit, never the work tree), `git ls-tree`, `git cat-file` and `find`.
 Only the buttons you click write: `git add`, `git restore`, `git rm --cached`,
 `git clean` (discarding an untracked file), `git apply --cached` (hunks and
 lines, from a patch file githerd writes into the repo's `.git` folder) and
 `git commit`, and the branch and sync buttons run `git switch`, `branch`,
 `tag`, `merge`, `rebase`, `cherry-pick`, `revert`, `reset`, `stash`, `fetch`,
-`pull` and `push`. These run your repo's own hooks and signing program, as git
+`pull` and `push`, and Edit commits runs `git rebase -i` with its todo list
+copied in by `cp` (`sequence.editor`). These run your repo's own hooks and signing program, as git
 always does, so use them only in repos whose `.git` folder you trust. Network
 commands never ask for a password (`GIT_TERMINAL_PROMPT=0`): use an SSH key or
 a credential helper. Nothing is ever force-pushed. Paths are
@@ -112,5 +119,5 @@ the rules a Herdr mod has to follow.
 | **M1** | Commit graph, commit details and diff, branches/tags/stashes sidebar, search ✅ |
 | **M2** | Staging by file, hunk and line; commit and amend; discard ✅ |
 | **M3** | Checkout, merge, rebase, cherry-pick, revert, reset, stash; fetch/pull/push ✅ |
-| **M4** | Blame, file history, reflog, take ours/theirs ✅; interactive rebase, line-level conflict resolver, tree at a commit, image diff |
+| **M4** | Blame, file history, reflog, take ours/theirs, files at a commit, interactive rebase ✅; line-level conflict resolver, image diff |
 | **M5** | Submodules, git-flow, LFS, GitHub integration, repository statistics |

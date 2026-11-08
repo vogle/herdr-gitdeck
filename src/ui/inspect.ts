@@ -13,9 +13,13 @@ const ROW = 18;
 export interface InspectActions {
   jump: (hash: string, cx: Context) => void;
   close: (cx: Context) => void;
+  /** The tree: open a file, or go back to the list. */
+  openTreeFile: (index: number, cx: Context) => void;
+  closeTreeFile: (cx: Context) => void;
 }
 
 interface Row {
+  /** The commit a click jumps to; the tree's rows open a file instead. */
   hash: string;
   cells: Element[];
 }
@@ -39,6 +43,21 @@ function rowsOf(v: InspectView, p: Palette, now: number): Row[] {
       cells: [dim(c.hash.slice(0, 7), 60), div().flex_1().min_w_0().truncate().child(c.subject), dim(c.author, 120), dim(ago(now, c.time), 60)],
     }));
   }
+  if (v.kind === "tree") {
+    if (v.file) {
+      const blob = v.blob;
+      if (!blob) return [{ hash: "", cells: [div().text_color(p.dim).child("Reading file…")] }];
+      if (blob.note) return [{ hash: "", cells: [div().text_color(p.dim).child(blob.note)] }];
+      return blob.lines.map((text, i) => ({
+        hash: "",
+        cells: [div().w(36).flex_shrink_0().text_right().text_color(p.dim).child(String(i + 1)), div().flex_1().min_w_0().truncate().child(text === "" ? " " : text)],
+      }));
+    }
+    return (v.data?.items ?? []).map((f) => ({
+      hash: "",
+      cells: [div().flex_1().min_w_0().truncate().child(f.path), dim(f.kind === "file" ? `${f.size} B` : f.kind, 80)],
+    }));
+  }
   return (v.data?.items ?? []).map((e) => ({
     hash: e.hash,
     cells: [dim(e.name, 80), dim(e.hash.slice(0, 7), 60), div().flex_1().min_w_0().truncate().child(e.action), dim(ago(now, e.time), 60)],
@@ -48,6 +67,7 @@ function rowsOf(v: InspectView, p: Palette, now: number): Row[] {
 function title(v: InspectView): string {
   if (v.kind === "blame") return `Blame: ${v.path} at ${v.rev.slice(0, 10)}`;
   if (v.kind === "file-log") return `History: ${v.path}`;
+  if (v.kind === "tree") return v.file ? `${v.file.path} at ${v.rev.slice(0, 10)}` : `Files at ${v.rev.slice(0, 10)} (${v.data?.items.length ?? 0})`;
   return "Reflog: where HEAD has been";
 }
 
@@ -63,7 +83,7 @@ export function inspectPane(v: InspectView, p: Palette, a: InspectActions): Elem
             .relative()
             .flex_1()
             .min_h_0()
-            .when(v.kind === "blame", (el) => el.font_family(monoFont()))
+            .when(v.kind === "blame" || (v.kind === "tree" && v.file !== null), (el) => el.font_family(monoFont()))
             .text_xs()
             .child(
               v_virtual_list(LIST, rows.length, ROW, (i) => String(i), (range) =>
@@ -72,6 +92,7 @@ export function inspectPane(v: InspectView, p: Palette, a: InspectActions): Elem
                 ),
               )
                 .on_item_click((key, cx) => {
+                  if (v.kind === "tree") return v.file === null ? a.openTreeFile(Number(key), cx) : undefined;
                   const row = rows[Number(key)];
                   if (row) a.jump(row.hash, cx);
                 })
@@ -94,6 +115,7 @@ export function inspectPane(v: InspectView, p: Palette, a: InspectActions): Elem
         .border_b_1()
         .border_color(p.border)
         .child(div().flex_1().min_w_0().truncate().text_xs().text_color(p.muted).child(title(v)))
+        .when(v.kind === "tree" && v.file !== null, (el) => el.child(textButton("tree-back", "← Files", p, a.closeTreeFile)))
         .child(textButton("inspect-close", "×", p, a.close)),
     )
     .child(body);

@@ -19,6 +19,7 @@ export interface HistoryActions extends GraphActions, DetailActions {
   jump: (hash: string, cx: Context) => void;
   reflog: (cx: Context) => void;
   closeInspect: (cx: Context) => void;
+  treeFile: (index: number | null, cx: Context) => void;
 }
 
 export interface HistoryParts {
@@ -77,7 +78,12 @@ function trustBanner(filters: readonly string[], p: Palette): Element {
 
 export function historyPane(parts: HistoryParts, p: Palette, actions: HistoryActions): Element {
   const below = parts.inspect
-    ? inspectPane(parts.inspect, p, { jump: actions.jump, close: actions.closeInspect })
+    ? inspectPane(parts.inspect, p, {
+        jump: actions.jump,
+        close: actions.closeInspect,
+        openTreeFile: (i, cx) => actions.treeFile(i, cx),
+        closeTreeFile: (cx) => actions.treeFile(null, cx),
+      })
     : parts.view.selected === UNCOMMITTED && parts.changes
       ? changesPane(parts.changes.parts, p, parts.changes.actions)
       : details(parts.view, parts.status, p, actions);

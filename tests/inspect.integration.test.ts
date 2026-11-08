@@ -65,3 +65,13 @@ test("a conflict resolved by taking theirs", async () => {
   assert.equal(await readFile(join(at.cwd, "b.txt"), "utf8"), "side\n");
   await git(at, ["merge", "--abort"]);
 });
+
+test("the tree at a commit lists its files and reads one as stored", async () => {
+  const { loadTree, loadBlob } = await import("../src/core/tree.ts");
+  const rev = await head();
+  const tree = await loadTree(git, at, rev);
+  assert.deepEqual(tree.files.map((f) => f.path), ["b.txt"]);
+  const file = tree.files[0];
+  assert.ok(file);
+  assert.deepEqual(await loadBlob(git, at, rev, file), { lines: ["main"], note: null });
+});

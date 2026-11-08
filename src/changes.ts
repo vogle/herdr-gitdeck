@@ -18,7 +18,7 @@ import {
 } from "./core/staging.ts";
 import type { ChangesActions, ChangesParts } from "./ui/changes.ts";
 
-const files: Files = {
+export const files: Files = {
   read: (path) => readTextFile(path),
   write: (path, text, expected) => writeTextFile(path, text, expected),
   remove: (path) => exec("rm", ["-f", "--", path]),

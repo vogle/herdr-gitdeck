@@ -3,6 +3,7 @@
 
 import type { Ref } from "./git/refs.ts";
 import type { Operation } from "./ops.ts";
+import type { RebasePlan } from "./rebase.ts";
 
 export interface OpsView {
   repo: string | null;
@@ -15,10 +16,12 @@ export interface OpsView {
   /** A new branch or tag being named, at this commit. */
   naming: { kind: "branch" | "tag"; at: string } | null;
   operation: Operation | null;
+  /** An interactive rebase being edited before it runs. */
+  plan: RebasePlan | null;
 }
 
 export const emptyOps = (repo: string | null): OpsView => ({
-  repo, busy: null, error: null, notice: null, confirm: null, naming: null, operation: null,
+  repo, busy: null, error: null, notice: null, confirm: null, naming: null, operation: null, plan: null,
 });
 
 export const forRepoOps = (v: OpsView, repo: string | null): OpsView => (v.repo === repo ? v : emptyOps(repo));
@@ -33,11 +36,12 @@ export const finished = (v: OpsView, error: string | null, notice: string | null
 export const confirmOps = (v: OpsView, key: string | null): OpsView => ({ ...v, confirm: key });
 export const startNaming = (v: OpsView, kind: "branch" | "tag", at: string): OpsView => ({ ...v, naming: { kind, at }, confirm: null });
 export const stopNaming = (v: OpsView): OpsView => ({ ...v, naming: null });
+export const withPlan = (v: OpsView, plan: RebasePlan | null): OpsView => ({ ...v, plan, confirm: null });
 export const withOperation = (v: OpsView, operation: Operation | null): OpsView => ({ ...v, operation });
 
 export type ActionKind =
   | "checkout-commit" | "checkout-branch" | "checkout-remote" | "branch" | "tag" | "cherry-pick" | "revert"
-  | "merge" | "rebase" | "reset" | "delete-branch" | "stash-apply" | "stash-pop" | "stash-drop";
+  | "merge" | "rebase" | "edit-after" | "reset" | "delete-branch" | "stash-apply" | "stash-pop" | "stash-drop";
 
 export interface CommitAction {
   kind: ActionKind;
@@ -67,7 +71,7 @@ export function commitActions(c: CommitFacts): CommitAction[] {
     { kind: "tag" },
     ...(isHead ? [] : [{ kind: "cherry-pick" as const }]),
     { kind: "revert" },
-    ...(!isHead && onBranch ? [{ kind: "merge" as const }, { kind: "rebase" as const }] : []),
+    ...(!isHead && onBranch ? [{ kind: "merge" as const }, { kind: "rebase" as const }, { kind: "edit-after" as const }] : []),
     { kind: "reset" },
   ];
   const byRef = c.refs.flatMap((r): CommitAction[] => {

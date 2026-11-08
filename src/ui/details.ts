@@ -20,6 +20,8 @@ export interface DetailActions {
   close: (cx: Context) => void;
   /** A committed file's blame or history. */
   inspectFile: (kind: "blame" | "file-log", path: string, cx: Context) => void;
+  /** Every file as it was at the selected commit. */
+  browseTree: (cx: Context) => void;
 }
 
 function statusColor(letter: string, p: Palette) {
@@ -168,6 +170,13 @@ export function details(view: HistoryView, status: RepoStatus | null, p: Palette
   const title = uncommitted ? "Uncommitted changes" : `Commit ${view.selected.slice(0, 10)}`;
   const body = uncommitted ? worktreeBody(status, p, actions) : commitBody(view, p, actions);
   return pane
-    .child(bar(title, p, textButton("details-close", "×", p, actions.close)))
+    .child(
+      bar(
+        title,
+        p,
+        ...(uncommitted ? [] : [textButton("details-tree", "Files at commit", p, actions.browseTree)]),
+        textButton("details-close", "×", p, actions.close),
+      ),
+    )
     .child(v_flex().id("details-body").flex_1().min_h_0().overflow_y_scrollbar().pb(6).children(body));
 }
