@@ -492,7 +492,6 @@ export default class Githerd extends View {
         header(this.herd, this.busy, p, {
           togglePicker: (cx) => this.togglePicker(cx),
           refresh: (cx) => this.refresh(cx),
-          close: () => run("layout.hide", { id: "panel" }),
         }),
       )
       .when(this.error !== null, (el) =>

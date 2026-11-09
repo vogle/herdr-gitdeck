@@ -1,4 +1,5 @@
-// The 40px bar: githerd, the shown repo (a dropdown when there's a herd), its branch, refresh, close.
+// The 40px bar: githerd, the shown repo (a dropdown when there's a herd), its branch, refresh.
+// The panel is hidden from the tab bar's GitHerd button, so it has no close of its own.
 
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex } from "gpui-base";
@@ -9,8 +10,6 @@ import { ICONS, icon, type Palette } from "./style.ts";
 export interface HeaderActions {
   togglePicker: (cx: Context) => void;
   refresh: (cx: Context) => void;
-  /** Folds the panel away (the main area keeps its tabs). */
-  close: (cx: Context) => void;
 }
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -78,17 +77,5 @@ export function header(state: HerdState, busy: boolean, p: Palette, actions: Hea
     .child(h_flex().gap(8).items_center().text_xs().text_color(p.muted).children(statusBadges(result, p)))
     .child(div().flex_1())
     .when(busy, (el) => el.child(div().text_color(p.dim).frames(SPINNER, 90)))
-    .child(refreshButton(p, actions.refresh))
-    .child(
-      div()
-        .id("close-panel")
-        .px(6)
-        .rounded(4)
-        .cursor_pointer()
-        .tooltip("Hide the panel")
-        .text_color(p.muted)
-        .hover((x) => x.bg(p.hover))
-        .on_click((_e, cx) => actions.close(cx))
-        .child("×"),
-    );
+    .child(refreshButton(p, actions.refresh));
 }
