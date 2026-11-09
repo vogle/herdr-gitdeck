@@ -88,7 +88,7 @@ export function monoFont(): string {
   return typeof f === "string" && f !== "" ? f : "Menlo";
 }
 
-/** A small clickable text button. */
+/** A small clickable text button. Its click stays with it: a button in a clickable row doesn't also click the row. */
 export function textButton(id: string, label: string, p: Palette, onClick: (cx: Context) => void, active = false): Element {
   return div()
     .id(id)
@@ -101,6 +101,9 @@ export function textButton(id: string, label: string, p: Palette, onClick: (cx: 
     .text_color(active ? p.foreground : p.muted)
     .when(active, (el) => el.bg(p.selected))
     .hover((el) => el.bg(p.hover).text_color(p.foreground))
-    .on_click((_e, cx) => onClick(cx))
+    .on_click((_e, cx) => {
+      cx.stop_propagation();
+      onClick(cx);
+    })
     .child(label);
 }
