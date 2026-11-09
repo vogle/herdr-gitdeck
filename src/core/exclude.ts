@@ -1,0 +1,37 @@
+// "Ignore locally": list a path in the repo's own exclude file (.git/info/exclude),
+// which works like .gitignore but is never committed. Agents leave scratch folders
+// (.claude/, .moai/) behind; this hides them without touching the project's files.
+
+import type { Git, Target } from "./git/runner.ts";
+import type { Files } from "./staging.ts";
+
+const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+/** The path anchored at the repo root, with gitignore's special characters escaped. */
+export function excludePattern(path: string): string {
+  const escaped = path.replace(/[\\[\]*?!#]/g, (c) => `\\${c}`).replace(/ $/, "\\ ");
+  return `/${escaped}`;
+}
+
+/** The exclude file's text with the path added on a line of its own, or null when it's already there. */
+export function withExcluded(text: string, path: string): string | null {
+  const pattern = excludePattern(path);
+  if (text.split("\n").some((line) => line.trim() === pattern)) return null;
+  const sep = text === "" || text.endsWith("\n") ? "" : "\n";
+  return `${text}${sep}${pattern}\n`;
+}
+
+/** Adds the path to the repo's exclude file; returns an error text, or null when done. */
+export async function excludeLocally(git: Git, files: Files, target: Target, path: string): Promise<string | null> {
+  if (target.on !== null) return "Ignoring a file works only for repos on this machine";
+  try {
+    const answer = (await git(target, ["rev-parse", "--git-path", "info/exclude"])).trim();
+    const file = answer.startsWith("/") ? answer : `${target.cwd}/${answer}`;
+    const current = await files.read(file);
+    const next = withExcluded(current ?? "", path);
+    if (next !== null) await files.write(file, next, current);
+    return null;
+  } catch (error) {
+    return message(error);
+  }
+}

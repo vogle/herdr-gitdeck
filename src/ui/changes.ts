@@ -6,6 +6,7 @@ import { h_flex, v_flex, v_virtual_list, Scrollbar, Textarea, type TextareaState
 import type { ChangesView, Resolving } from "../core/changesView.ts";
 import { allChosen, type Choice } from "../core/conflict.ts";
 import type { DiffRow } from "../core/git/diff.ts";
+import type { AgentNote } from "../core/repoAgents.ts";
 import type { ChangeFile, Changes } from "../core/staging.ts";
 import { monoFont, textButton, type Palette } from "./style.ts";
 
@@ -33,6 +34,10 @@ export interface ChangesActions {
   /** Writes a message drafted from the staged files into the box. */
   suggest: (cx: Context) => void;
   commit: (cx: Context) => void;
+  /** Moves HEAD back one commit; its changes stay staged. */
+  undo: (cx: Context) => void;
+  /** Lists an untracked file in .git/info/exclude so it stops showing. */
+  ignore: (file: ChangeFile, cx: Context) => void;
   close: (cx: Context) => void;
 }
 
@@ -42,6 +47,10 @@ export interface ChangesParts {
   message: TextareaState;
   /** Partial staging writes a patch file: this machine only. */
   local: boolean;
+  /** What a coding agent working in this repo means for the commit, if anything. */
+  agentNote: AgentNote | null;
+  /** The last commit was made here and can be undone. */
+  undoable: boolean;
 }
 
 function letterColor(letter: string, p: Palette) {
@@ -88,6 +97,7 @@ function fileLists(parts: ChangesParts, p: Palette, a: ChangesActions): Element[
     const key = `discard:${f.path}`;
     const asking = view.confirm === key;
     return fileRow(`uf:${i}`, f, p, (cx) => a.open(f, false, cx), [
+      ...(f.untracked && parts.local ? [textButton(`ig:${i}`, "Ignore", p, (cx) => a.ignore(f, cx))] : []),
       textButton(`dc:${i}`, asking ? (f.untracked ? "Delete file?" : "Discard?") : "Discard", p, (cx) => a.discard(f, cx), asking),
       textButton(`st:${i}`, "Stage", p, (cx) => a.stage([f.path], cx)),
     ]);
@@ -108,6 +118,30 @@ function fileLists(parts: ChangesParts, p: Palette, a: ChangesActions): Element[
   ];
 }
 
+const NOTE_ICON = { working: "⏳", blocked: "✋", done: "✅" } as const;
+
+function agentBanner(note: AgentNote, p: Palette): Element {
+  const color = note.kind === "working" ? p.changed : note.kind === "blocked" ? p.removed : p.added;
+  return h_flex()
+    .px(10)
+    .py(4)
+    .gap(6)
+    .flex_shrink_0()
+    .items_center()
+    .text_xs()
+    .bg(p.raised)
+    .text_color(color)
+    .child(NOTE_ICON[note.kind])
+    .child(div().min_w_0().flex_1().truncate().child(note.text));
+}
+
+function commitLabel(parts: ChangesParts): string {
+  const { view } = parts;
+  if (view.busy) return "Working…";
+  if (view.confirm === "commit") return "Commit anyway?";
+  return view.amend ? "Amend" : `Commit ${parts.changes.staged.length}`;
+}
+
 function commitBox(parts: ChangesParts, p: Palette, a: ChangesActions): Element {
   const { view } = parts;
   return v_flex()
@@ -124,7 +158,8 @@ function commitBox(parts: ChangesParts, p: Palette, a: ChangesActions): Element 
         .child(textButton("suggest", "✨ Suggest", p, a.suggest))
         .child(textButton("amend", view.amend ? "☑ Amend last commit" : "☐ Amend last commit", p, a.toggleAmend, view.amend))
         .child(div().flex_1())
-        .child(textButton("commit", view.busy ? "Working…" : view.amend ? "Amend" : `Commit ${parts.changes.staged.length}`, p, a.commit, true)),
+        .when(parts.undoable && !view.busy, (el) => el.child(textButton("undo-commit", "↶ Undo commit", p, a.undo)))
+        .child(textButton("commit", commitLabel(parts), p, a.commit, true)),
     );
 }
 
@@ -262,6 +297,7 @@ export function changesPane(parts: ChangesParts, p: Palette, a: ChangesActions):
     .bg(p.surface)
     .child(top)
     .when(error !== null, (el) => el.child(error ?? div()))
+    .when(parts.agentNote !== null, (el) => el.child(parts.agentNote ? agentBanner(parts.agentNote, p) : div()))
     .child(
       view.resolving
         ? resolvePane(view.resolving, p, a)

@@ -18,6 +18,9 @@ import {
 } from "./core/staging.ts";
 import { allChosen, parseConflicts, resolveFile } from "./core/conflict.ts";
 import { draftMessage, followDraft } from "./core/draft.ts";
+import { excludeLocally } from "./core/exclude.ts";
+import { agentNote, type RepoAgent } from "./core/repoAgents.ts";
+import { undoLastCommit } from "./core/undo.ts";
 import type { ChangesActions, ChangesParts } from "./ui/changes.ts";
 
 export const files: Files = {
@@ -33,6 +36,8 @@ export interface ChangesHost {
   status: () => RepoStatus | null;
   /** Reads the shown repo's status again after a change. */
   changed: (cx: AsyncContext) => Promise<void>;
+  /** The coding agents whose terminal is in the shown repo. */
+  agents: () => readonly RepoAgent[];
 }
 
 export class ChangesPanel {
@@ -42,6 +47,8 @@ export class ChangesPanel {
   recent: string[] = [];
   /** The last message drafted from the staged files, to tell it from one the person wrote. */
   drafted = "";
+  /** A commit was just made here and can still be undone (not an amend, not pushed). */
+  undoable = false;
 
   private readonly host: ChangesHost;
 
@@ -55,6 +62,7 @@ export class ChangesPanel {
   }
 
   forRepo(repo: string | null): void {
+    if (repo !== this.view.repo) this.undoable = false;
     this.view = forRepoChanges(this.view, repo);
   }
 
@@ -71,7 +79,14 @@ export class ChangesPanel {
   }
 
   parts(): ChangesParts {
-    return { view: this.view, changes: this.changes(), message: this.message, local: this.host.target()?.on === null };
+    return {
+      view: this.view,
+      changes: this.changes(),
+      message: this.message,
+      local: this.host.target()?.on === null,
+      agentNote: agentNote(this.host.agents()),
+      undoable: this.undoable,
+    };
   }
 
   /** Runs one git action, then re-reads the status and the open diff. */
@@ -188,6 +203,12 @@ export class ChangesPanel {
         cx.notify();
       },
       commit: (cx) => {
+        // While an agent is still working, the first click asks: its changes may be half-made.
+        if (agentNote(this.host.agents())?.kind === "working" && this.view.confirm !== "commit") {
+          this.view = askConfirm(this.view, "commit");
+          cx.notify();
+          return;
+        }
         const text = this.message.value();
         const amend = this.view.amend;
         this.act(
@@ -197,9 +218,14 @@ export class ChangesPanel {
             this.recent = remember(this.recent, text);
             this.message.set_value("");
             this.view = setAmend(this.view, false);
+            this.undoable = !amend;
           },
         );
       },
+      undo: (cx) => this.act(cx, undoLastCommit, () => {
+        this.undoable = false;
+      }),
+      ignore: (file, cx) => this.act(cx, (git, target) => excludeLocally(git, files, target, file.path)),
       close: (cx) => {
         this.view = closeSide(askConfirm(this.view, null));
         cx.notify();
