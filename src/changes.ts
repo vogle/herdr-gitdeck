@@ -18,7 +18,7 @@ import {
 } from "./core/staging.ts";
 import { allChosen, parseConflicts, resolveFile } from "./core/conflict.ts";
 import { draftMessage, followDraft } from "./core/draft.ts";
-import { excludeLocally } from "./core/exclude.ts";
+import { excludeLocally, readExcluded, unexcludeLocally } from "./core/exclude.ts";
 import { agentNote, type RepoAgent } from "./core/repoAgents.ts";
 import { undoLastCommit } from "./core/undo.ts";
 import type { ChangesActions, ChangesParts } from "./ui/changes.ts";
@@ -49,6 +49,8 @@ export class ChangesPanel {
   drafted = "";
   /** A commit was just made here and can still be undone (not an amend, not pushed). */
   undoable = false;
+  /** The patterns in the shown repo's .git/info/exclude. */
+  ignored: string[] = [];
 
   private readonly host: ChangesHost;
 
@@ -62,8 +64,27 @@ export class ChangesPanel {
   }
 
   forRepo(repo: string | null): void {
-    if (repo !== this.view.repo) this.undoable = false;
+    if (repo !== this.view.repo) {
+      this.undoable = false;
+      this.ignored = [];
+    }
     this.view = forRepoChanges(this.view, repo);
+  }
+
+  async readIgnored(cx: AsyncContext): Promise<void> {
+    const target = this.host.target();
+    if (!target) return;
+    this.ignored = await readExcluded(this.host.git, files, target);
+    cx.notify();
+  }
+
+  /** Edits the exclude file, then lists it again so the Ignored section follows. */
+  private editIgnored(cx: Context, edit: (git: Git, target: Target) => Promise<string | null>): void {
+    this.act(cx, async (git, target) => {
+      const error = await edit(git, target);
+      this.ignored = await readExcluded(git, files, target);
+      return error;
+    });
   }
 
   changes(): Changes {
@@ -86,6 +107,7 @@ export class ChangesPanel {
       local: this.host.target()?.on === null,
       agentNote: agentNote(this.host.agents()),
       undoable: this.undoable,
+      ignored: this.ignored,
     };
   }
 
@@ -225,7 +247,8 @@ export class ChangesPanel {
       undo: (cx) => this.act(cx, undoLastCommit, () => {
         this.undoable = false;
       }),
-      ignore: (file, cx) => this.act(cx, (git, target) => excludeLocally(git, files, target, file.path)),
+      ignore: (file, cx) => this.editIgnored(cx, (git, target) => excludeLocally(git, files, target, file.path)),
+      unignore: (line, cx) => this.editIgnored(cx, (git, target) => unexcludeLocally(git, files, target, line)),
       close: (cx) => {
         this.view = closeSide(askConfirm(this.view, null));
         cx.notify();

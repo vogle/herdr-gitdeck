@@ -6,6 +6,7 @@ import { h_flex, v_flex, v_virtual_list, Scrollbar, Textarea, type TextareaState
 import type { ChangesView, Resolving } from "../core/changesView.ts";
 import { allChosen, type Choice } from "../core/conflict.ts";
 import type { DiffRow } from "../core/git/diff.ts";
+import { excludeLabel } from "../core/exclude.ts";
 import type { AgentNote } from "../core/repoAgents.ts";
 import type { ChangeFile, Changes } from "../core/staging.ts";
 import { monoFont, textButton, type Palette } from "./style.ts";
@@ -38,6 +39,8 @@ export interface ChangesActions {
   undo: (cx: Context) => void;
   /** Lists an untracked file in .git/info/exclude so it stops showing. */
   ignore: (file: ChangeFile, cx: Context) => void;
+  /** Takes a pattern back out of .git/info/exclude, so its files show again. */
+  unignore: (line: string, cx: Context) => void;
   close: (cx: Context) => void;
 }
 
@@ -51,6 +54,8 @@ export interface ChangesParts {
   agentNote: AgentNote | null;
   /** The last commit was made here and can be undone. */
   undoable: boolean;
+  /** The patterns in .git/info/exclude (this machine's repos only). */
+  ignored: readonly string[];
 }
 
 function letterColor(letter: string, p: Palette) {
@@ -108,6 +113,18 @@ function fileLists(parts: ChangesParts, p: Palette, a: ChangesActions): Element[
     textButton(`ct:${i}`, "Take theirs", p, (cx) => a.takeSide(f, "theirs", cx)),
     textButton(`cs:${i}`, "Mark resolved", p, (cx) => a.stage([f.path], cx)),
   ]));
+  const ignored = parts.ignored.map((line, i) =>
+    h_flex()
+      .id(`ig-row:${i}`)
+      .h(24)
+      .pl(10)
+      .pr(4)
+      .gap(8)
+      .items_center()
+      .child(div().w(14).flex_shrink_0().text_color(p.dim).child("–"))
+      .child(div().min_w_0().flex_1().truncate().text_color(p.muted).child(excludeLabel(line)))
+      .child(textButton(`ui:${i}`, "Unignore", p, (cx) => a.unignore(line, cx))),
+  );
   const all = (files: readonly ChangeFile[]) => files.map((f) => f.path);
   return [
     ...(conflicts.length > 0 ? [heading(`Conflicts ${conflicts.length}`, p, null), ...conflicts] : []),
@@ -115,6 +132,7 @@ function fileLists(parts: ChangesParts, p: Palette, a: ChangesActions): Element[
     ...staged,
     heading(`Changes ${changes.unstaged.length}`, p, changes.unstaged.length > 0 ? textButton("stage-all", "Stage all", p, (cx) => a.stage(all(changes.unstaged), cx)) : null),
     ...unstaged,
+    ...(ignored.length > 0 ? [heading(`Ignored locally ${ignored.length}`, p, null), ...ignored] : []),
   ];
 }
 

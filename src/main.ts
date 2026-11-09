@@ -265,7 +265,10 @@ export default class Githerd extends View {
     this.syncRows();
     cx.notify();
     if (!target) return;
-    if (this.trustedStatus()) await this.opsPanel.readOperation(cx);
+    if (this.trustedStatus()) {
+      await this.opsPanel.readOperation(cx);
+      await this.changesPanel.readIgnored(cx);
+    }
     const history = await loadHistory(this.git, target, this.view.limit);
     this.view = withHistory(this.view, target.cwd, history);
     this.syncRows();

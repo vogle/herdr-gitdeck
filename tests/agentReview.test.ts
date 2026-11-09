@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { GitError, type Git, type Target } from "../src/core/git/runner.ts";
 import type { Files } from "../src/core/staging.ts";
-import { excludeLocally, excludePattern, withExcluded } from "../src/core/exclude.ts";
+import { excludeLabel, excludeLocally, excludePattern, excludedLines, readExcluded, unexcludeLocally, withExcluded, withoutExcluded } from "../src/core/exclude.ts";
 import { agentNote, repoAgents } from "../src/core/repoAgents.ts";
 import { undoLastCommit } from "../src/core/undo.ts";
 
@@ -69,6 +69,40 @@ test("excludeLocally refuses another machine's repo and reports errors as text",
   assert.equal(await excludeLocally(recorder().git, memoryFiles({}), { cwd: "/r", on: "m1" }, "x"), "Ignoring a file works only for repos on this machine");
   const r = recorder({ "rev-parse --git-path info/exclude": new GitError("not a git repository", [], 128, "") });
   assert.equal(await excludeLocally(r.git, memoryFiles({}), at, "x"), "not a git repository");
+});
+
+test("excludedLines lists the patterns, skipping comments and blank lines", () => {
+  assert.deepEqual(excludedLines("# git ls-files --others\n\n*.log\n/.claude/\n  \n/a\\[1\\]\n"), ["*.log", "/.claude/", "/a\\[1\\]"]);
+  assert.deepEqual(excludedLines(""), []);
+});
+
+test("excludeLabel shows a pattern the way the file list names the path", () => {
+  assert.equal(excludeLabel("/.claude/"), ".claude/");
+  assert.equal(excludeLabel("/a\\[1\\]\\*.txt"), "a[1]*.txt");
+  assert.equal(excludeLabel("*.log"), "*.log");
+});
+
+test("withoutExcluded drops the pattern's line and keeps the rest, or null when it's missing", () => {
+  assert.equal(withoutExcluded("# keep\n/.claude/\n*.log\n", "/.claude/"), "# keep\n*.log\n");
+  assert.equal(withoutExcluded("/.claude/", "/.claude/"), "");
+  assert.equal(withoutExcluded("*.log\n", "/.claude/"), null);
+});
+
+test("readExcluded and unexcludeLocally use the repo's exclude file", async () => {
+  const r = recorder({ "rev-parse --git-path info/exclude": ".git/info/exclude\n" });
+  const files = memoryFiles({ "/r/.git/info/exclude": "# keep\n/.claude/\n/.moai/\n" });
+  assert.deepEqual(await readExcluded(r.git, files, at), ["/.claude/", "/.moai/"]);
+  assert.equal(await unexcludeLocally(r.git, files, at, "/.claude/"), null);
+  assert.equal(files.store["/r/.git/info/exclude"], "# keep\n/.moai/\n");
+  // Already gone: nothing written, no error.
+  assert.equal(await unexcludeLocally(r.git, files, at, "/.claude/"), null);
+  // No file yet, another machine, or a git error: an empty list.
+  assert.deepEqual(await readExcluded(r.git, memoryFiles({}), at), []);
+  assert.deepEqual(await readExcluded(r.git, files, { cwd: "/r", on: "m1" }), []);
+  const broken = recorder({ "rev-parse --git-path info/exclude": new GitError("not a git repository", [], 128, "") });
+  assert.deepEqual(await readExcluded(broken.git, files, at), []);
+  assert.equal(await unexcludeLocally(broken.git, files, at, "/x"), "not a git repository");
+  assert.equal(await unexcludeLocally(r.git, files, { cwd: "/r", on: "m1" }, "/x"), "Ignoring a file works only for repos on this machine");
 });
 
 // --- Agents working in the shown repo ---
