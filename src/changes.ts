@@ -17,6 +17,7 @@ import {
   type ChangeFile, type Changes, type Files,
 } from "./core/staging.ts";
 import { allChosen, parseConflicts, resolveFile } from "./core/conflict.ts";
+import { draftMessage, followDraft } from "./core/draft.ts";
 import type { ChangesActions, ChangesParts } from "./ui/changes.ts";
 
 export const files: Files = {
@@ -39,6 +40,8 @@ export class ChangesPanel {
   message!: TextareaState;
   /** Recent commit messages, newest first. */
   recent: string[] = [];
+  /** The last message drafted from the staged files, to tell it from one the person wrote. */
+  drafted = "";
 
   private readonly host: ChangesHost;
 
@@ -57,6 +60,14 @@ export class ChangesPanel {
 
   changes(): Changes {
     return splitChanges(this.host.status()?.entries ?? []);
+  }
+
+  /** After the status changes: the draft follows the staged files, unless the person wrote their own. */
+  syncDraft(): void {
+    const draft = draftMessage(this.changes().staged);
+    const next = followDraft(this.message.value(), this.drafted, draft, this.view.amend);
+    this.drafted = draft;
+    if (next !== null) this.message.set_value(next);
   }
 
   parts(): ChangesParts {
@@ -163,6 +174,16 @@ export class ChangesPanel {
             if (this.view.amend && this.message.value().trim() === "") this.message.set_value(last);
             cx.notify();
           });
+        }
+        cx.notify();
+      },
+      suggest: (cx) => {
+        const draft = draftMessage(this.changes().staged);
+        if (draft === "") {
+          this.view = withResult(this.view, "Stage a file first: the suggestion names the staged files");
+        } else {
+          this.drafted = draft;
+          this.message.set_value(draft);
         }
         cx.notify();
       },

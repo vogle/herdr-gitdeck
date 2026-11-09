@@ -234,6 +234,7 @@ export default class Githerd extends View {
     const status = this.trustedStatus();
     const changes = status ? status.entries.filter((e) => e.kind !== "ignored").length : 0;
     this.view = rebuild(this.view, status?.oid ?? null, changes);
+    if (status) this.changesPanel.syncDraft();
   }
 
   /** The shown repo's status, unless it is waiting for trust. */

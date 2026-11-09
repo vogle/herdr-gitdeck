@@ -30,6 +30,8 @@ export interface ChangesActions {
   diffClick: (row: number, cx: Context) => void;
   applyPicked: (cx: Context) => void;
   toggleAmend: (cx: Context) => void;
+  /** Writes a message drafted from the staged files into the box. */
+  suggest: (cx: Context) => void;
   commit: (cx: Context) => void;
   close: (cx: Context) => void;
 }
@@ -119,6 +121,7 @@ function commitBox(parts: ChangesParts, p: Palette, a: ChangesActions): Element 
       h_flex()
         .gap(6)
         .items_center()
+        .child(textButton("suggest", "✨ Suggest", p, a.suggest))
         .child(textButton("amend", view.amend ? "☑ Amend last commit" : "☐ Amend last commit", p, a.toggleAmend, view.amend))
         .child(div().flex_1())
         .child(textButton("commit", view.busy ? "Working…" : view.amend ? "Amend" : `Commit ${parts.changes.staged.length}`, p, a.commit, true)),
