@@ -11,10 +11,13 @@ import { parseStatus, summarize, STATUS_ARGS } from "../src/core/git/status.ts";
 import { findArgs, parseFound, findHerdRoot } from "../src/core/repos/discover.ts";
 import { loadStatus } from "../src/core/scan.ts";
 
+// A commit hook runs with GIT_INDEX_FILE and friends set; the test repos must not inherit them.
+const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+
 // Herdr's exec, played by Node: an argument array, never a shell.
 const exec: Exec = (command, args, options) =>
   new Promise((resolve, reject) => {
-    execFile(command, args, { cwd: options.cwd, encoding: "utf8" }, (error, stdout, stderr) => {
+    execFile(command, args, { cwd: options.cwd, encoding: "utf8", env }, (error, stdout, stderr) => {
       if (error && typeof error.code !== "number") return reject(error);
       resolve({ code: error ? Number(error.code) : 0, stdout, stderr });
     });
