@@ -32,7 +32,7 @@ export interface ChangesActions {
   diffClick: (row: number, cx: Context) => void;
   applyPicked: (cx: Context) => void;
   toggleAmend: (cx: Context) => void;
-  /** Writes a message drafted from the staged files into the box. */
+  /** Claude Code writes a message from the staged diff into the box. */
   suggest: (cx: Context) => void;
   commit: (cx: Context) => void;
   /** Moves HEAD back one commit; its changes stay staged. */
@@ -56,6 +56,8 @@ export interface ChangesParts {
   undoable: boolean;
   /** The patterns in .git/info/exclude (this machine's repos only). */
   ignored: readonly string[];
+  /** Claude Code is writing a message. */
+  suggesting: boolean;
 }
 
 function letterColor(letter: string, p: Palette) {
@@ -176,7 +178,7 @@ function commitBox(parts: ChangesParts, p: Palette, a: ChangesActions): Element 
       h_flex()
         .gap(6)
         .items_center()
-        .child(textButton("suggest", "✨ Suggest", p, a.suggest))
+        .child(textButton("suggest", parts.suggesting ? "✨ Writing…" : "✨ Suggest", p, a.suggest, parts.suggesting))
         .child(textButton("amend", view.amend ? "☑ Amend last commit" : "☐ Amend last commit", p, a.toggleAmend, view.amend))
         .child(div().flex_1())
         .when(parts.undoable && !view.busy, (el) => el.child(textButton("undo-commit", "↶ Undo commit", p, a.undo)))

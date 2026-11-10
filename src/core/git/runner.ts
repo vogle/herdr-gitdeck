@@ -8,7 +8,7 @@ export interface ExecResult {
 }
 
 /** Herdr's `exec` (or a fake): runs a program in a folder, on a machine (null: this one). */
-export type Exec = (command: string, args: string[], options: { cwd?: string; on?: string | null }) => Promise<ExecResult>;
+export type Exec = (command: string, args: string[], options: { cwd?: string; on?: string | null; timeout?: number }) => Promise<ExecResult>;
 
 /** Where a git command runs. */
 export interface Target {

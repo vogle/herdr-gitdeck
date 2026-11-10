@@ -17,6 +17,7 @@ import {
   type ChangeFile, type Changes, type Files,
 } from "./core/staging.ts";
 import { allChosen, parseConflicts, resolveFile } from "./core/conflict.ts";
+import { suggestWithAi } from "./core/aiMessage.ts";
 import { draftMessage, followDraft } from "./core/draft.ts";
 import { excludeLocally, readExcluded, unexcludeLocally } from "./core/exclude.ts";
 import { agentNote, type RepoAgent } from "./core/repoAgents.ts";
@@ -51,6 +52,8 @@ export class ChangesPanel {
   undoable = false;
   /** The patterns in the shown repo's .git/info/exclude. */
   ignored: string[] = [];
+  /** Claude Code is writing a message. */
+  suggesting = false;
 
   private readonly host: ChangesHost;
 
@@ -87,6 +90,32 @@ export class ChangesPanel {
     });
   }
 
+  /** Claude Code writes the message; a box edited meanwhile is left alone. */
+  suggest(cx: Context): void {
+    const target = this.host.target();
+    if (!target || this.suggesting) return;
+    this.suggesting = true;
+    const before = this.message.value();
+    cx.notify();
+    cx.spawn(async (cx) => {
+      const result = await suggestWithAi(this.host.git, exec, target);
+      this.suggesting = false;
+      const untouched = this.message.value() === before;
+      if ("message" in result) {
+        if (untouched) this.message.set_value(result.message);
+      } else {
+        this.view = { ...this.view, error: result.error };
+        // Still something to start from: the plain draft from the file names.
+        const draft = draftMessage(this.changes().staged);
+        if (untouched && before.trim() === "" && draft !== "") {
+          this.drafted = draft;
+          this.message.set_value(draft);
+        }
+      }
+      cx.notify();
+    });
+  }
+
   changes(): Changes {
     return splitChanges(this.host.status()?.entries ?? []);
   }
@@ -108,6 +137,7 @@ export class ChangesPanel {
       agentNote: agentNote(this.host.agents()),
       undoable: this.undoable,
       ignored: this.ignored,
+      suggesting: this.suggesting,
     };
   }
 
@@ -214,16 +244,7 @@ export class ChangesPanel {
         }
         cx.notify();
       },
-      suggest: (cx) => {
-        const draft = draftMessage(this.changes().staged);
-        if (draft === "") {
-          this.view = withResult(this.view, "Stage a file first: the suggestion names the staged files");
-        } else {
-          this.drafted = draft;
-          this.message.set_value(draft);
-        }
-        cx.notify();
-      },
+      suggest: (cx) => this.suggest(cx),
       commit: (cx) => {
         // While an agent is still working, the first click asks: its changes may be half-made.
         if (agentNote(this.host.agents())?.kind === "working" && this.view.confirm !== "commit") {
