@@ -122,6 +122,12 @@ test("repoAgents keeps the agents whose pane is in the repo or below it", () => 
   assert.deepEqual(repoAgents(null, all, panes), []);
 });
 
+test("repoAgents skips a pane with no folder at all, like the viewer tab's mod pane", () => {
+  // Herdr types cwd as string | null, but a mod pane can come back without one.
+  const panes = [{ pane: "v", cwd: undefined as unknown as null }, { pane: "p1", cwd: "/w/app" }];
+  assert.deepEqual(repoAgents("/w/app", [agent("v", "working"), agent("p1", "idle")], panes).map((a) => a.status), ["idle"]);
+});
+
 test("agentNote says the most urgent state, and nothing for idle agents", () => {
   assert.equal(agentNote([]), null);
   assert.equal(agentNote([{ name: "Claude Code", status: "idle" }]), null);

@@ -26,7 +26,8 @@ interface PaneLike {
   cwd: string | null;
 }
 
-const inside = (repo: string, cwd: string | null): boolean => cwd !== null && (cwd === repo || cwd.startsWith(`${repo}/`));
+// A mod pane (the viewer tab) can come back with no cwd at all, despite the type.
+const inside = (repo: string, cwd: string | null): boolean => typeof cwd === "string" && (cwd === repo || cwd.startsWith(`${repo}/`));
 
 /** The agents whose terminal is in the repo or a folder below it. */
 export function repoAgents(repo: string | null, agents: readonly AgentLike[], panes: readonly PaneLike[]): RepoAgent[] {
