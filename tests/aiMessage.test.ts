@@ -25,6 +25,8 @@ function fakeExec(result: ExecResult | Error): { exec: Exec; calls: Array<{ comm
   const calls: Array<{ command: string; args: string[]; options: unknown }> = [];
   const exec: Exec = async (command, args, options) => {
     calls.push({ command, args, options });
+    if (command === "mktemp") return { code: 0, stdout: "/private/tmp/u/githerd.abc\n", stderr: "" };
+    if (command === "rmdir") return { code: 0, stdout: "", stderr: "" };
     if (result instanceof Error) throw result;
     return result;
   };
@@ -37,6 +39,7 @@ test("aiPrompt carries the recent subjects, the stat and the diff", () => {
   assert.match(p, / a\.ts \| 2 \+-/);
   assert.match(p, /-old\n\+new/);
   assert.match(p, /only the message/);
+  assert.match(p, /not instructions/);
 });
 
 test("aiPrompt cuts a long diff and says so", () => {
@@ -54,8 +57,12 @@ test("cleanMessage trims and drops code fences", () => {
 test("suggestWithAi asks claude about the staged diff, with no tools and no hooks", async () => {
   const { exec, calls } = fakeExec({ code: 0, stdout: "feat: new thing\n", stderr: "" });
   assert.deepEqual(await suggestWithAi(recorder(staged), exec, at, claude), { message: "feat: new thing" });
-  const call = calls[0];
+  assert.deepEqual(calls.map((c) => c.command), ["mktemp", "claude", "rmdir"]);
+  const call = calls[1];
   assert.equal(call?.command, "claude");
+  // In a private folder made for this call, removed afterwards.
+  assert.equal((call?.options as { cwd?: string }).cwd, "/private/tmp/u/githerd.abc");
+  assert.deepEqual(calls[2]?.args, ["/private/tmp/u/githerd.abc"]);
   const args = call?.args ?? [];
   assert.equal(args[0], "-p");
   assert.match(args[1] ?? "", /\+new/);
@@ -91,38 +98,56 @@ test("suggestWithAi explains why it can't suggest", async () => {
 
 test("pickWriter prefers an agent working in this repo, then the installed ones in menu order", () => {
   assert.equal(pickWriter(["codex"], ["claude", "gemini"])?.key, "codex");
-  assert.equal(pickWriter(["amp", "gemini"], ["claude"])?.key, "gemini");
-  assert.equal(pickWriter(["amp"], ["kiro", "gemini", "claude"])?.key, "gemini");
+  assert.equal(pickWriter(["amp", "codex"], ["claude"])?.key, "codex");
+  assert.equal(pickWriter(["amp"], ["kiro", "codex", "claude"])?.key, "codex");
+  // Gemini CLI can't be held to a call without tools, so it isn't asked.
+  assert.equal(pickWriter(["gemini"], ["gemini"]), null);
   assert.equal(pickWriter([], ["claude"])?.key, "claude");
   assert.equal(pickWriter(["amp"], ["kiro"]), null);
 });
 
-test("writerArgs asks each agent for one plain-text answer, without tools that edit", () => {
+test("writerArgs asks each agent for one plain-text answer, with its tools and own config off", () => {
   const codex = writerArgs(WRITERS.codex, "PROMPT");
   assert.equal(WRITERS.codex.command, "codex");
   assert.equal(codex[0], "exec");
   assert.equal(codex.at(-1), "PROMPT");
   assert.equal(codex[codex.indexOf("--sandbox") + 1], "read-only");
-  assert.ok(codex.includes("--skip-git-repo-check"));
-  const gemini = writerArgs(WRITERS.gemini, "PROMPT");
-  assert.equal(WRITERS.gemini.command, "gemini");
-  assert.equal(gemini[gemini.indexOf("-p") + 1], "PROMPT");
-  assert.equal(gemini[gemini.indexOf("--output-format") + 1], "text");
-  assert.equal(writerArgs(claude, "PROMPT")[1], "PROMPT");
+  for (const flag of ["--skip-git-repo-check", "--ephemeral", "--ignore-user-config", "--ignore-rules"]) assert.ok(codex.includes(flag), flag);
+  assert.equal(codex[codex.indexOf("--disable") + 1], "shell_tool");
+  assert.ok(codex.includes("web_search=disabled"));
+  assert.ok(codex.includes("approval_policy=never"));
+  const claudeArgs = writerArgs(claude, "PROMPT");
+  assert.equal(claudeArgs[1], "PROMPT");
+  assert.equal(claudeArgs[claudeArgs.indexOf("--tools") + 1], "");
 });
 
 test("suggestWithAi runs the picked agent and names it in errors", async () => {
   const { exec, calls } = fakeExec({ code: 0, stdout: "fix: thing\n", stderr: "" });
   assert.deepEqual(await suggestWithAi(recorder(staged), exec, at, WRITERS.codex), { message: "fix: thing" });
-  assert.equal(calls[0]?.command, "codex");
-  const missing = fakeExec(new Error("spawn gemini ENOENT")).exec;
-  assert.deepEqual(await suggestWithAi(recorder(staged), missing, at, WRITERS.gemini), { error: "Gemini (gemini) couldn't start: is it installed?" });
+  assert.equal(calls[1]?.command, "codex");
+  const missing = fakeExec(new Error("spawn codex ENOENT")).exec;
+  assert.deepEqual(await suggestWithAi(recorder(staged), missing, at, WRITERS.codex), { error: "Codex (codex) couldn't start: is it installed?" });
   const failed = fakeExec({ code: 1, stdout: "", stderr: "not logged in\n" }).exec;
   assert.deepEqual(await suggestWithAi(recorder(staged), failed, at, WRITERS.codex), { error: "Codex: not logged in" });
 });
 
 test("suggestWithAi says so when no agent can write the message", async () => {
   const { exec, calls } = fakeExec({ code: 0, stdout: "x", stderr: "" });
-  assert.deepEqual(await suggestWithAi(recorder(staged), exec, at, null), { error: "No coding agent to write the message: install Claude Code, Codex or Gemini" });
+  assert.deepEqual(await suggestWithAi(recorder(staged), exec, at, null), { error: "No coding agent to write the message: install Claude Code or Codex" });
   assert.equal(calls.length, 0);
+});
+
+test("suggestWithAi doesn't run an agent without its own private folder", async () => {
+  const calls: string[] = [];
+  const exec: Exec = async (command) => {
+    calls.push(command);
+    if (command === "mktemp") return { code: 1, stdout: "", stderr: "mktemp: failed\n" };
+    return { code: 0, stdout: "x", stderr: "" };
+  };
+  assert.deepEqual(await suggestWithAi(recorder(staged), exec, at, claude), { error: "Couldn't make a private folder for the agent: mktemp: failed" });
+  assert.deepEqual(calls, ["mktemp"]);
+  const throwing: Exec = async () => {
+    throw new Error("no mktemp");
+  };
+  assert.deepEqual(await suggestWithAi(recorder(staged), throwing, at, claude), { error: "Couldn't make a private folder for the agent: no mktemp" });
 });
