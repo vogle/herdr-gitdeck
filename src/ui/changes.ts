@@ -44,7 +44,6 @@ export interface ChangesActions {
   ignore: (file: ChangeFile, cx: Context) => void;
   /** Takes a pattern back out of .git/info/exclude, so its files show again. */
   unignore: (line: string, cx: Context) => void;
-  close: (cx: Context) => void;
 }
 
 export interface ChangesParts {
@@ -309,16 +308,6 @@ function resolvePane(r: Resolving, p: Palette, a: ChangesActions): Element {
 
 export function changesPane(parts: ChangesParts, p: Palette, a: ChangesActions): Element {
   const { view } = parts;
-  const top = h_flex()
-    .h(28)
-    .px(8)
-    .gap(6)
-    .items_center()
-    .flex_shrink_0()
-    .border_b_1()
-    .border_color(p.border)
-    .child(div().flex_1().text_xs().text_color(p.muted).child("Uncommitted changes"))
-    .child(textButton("changes-close", "×", p, a.close));
   const error = view.error === null ? null : div().px(10).py(4).flex_shrink_0().text_xs().text_color(p.removed).bg(p.raised).child(view.error);
   return v_flex()
     .flex_1()
@@ -326,7 +315,6 @@ export function changesPane(parts: ChangesParts, p: Palette, a: ChangesActions):
     .border_t_1()
     .border_color(p.border)
     .bg(p.surface)
-    .child(top)
     .when(error !== null, (el) => el.child(error ?? div()))
     .when(parts.agentNote !== null, (el) => el.child(parts.agentNote ? agentBanner(parts.agentNote, p) : div()))
     .child(

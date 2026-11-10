@@ -280,10 +280,6 @@ export class ChangesPanel {
       }),
       ignore: (file, cx) => this.editIgnored(cx, (git, target) => excludeLocally(git, files, target, file.path)),
       unignore: (line, cx) => this.editIgnored(cx, (git, target) => unexcludeLocally(git, files, target, line)),
-      close: (cx) => {
-        this.view = closeSide(askConfirm(this.view, null));
-        cx.notify();
-      },
     };
   }
 }
