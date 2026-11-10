@@ -11,7 +11,7 @@ import {
   untrackedDiffArgs,
   worktreeDiffArgs,
 } from "../src/core/git/show.ts";
-import { parseDiff } from "../src/core/git/diff.ts";
+import { parseDiff, sameDiff } from "../src/core/git/diff.ts";
 
 const H1 = "a".repeat(40);
 const H2 = "b".repeat(40);
@@ -130,4 +130,12 @@ test("parseDiff says so for a binary file or no text change, and caps long diffs
 test("parseDiff keeps a new file's mode lines out and handles a hunk without counts", () => {
   const out = "diff --git a/n b/n\nnew file mode 100644\nindex 0..1\n--- /dev/null\n+++ b/n\n@@ -0,0 +1 @@\n+only\n";
   assert.deepEqual(parseDiff(out).rows.slice(1), [{ kind: "add", old: null, new: 1, text: "only" }]);
+});
+
+test("sameDiff compares the rows and the cut, so an unchanged re-read can be skipped", () => {
+  const a = parseDiff("@@ -1 +1 @@\n-a\n+b\n");
+  assert.equal(sameDiff(a, parseDiff("@@ -1 +1 @@\n-a\n+b\n")), true);
+  assert.equal(sameDiff(a, parseDiff("@@ -1 +1 @@\n-a\n+c\n")), false);
+  assert.equal(sameDiff(a, { ...a, truncated: true }), false);
+  assert.equal(sameDiff(a, parseDiff("")), false);
 });

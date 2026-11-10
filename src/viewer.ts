@@ -4,14 +4,14 @@
 
 import { div, type AsyncContext, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { appHome, exec, panes, run, setShared, shared, spaces } from "herdr";
-import type { Diff } from "./core/git/diff.ts";
+import { appHome, exec, focused, panes, run, setShared, shared, spaces } from "herdr";
+import { sameDiff, type Diff } from "./core/git/diff.ts";
 import type { Git, Target } from "./core/git/runner.ts";
 import { loadDiff } from "./core/history.ts";
 import { loadImagePair } from "./core/imageDiff.ts";
 import { loadBlame, loadFileLog, type InspectView } from "./core/inspect.ts";
 import {
-  findViewerTab, parseViewer, staleViewerTab, VIEWER_TAB_NAME, viewerBack, viewerKey, viewerShow, viewerTitle, VIEWER_KEY,
+  findViewerTab, liveDiff, parseViewer, staleViewerTab, VIEWER_TAB_NAME, viewerBack, viewerKey, viewerShow, viewerFocused, viewerTitle, VIEWER_KEY,
   type ViewerNav, type ViewerRequest,
 } from "./core/panel.ts";
 import { loadStatus } from "./core/scan.ts";
@@ -23,6 +23,8 @@ import { textButton, type Palette } from "./ui/style.ts";
 
 /** Image diffs are written here (hidden, so writing doesn't reload the mod), under the app folder `image()` reads from. */
 export const IMAGE_CACHE = "mods/githerd/.cache/images";
+/** While an uncommitted diff is on screen, how often it is read again. */
+const LIVE_EVERY_MS = 3_000;
 
 /** Asks the viewer tab to show a request: switches to it, or opens it. */
 export function openViewer(request: ViewerRequest): void {
@@ -40,6 +42,8 @@ export class Viewer {
   seen = "";
   shown: Shown | null = null;
   readonly wake = new Signal();
+  /** Re-reads the shown uncommitted diff in place, without the loading blank. */
+  readonly tick = new Signal();
 
   readonly git: Git;
 
@@ -53,6 +57,16 @@ export class Viewer {
         await this.wake.wait();
         await this.load(cx);
       }
+    });
+    cx.spawn(async (cx) => {
+      for (;;) {
+        await this.tick.wait();
+        await this.refresh(cx);
+      }
+    });
+    // Only while the tab is looked at: a hidden one costs no git calls.
+    cx.timer.every(LIVE_EVERY_MS, () => {
+      if (liveDiff(this.nav.current) && viewerFocused(focused(), panes())) this.tick.fire();
     });
     const stale = staleViewerTab(spaces(), panes());
     if (stale) run("tab.rename", { id: stale, name: VIEWER_TAB_NAME });
@@ -123,6 +137,18 @@ export class Viewer {
     return { kind: "diff", diff: { ...diff, images } };
   }
 
+  /** The shown uncommitted diff, read again: redrawn only when it changed, and dropped if the view moved on. */
+  async refresh(cx: AsyncContext): Promise<void> {
+    const request = this.nav.current;
+    const before = this.shown;
+    if (!request || !liveDiff(request) || before?.kind !== "diff") return;
+    const after = await this.read(request);
+    if (this.nav.current !== request || this.shown !== before) return;
+    if (after.kind === "diff" && sameDiff(after.diff, before.diff)) return;
+    this.shown = after;
+    cx.notify();
+  }
+
   private bar(r: ViewerRequest, p: Palette): Element {
     const commit = r.view === "diff" && r.source.kind === "commit" ? r.source : null;
     const inspect = (view: "blame" | "file-log") => (cx: Context) =>
@@ -130,8 +156,8 @@ export class Viewer {
     const fileButtons = commit
       ? [textButton("viewer-blame", "Blame", p, inspect("blame")), textButton("viewer-history", "History", p, inspect("file-log"))]
       : r.view === "diff"
-        ? // The work tree changes under an uncommitted diff: read it again on demand.
-          [textButton("viewer-reload", "Reload", p, () => this.wake.fire())]
+        ? // Read again every few seconds anyway; this is for right now.
+          [textButton("viewer-reload", "Reload", p, () => this.tick.fire())]
         : [];
     const side = r.view === "diff" && r.source.kind === "index" ? (r.source.staged ? "Staged: " : "Unstaged: ") : "";
     const where = r.view === "diff" ? `${side}${r.source.path}` : r.view === "stats" ? r.repo : `${r.path} at ${r.rev.slice(0, 10)}`;

@@ -63,6 +63,9 @@ export function parseViewer(v: unknown): ViewerRequest | null {
   return source ? { ...where, view: "diff", source } : null;
 }
 
+/** An uncommitted diff: the work tree or the index can change it while it is shown. */
+export const liveDiff = (r: ViewerRequest | null): boolean => r !== null && r.view === "diff" && r.source.kind !== "commit";
+
 /** Equal requests give equal keys (fields in a fixed order). */
 export function viewerKey(r: ViewerRequest | null): string {
   if (!r) return "";

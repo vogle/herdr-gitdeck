@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  backStep, findViewerTab, isWide, staleViewerTab, viewerFocused, VIEWER_TAB_NAME, parseViewer, viewerBack, viewerKey, viewerShow, viewerTitle, WIDE_PX,
+  backStep, findViewerTab, isWide, liveDiff, staleViewerTab, viewerFocused, VIEWER_TAB_NAME, parseViewer, viewerBack, viewerKey, viewerShow, viewerTitle, WIDE_PX,
   type ViewerRequest,
 } from "../src/core/panel.ts";
 
@@ -104,4 +104,14 @@ test("staleViewerTab finds a viewer tab still under the old lowercase name", () 
   assert.equal(staleViewerTab(spaces(VIEWER_TAB_NAME), panes), null);
   assert.equal(staleViewerTab(spaces("my diff"), panes), null);
   assert.equal(staleViewerTab(spaces("githerd"), [{ tab: "t1" }]), null);
+});
+
+test("liveDiff: only an uncommitted diff can change under the viewer", () => {
+  const at = { repo: "/r", on: null };
+  assert.equal(liveDiff({ ...at, view: "diff", source: { kind: "index", path: "p", staged: false } }), true);
+  assert.equal(liveDiff({ ...at, view: "diff", source: { kind: "untracked", path: "p" } }), true);
+  assert.equal(liveDiff({ ...at, view: "diff", source: { kind: "worktree", path: "p", hasHead: true } }), true);
+  assert.equal(liveDiff({ ...at, view: "diff", source: { kind: "commit", hash: "h", parents: [], path: "p", oldPath: null } }), false);
+  assert.equal(liveDiff({ ...at, view: "stats" }), false);
+  assert.equal(liveDiff(null), false);
 });

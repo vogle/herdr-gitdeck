@@ -57,3 +57,12 @@ export function parseDiff(output: string, cap = DIFF_ROW_CAP): Diff {
   }
   return { rows: rows.length > 0 ? rows : [note("No text changes")], truncated: false };
 }
+
+/** Two reads of a diff show the same thing (images aside: only uncommitted diffs are re-read, and they have none). */
+export function sameDiff(a: Diff, b: Diff): boolean {
+  if (a.truncated !== b.truncated || a.rows.length !== b.rows.length) return false;
+  return a.rows.every((r, i) => {
+    const o = b.rows[i];
+    return o !== undefined && r.kind === o.kind && r.old === o.old && r.new === o.new && r.text === o.text;
+  });
+}
