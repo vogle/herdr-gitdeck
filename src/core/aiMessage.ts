@@ -4,6 +4,7 @@
 // diff goes to Anthropic.
 
 import type { Exec, Git, Target } from "./git/runner.ts";
+import { SAFE_DIFF } from "./git/show.ts";
 
 /** Characters of diff sent; the stat still names every file. */
 export const MAX_DIFF = 20_000;
@@ -59,9 +60,9 @@ export async function suggestWithAi(git: Git, exec: Exec, target: Target): Promi
   if (target.on !== null) return { error: "AI suggestions work only for repos on this machine" };
   let prompt: string;
   try {
-    const stat = await git(target, ["diff", "--cached", "--stat"]);
+    const stat = await git(target, ["diff", ...SAFE_DIFF, "--cached", "--stat"]);
     if (stat.trim() === "") return { error: "Stage a file first: the suggestion reads the staged changes" };
-    prompt = aiPrompt(stat, await git(target, ["diff", "--cached"]), await recentSubjects(git, target));
+    prompt = aiPrompt(stat, await git(target, ["diff", ...SAFE_DIFF, "--cached"]), await recentSubjects(git, target));
   } catch (error) {
     return { error: message(error) };
   }

@@ -14,8 +14,8 @@ function recorder(answers: Record<string, string | GitError> = {}): Git {
 }
 
 const staged = {
-  "diff --cached --stat": " a.ts | 2 +-\n",
-  "diff --cached": "diff --git a/a.ts b/a.ts\n-old\n+new\n",
+  "diff --no-ext-diff --no-textconv --no-color --cached --stat": " a.ts | 2 +-\n",
+  "diff --no-ext-diff --no-textconv --no-color --cached": "diff --git a/a.ts b/a.ts\n-old\n+new\n",
   "log -8 --format=%s": "feat: one\nfix: two\n",
 };
 
@@ -81,6 +81,6 @@ test("suggestWithAi explains why it can't suggest", async () => {
   assert.deepEqual(await suggestWithAi(recorder(staged), silent, at), { error: "Claude Code stopped without a message" });
   const empty = fakeExec({ code: 0, stdout: "  \n", stderr: "" }).exec;
   assert.deepEqual(await suggestWithAi(recorder(staged), empty, at), { error: "Claude Code stopped without a message" });
-  const broken = recorder({ "diff --cached --stat": new GitError("index locked", [], 128, "") });
+  const broken = recorder({ "diff --no-ext-diff --no-textconv --no-color --cached --stat": new GitError("index locked", [], 128, "") });
   assert.deepEqual(await suggestWithAi(broken, ok, at), { error: "index locked" });
 });
