@@ -84,7 +84,6 @@ export function writerArgs(writer: Writer, prompt: string): string[] {
         "--sandbox", "read-only",
         "-c", "approval_policy=never",
         "-c", "web_search=disabled",
-        "-c", "include_apply_patch_tool=false",
         "--disable", "shell_tool",
         "--color", "never",
         prompt,
