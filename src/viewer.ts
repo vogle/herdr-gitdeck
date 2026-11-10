@@ -129,8 +129,12 @@ export class Viewer {
       commit && this.go({ view, repo: r.repo, on: r.on, rev: commit.hash, path: commit.path }, cx);
     const fileButtons = commit
       ? [textButton("viewer-blame", "Blame", p, inspect("blame")), textButton("viewer-history", "History", p, inspect("file-log"))]
-      : [];
-    const where = r.view === "diff" ? r.source.path : r.view === "stats" ? r.repo : `${r.path} at ${r.rev.slice(0, 10)}`;
+      : r.view === "diff"
+        ? // The work tree changes under an uncommitted diff: read it again on demand.
+          [textButton("viewer-reload", "Reload", p, () => this.wake.fire())]
+        : [];
+    const side = r.view === "diff" && r.source.kind === "index" ? (r.source.staged ? "Staged: " : "Unstaged: ") : "";
+    const where = r.view === "diff" ? `${side}${r.source.path}` : r.view === "stats" ? r.repo : `${r.path} at ${r.rev.slice(0, 10)}`;
     return h_flex()
       .h(32)
       .px(8)

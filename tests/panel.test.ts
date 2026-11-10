@@ -34,6 +34,8 @@ test("parseViewer accepts every well-formed request", () => {
   assert.deepEqual(parseViewer(wt), wt);
   const un = { view: "diff", repo: "/r", on: null, source: { kind: "untracked", path: "p" } };
   assert.deepEqual(parseViewer(un), un);
+  const ix = { view: "diff", repo: "/r", on: null, source: { kind: "index", path: "p", staged: true } };
+  assert.deepEqual(parseViewer(ix), ix);
 });
 
 test("parseViewer rejects anything malformed", () => {
@@ -48,6 +50,7 @@ test("parseViewer rejects anything malformed", () => {
     { view: "diff", repo: "/r", on: null, source: { kind: "commit", hash: "h", parents: [1], path: "p", oldPath: null } },
     { view: "diff", repo: "/r", on: null, source: { kind: "commit", hash: "h", parents: [], path: "p", oldPath: 2 } },
     { view: "diff", repo: "/r", on: null, source: { kind: "worktree", path: "p" } },
+    { view: "diff", repo: "/r", on: null, source: { kind: "index", path: "p" } },
     { view: "diff", repo: "/r", on: null, source: { kind: "other", path: "p" } },
   ]) assert.equal(parseViewer(bad), null, JSON.stringify(bad));
 });

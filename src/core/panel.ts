@@ -42,6 +42,7 @@ const isText = (v: unknown): v is string => typeof v === "string" && v !== "";
 function parseSource(v: unknown): DiffSource | null {
   if (!isObj(v) || !isText(v.path)) return null;
   if (v.kind === "untracked") return { kind: "untracked", path: v.path };
+  if (v.kind === "index") return typeof v.staged === "boolean" ? { kind: "index", path: v.path, staged: v.staged } : null;
   if (v.kind === "worktree") return typeof v.hasHead === "boolean" ? { kind: "worktree", path: v.path, hasHead: v.hasHead } : null;
   if (v.kind !== "commit" || !isText(v.hash) || !Array.isArray(v.parents) || !v.parents.every(isText)) return null;
   if (v.oldPath !== null && !isText(v.oldPath)) return null;

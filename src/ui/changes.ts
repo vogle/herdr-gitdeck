@@ -16,7 +16,10 @@ const ROW = 18;
 const MAX_FILES = 500;
 
 export interface ChangesActions {
+  /** Shows one side of a file's diff in the viewer tab. */
   open: (file: ChangeFile, staged: boolean, cx: Context) => void;
+  /** Opens one side of a file's diff here in the panel, to stage or unstage single hunks and lines. */
+  lines: (file: ChangeFile, staged: boolean, cx: Context) => void;
   closeDiff: (cx: Context) => void;
   stage: (paths: string[], cx: Context) => void;
   unstage: (paths: string[], cx: Context) => void;
@@ -98,12 +101,17 @@ function heading(title: string, p: Palette, button: Element | null): Element {
 function fileLists(parts: ChangesParts, p: Palette, a: ChangesActions): Element[] {
   const { changes, view } = parts;
   const staged = changes.staged.slice(0, MAX_FILES).map((f, i) =>
-    fileRow(`sf:${i}`, f, p, (cx) => a.open(f, true, cx), [iconButton(`un:${i}`, ICONS.unstage, "Unstage", p, (cx) => a.unstage([f.path], cx))]),
+    fileRow(`sf:${i}`, f, p, (cx) => a.open(f, true, cx), [
+      iconButton(`sl:${i}`, ICONS.lines, "Unstage lines…", p, (cx) => a.lines(f, true, cx)),
+      iconButton(`un:${i}`, ICONS.unstage, "Unstage", p, (cx) => a.unstage([f.path], cx)),
+    ]),
   );
   const unstaged = changes.unstaged.slice(0, MAX_FILES).map((f, i) => {
     const key = `discard:${f.path}`;
     const asking = view.confirm === key;
     return fileRow(`uf:${i}`, f, p, (cx) => a.open(f, false, cx), [
+      // A new file has no lines to pick from yet: stage it whole.
+      ...(f.untracked ? [] : [iconButton(`ul:${i}`, ICONS.lines, "Stage lines…", p, (cx) => a.lines(f, false, cx))]),
       ...(f.untracked && parts.local ? [iconButton(`ig:${i}`, ICONS.ignore, "Ignore locally (.git/info/exclude)", p, (cx) => a.ignore(f, cx))] : []),
       // Discarding can't be undone, so its confirmation is spelled out.
       asking

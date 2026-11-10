@@ -86,6 +86,7 @@ export default class Githerd extends View {
         return []; // Unknown: the agents working in the repo still count.
       }
     },
+    openViewer,
   });
   readonly opsPanel = new OpsPanel({
     git: this.git,

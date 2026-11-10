@@ -76,6 +76,7 @@ export const ICONS = {
   delete: "mods/githerd/icons/trash.svg",
   ignore: "mods/githerd/icons/eye-off.svg",
   unignore: "mods/githerd/icons/eye.svg",
+  lines: "mods/githerd/icons/scissors.svg",
 } as const;
 
 export function icon(path: string, color: Color, size = 14): Element {

@@ -9,6 +9,7 @@ import {
   untrackedDiffArgs, worktreeDiffArgs, type CommitDetail, type CommitFile,
 } from "./git/show.ts";
 import { parseDiff, type Diff } from "./git/diff.ts";
+import { stagedDiffArgs, unstagedDiffArgs } from "./stage.ts";
 import { layoutLanes, type Lanes } from "./graph/lanes.ts";
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -81,11 +82,14 @@ export async function loadCommit(git: Git, target: Target, hash: string, parents
 export type DiffSource =
   | { kind: "commit"; hash: string; parents: readonly string[]; path: string; oldPath: string | null }
   | { kind: "worktree"; path: string; hasHead: boolean }
-  | { kind: "untracked"; path: string };
+  | { kind: "untracked"; path: string }
+  /** One side of an uncommitted file: what is staged, or what is not yet. */
+  | { kind: "index"; path: string; staged: boolean };
 
 function diffArgs(source: DiffSource): string[] {
   if (source.kind === "commit") return commitDiffArgs(source.hash, source.parents, source);
   if (source.kind === "worktree") return worktreeDiffArgs(source.path, source.hasHead);
+  if (source.kind === "index") return source.staged ? stagedDiffArgs(source.path) : unstagedDiffArgs(source.path);
   return untrackedDiffArgs(source.path);
 }
 

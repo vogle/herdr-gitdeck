@@ -5,7 +5,7 @@ import type { AsyncContext, Context } from "gpui-kit";
 import { TextareaState } from "gpui-base";
 import { exec, readTextFile, writeTextFile } from "herdr";
 import {
-  askConfirm, chooseBlock, closeSide, startResolving, emptyChanges, forRepoChanges, hunkPick, openSide, picks, setAmend, setBusy, togglePick,
+  askConfirm, changeSource, chooseBlock, closeSide, startResolving, emptyChanges, forRepoChanges, hunkPick, openSide, picks, setAmend, setBusy, togglePick,
   withResult, withStageDiff, type ChangesView,
 } from "./core/changesView.ts";
 import type { Git, Target } from "./core/git/runner.ts";
@@ -21,6 +21,7 @@ import { pickWriter, suggestWithAi } from "./core/aiMessage.ts";
 import { draftMessage, followDraft } from "./core/draft.ts";
 import { excludeLocally, readExcluded, unexcludeLocally } from "./core/exclude.ts";
 import { agentNote, type RepoAgent } from "./core/repoAgents.ts";
+import type { ViewerRequest } from "./core/panel.ts";
 import { undoLastCommit } from "./core/undo.ts";
 import type { ChangesActions, ChangesParts } from "./ui/changes.ts";
 
@@ -41,6 +42,8 @@ export interface ChangesHost {
   agents: () => readonly RepoAgent[];
   /** Herdr keys of the coding agents installed here, most picked first. */
   installedAgents: () => Promise<readonly string[]>;
+  /** Shows a request in the viewer tab in the main area. */
+  openViewer: (request: ViewerRequest) => void;
 }
 
 export class ChangesPanel {
@@ -180,7 +183,11 @@ export class ChangesPanel {
   actions(): ChangesActions {
     const hasHead = () => this.host.status()?.oid !== null;
     return {
-      open: (file: ChangeFile, staged: boolean, cx: Context) => {
+      open: (file: ChangeFile, staged: boolean) => {
+        const target = this.host.target();
+        if (target) this.host.openViewer({ view: "diff", repo: target.cwd, on: target.on, source: changeSource(file, staged) });
+      },
+      lines: (file: ChangeFile, staged: boolean, cx: Context) => {
         this.view = openSide(this.view, file.path, staged, file.untracked && !staged);
         cx.spawn((cx) => this.readDiff(cx));
         cx.notify();

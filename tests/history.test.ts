@@ -94,6 +94,15 @@ test("loadDiff of a commit file, a work-tree file and an untracked file", async 
   assert.equal(u.rows.length, 3);
 });
 
+test("loadDiff of a file's staged or unstaged side", async () => {
+  const calls: string[][] = [];
+  const git: Git = async (_t, args) => { calls.push(args); return ""; };
+  await loadDiff(git, T, { kind: "index", path: "f", staged: true });
+  await loadDiff(git, T, { kind: "index", path: "f", staged: false });
+  assert.deepEqual(calls[0], ["diff", "--no-ext-diff", "--no-textconv", "--no-color", "--cached", "--", "f"]);
+  assert.deepEqual(calls[1], ["diff", "--no-ext-diff", "--no-textconv", "--no-color", "--", "f"]);
+});
+
 test("loadDiff turns a failure into a note", async () => {
   const d = await loadDiff(fake({ "diff-tree": new GitError("fatal: boom", [], 128, "") }), T, { kind: "commit", hash: H1, parents: [], path: "f", oldPath: null });
   assert.deepEqual(d.rows, [{ kind: "note", old: null, new: null, text: "Can't show this diff: fatal: boom" }]);
