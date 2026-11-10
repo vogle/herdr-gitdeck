@@ -9,7 +9,7 @@ import type { DiffRow } from "../core/git/diff.ts";
 import { excludeLabel } from "../core/exclude.ts";
 import type { AgentNote } from "../core/repoAgents.ts";
 import type { ChangeFile, Changes } from "../core/staging.ts";
-import { monoFont, textButton, type Palette } from "./style.ts";
+import { ICONS, iconButton, monoFont, textButton, type Palette } from "./style.ts";
 
 const LIST = "githerd-stage-diff";
 const ROW = 18;
@@ -96,15 +96,18 @@ function heading(title: string, p: Palette, button: Element | null): Element {
 function fileLists(parts: ChangesParts, p: Palette, a: ChangesActions): Element[] {
   const { changes, view } = parts;
   const staged = changes.staged.slice(0, MAX_FILES).map((f, i) =>
-    fileRow(`sf:${i}`, f, p, (cx) => a.open(f, true, cx), [textButton(`un:${i}`, "Unstage", p, (cx) => a.unstage([f.path], cx))]),
+    fileRow(`sf:${i}`, f, p, (cx) => a.open(f, true, cx), [iconButton(`un:${i}`, ICONS.unstage, "Unstage", p, (cx) => a.unstage([f.path], cx))]),
   );
   const unstaged = changes.unstaged.slice(0, MAX_FILES).map((f, i) => {
     const key = `discard:${f.path}`;
     const asking = view.confirm === key;
     return fileRow(`uf:${i}`, f, p, (cx) => a.open(f, false, cx), [
-      ...(f.untracked && parts.local ? [textButton(`ig:${i}`, "Ignore", p, (cx) => a.ignore(f, cx))] : []),
-      textButton(`dc:${i}`, asking ? (f.untracked ? "Delete file?" : "Discard?") : "Discard", p, (cx) => a.discard(f, cx), asking),
-      textButton(`st:${i}`, "Stage", p, (cx) => a.stage([f.path], cx)),
+      ...(f.untracked && parts.local ? [iconButton(`ig:${i}`, ICONS.ignore, "Ignore locally (.git/info/exclude)", p, (cx) => a.ignore(f, cx))] : []),
+      // Discarding can't be undone, so its confirmation is spelled out.
+      asking
+        ? textButton(`dc:${i}`, f.untracked ? "Delete file?" : "Discard?", p, (cx) => a.discard(f, cx), true)
+        : iconButton(`dc:${i}`, f.untracked ? ICONS.delete : ICONS.discard, f.untracked ? "Delete file" : "Discard changes", p, (cx) => a.discard(f, cx)),
+      iconButton(`st:${i}`, ICONS.stage, "Stage", p, (cx) => a.stage([f.path], cx)),
     ]);
   });
   const conflicts = changes.conflicts.map((f, i) => fileRow(`cf:${i}`, f, p, (cx) => a.open(f, false, cx), [
@@ -123,7 +126,7 @@ function fileLists(parts: ChangesParts, p: Palette, a: ChangesActions): Element[
       .items_center()
       .child(div().w(14).flex_shrink_0().text_color(p.dim).child("–"))
       .child(div().min_w_0().flex_1().truncate().text_color(p.muted).child(excludeLabel(line)))
-      .child(textButton(`ui:${i}`, "Unignore", p, (cx) => a.unignore(line, cx))),
+      .child(iconButton(`ui:${i}`, ICONS.unignore, "Unignore", p, (cx) => a.unignore(line, cx))),
   );
   const all = (files: readonly ChangeFile[]) => files.map((f) => f.path);
   return [

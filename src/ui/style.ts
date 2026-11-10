@@ -70,6 +70,12 @@ export const ICONS = {
   chevron: "mods/githerd/icons/chevron-down.svg",
   branch: "mods/githerd/icons/branch.svg",
   herd: "mods/githerd/icons/herd.svg",
+  stage: "mods/githerd/icons/plus.svg",
+  unstage: "mods/githerd/icons/minus.svg",
+  discard: "mods/githerd/icons/undo.svg",
+  delete: "mods/githerd/icons/trash.svg",
+  ignore: "mods/githerd/icons/eye-off.svg",
+  unignore: "mods/githerd/icons/eye.svg",
 } as const;
 
 export function icon(path: string, color: Color, size = 14): Element {
@@ -86,6 +92,23 @@ export function badge(mark: string, count: number, color: Color, title: string):
 export function monoFont(): string {
   const f = settings().font_family;
   return typeof f === "string" && f !== "" ? f : "Menlo";
+}
+
+/** A small icon button for a row action, named by its tooltip. Its click stays with it, like textButton's. */
+export function iconButton(id: string, path: string, tip: string, p: Palette, onClick: (cx: Context) => void): Element {
+  return div()
+    .id(id)
+    .p(4)
+    .rounded(4)
+    .flex_shrink_0()
+    .cursor_pointer()
+    .tooltip(tip)
+    .hover((el) => el.bg(p.hover))
+    .on_click((_e, cx) => {
+      cx.stop_propagation();
+      onClick(cx);
+    })
+    .child(icon(path, p.muted, 14));
 }
 
 /** A small clickable text button. Its click stays with it: a button in a clickable row doesn't also click the row. */
