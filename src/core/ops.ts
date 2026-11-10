@@ -50,7 +50,7 @@ export const sequenceArgs = (op: Operation, step: "continue" | "abort" | "skip")
 
 /**
  * Stash matches files with pathspec patterns of its own (it is broken by
- * --literal-pathspecs); it takes no paths from githerd, so patterns are back on.
+ * --literal-pathspecs); it takes no paths from gitdeck, so patterns are back on.
  */
 const STASH = ["--no-literal-pathspecs", "stash"];
 

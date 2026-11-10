@@ -1,10 +1,10 @@
-# githerd
+# gitdeck
 
 A git client for the [Herdr](https://herdr.dev) desktop app, built for working
 with **a herd of repositories** at once: a folder of services, a monorepo of
 sub-repos, or one plain repo.
 
-githerd follows the terminal you're focused on. It climbs to the outermost
+gitdeck follows the terminal you're focused on. It climbs to the outermost
 repository around that folder, lists every repository below it, and shows the
 one you're in, with its branch and where it stands.
 
@@ -19,7 +19,7 @@ one you're in, with its branch and where it stands.
 - **Follows focus.** The focused terminal's folder, else a terminal in the same
   tab, else the space's folder. Spaces on another machine run git there.
 - **Finds the herd.** From `bsp/bsp-bo`, the herd is `bsp` and all its
-  sub-repos, not just `bsp-bo`. It searches 3 folders deep (`githerd.depth`,
+  sub-repos, not just `bsp-bo`. It searches 3 folders deep (`gitdeck.depth`,
   1 to 6) and never enters hidden folders, `node_modules`, `vendor`,
   `target`, `dist`, `build`, `Pods` or `DerivedData`. A home folder that isn't
   a repo is never searched.
@@ -51,7 +51,7 @@ one you're in, with its branch and where it stands.
 - **Image diff.** A commit's changed PNG, JPEG, GIF, WebP, BMP or ICO shows
   its before and after side by side above the diff. Each version is written
   from git's objects (`git cat-file`, so no filter runs) into
-  `mods/githerd/.cache/images/`, named by its object id, up to 20 MB. Repos on
+  `mods/gitdeck/.cache/images/`, named by its object id, up to 20 MB. Repos on
   this machine only.
 - **Looking closer.** A committed file's diff has **Blame** (each line's
   commit, author and age) and **History** (the commits that changed it,
@@ -65,7 +65,7 @@ one you're in, with its branch and where it stands.
   records and its URL (from that commit's `.gitmodules`, read as plain text).
 - **Editing history.** "Edit commits after this" opens the commits between
   the selected one and HEAD, oldest first. Click a step to cycle pick →
-  squash → fixup → drop, move it with ↑ ↓, then Run. githerd writes git's todo
+  squash → fixup → drop, move it with ↑ ↓, then Run. gitdeck writes git's todo
   list itself (no editor opens) and a squash keeps both messages. Ranges with
   a merge commit are refused. Repos on this machine only.
 - **Statistics.** **Stats** in the toolbar: commits (no merges) on HEAD, files,
@@ -76,7 +76,7 @@ one you're in, with its branch and where it stands.
   tool is needed; finishing one is an ordinary merge.
 - **GitHub.** **PRs** in the toolbar lists the repo's pull requests (open,
   merged and closed, the latest 100) through the `gh` CLI, read-only. A click
-  jumps to the PR's head commit. githerd reads `owner/repo` from `origin` and
+  jumps to the PR's head commit. gitdeck reads `owner/repo` from `origin` and
   runs `gh --repo owner/repo` outside the repo, so gh never reads the work
   tree; sign in once with `gh auth login`.
 
@@ -85,7 +85,7 @@ Reading uses `git status`, `git log`, `git show -s`, `git diff-tree`,
 (of a commit, never the work tree), `git ls-tree`, `git cat-file`, `git ls-files` and `find`.
 Only the buttons you click write: `git add`, `git restore`, `git rm --cached`,
 `git clean` (discarding an untracked file), `git apply --cached` (hunks and
-lines, from a patch file githerd writes into the repo's `.git` folder) and
+lines, from a patch file gitdeck writes into the repo's `.git` folder) and
 `git commit`, and the branch and sync buttons run `git switch`, `branch`,
 `tag`, `merge`, `rebase`, `cherry-pick`, `revert`, `reset`, `stash`, `fetch`,
 `pull` and `push`, and Edit commits runs `git rebase -i` with its todo list
@@ -100,7 +100,7 @@ Only Fetch, Pull, Push and the PRs list go over the network.
 Partial staging (hunks and lines) works for repos on this machine only: a
 remote machine's repo can still stage whole files and commit.
 
-A repository's own `.git/config` can name programs for git to run. githerd
+A repository's own `.git/config` can name programs for git to run. gitdeck
 never lets it: no fsmonitor, no signature checks (`gpg.program`), no external
 diff or textconv, no submodules, and a repo whose config names filter programs
 gets no status or work-tree diff until you've looked at it yourself.
@@ -111,22 +111,22 @@ Bind them in `keys.json` or run them with `herdr-app do`:
 
 | Command | Does |
 |---|---|
-| `githerd.picker` | open or close the repo picker |
-| `githerd.refresh` | scan the herd again |
-| `githerd.search` | put the keyboard in the history search box |
+| `gitdeck.picker` | open or close the repo picker |
+| `gitdeck.refresh` | scan the herd again |
+| `gitdeck.search` | put the keyboard in the history search box |
 
 ## Install (development)
 
 ```sh
 pnpm install
 pnpm types   # copy the installed Herdr app's type files into types/
-pnpm dev     # build, check and install into ~/.config/herdr-app/mods/githerd
+pnpm dev     # build, check and install into ~/.config/herdr-app/mods/gitdeck
 ```
 
 Then show it, for example beside a terminal:
 
 ```sh
-herdr-app do pane.split '{"direction":"right","mod":"githerd"}'
+herdr-app do pane.split '{"direction":"right","mod":"gitdeck"}'
 ```
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for how the code is laid out and

@@ -1,4 +1,4 @@
-// Interactive rebase (M4) without an editor: githerd writes git's todo list
+// Interactive rebase (M4) without an editor: gitdeck writes git's todo list
 // and has git copy it in place of opening one.
 
 import { logArgs, parseLog, type Commit } from "./git/log.ts";
@@ -72,7 +72,7 @@ export const shellQuote = (s: string): string => `'${s.replace(/'/g, `'\\''`)}'`
 
 /**
  * git runs `sequence.editor` with the todo file's path appended: `cp` puts
- * githerd's list there. A squash keeps the joined message (core.editor=true).
+ * gitdeck's list there. A squash keeps the joined message (core.editor=true).
  */
 export function interactiveArgs(base: string | null, todoPath: string): string[] {
   return ["-c", `sequence.editor=cp ${shellQuote(todoPath)}`, "-c", "core.editor=true", "rebase", "-i", base ?? "--root"];
@@ -86,7 +86,7 @@ export async function loadPlan(git: Git, target: Target, base: string | null): P
   }
 }
 
-const todoName = (): string => `githerd-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}.todo`;
+const todoName = (): string => `gitdeck-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}.todo`;
 
 /** Runs the plan. The todo file is new, in the repo's .git folder, and removed afterwards. */
 export async function runPlan(git: Git, files: Files, target: Target, plan: RebasePlan): Promise<string | null> {

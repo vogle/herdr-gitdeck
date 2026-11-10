@@ -14,8 +14,8 @@ export const ROW = 24;
 const LANE = 14;
 const PAD = 6;
 const MAX_LABELS = 3;
-export const GRAPH_LIST = "githerd-graph";
-const MORE = "githerd:more";
+export const GRAPH_LIST = "gitdeck-graph";
+const MORE = "gitdeck:more";
 
 const laneX = (lane: number) => PAD + lane * LANE + LANE / 2;
 const laneColor = (p: Palette, lane: number): Color => p.lanes[lane % p.lanes.length] ?? p.accent;

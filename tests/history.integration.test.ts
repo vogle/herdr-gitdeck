@@ -27,7 +27,7 @@ let marker = "";
 let at = { cwd: "", on: null as string | null };
 
 before(async () => {
-  dir = await realpath(await mkdtemp(join(tmpdir(), "githerd-hist-")));
+  dir = await realpath(await mkdtemp(join(tmpdir(), "gitdeck-hist-")));
   marker = join(dir, "..", `${dir.split("/").pop()}-ran`);
   at = { cwd: dir, on: null };
   const trap = join(dir, ".trap.sh");
@@ -81,7 +81,7 @@ test("the history, a commit, its diff and a work-tree diff run none of the repo'
   assert.equal(await exists(marker), false, "a repo-configured program ran");
 });
 
-test("the trap is real: git without githerd's flags runs gpg.program from stash list", async () => {
+test("the trap is real: git without gitdeck's flags runs gpg.program from stash list", async () => {
   // Straight to git, past createGit: proves the repo's config would run its program.
   await exec("git", ["stash", "list"], { cwd: dir });
   assert.equal(await exists(marker), true);

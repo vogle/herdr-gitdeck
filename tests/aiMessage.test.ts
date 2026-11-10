@@ -25,7 +25,7 @@ function fakeExec(result: ExecResult | Error): { exec: Exec; calls: Array<{ comm
   const calls: Array<{ command: string; args: string[]; options: unknown }> = [];
   const exec: Exec = async (command, args, options) => {
     calls.push({ command, args, options });
-    if (command === "mktemp") return { code: 0, stdout: "/private/tmp/u/githerd.abc\n", stderr: "" };
+    if (command === "mktemp") return { code: 0, stdout: "/private/tmp/u/gitdeck.abc\n", stderr: "" };
     if (command === "rmdir") return { code: 0, stdout: "", stderr: "" };
     if (result instanceof Error) throw result;
     return result;
@@ -61,8 +61,8 @@ test("suggestWithAi asks claude about the staged diff, with no tools and no hook
   const call = calls[1];
   assert.equal(call?.command, "claude");
   // In a private folder made for this call, removed afterwards.
-  assert.equal((call?.options as { cwd?: string }).cwd, "/private/tmp/u/githerd.abc");
-  assert.deepEqual(calls[2]?.args, ["/private/tmp/u/githerd.abc"]);
+  assert.equal((call?.options as { cwd?: string }).cwd, "/private/tmp/u/gitdeck.abc");
+  assert.deepEqual(calls[2]?.args, ["/private/tmp/u/gitdeck.abc"]);
   const args = call?.args ?? [];
   assert.equal(args[0], "-p");
   assert.match(args[1] ?? "", /\+new/);

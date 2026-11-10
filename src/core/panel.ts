@@ -1,12 +1,12 @@
-// githerd as a right-side panel: the drill-down's back step, the wide breakpoint,
+// gitdeck as a right-side panel: the drill-down's back step, the wide breakpoint,
 // and the viewer tab that shows what needs the whole width (diffs, blame, stats).
 // The panel asks for a view by writing a request to a shared value; the viewer
-// tab (a githerd pane in the main area) reads it.
+// tab (a gitdeck pane in the main area) reads it.
 
 import type { DiffSource } from "./history.ts";
 
 /** The shared value carrying what the viewer tab shows. */
-export const VIEWER_KEY = "githerd.viewer";
+export const VIEWER_KEY = "gitdeck.viewer";
 /** Panel widths from here up get two columns. */
 export const WIDE_PX = 640;
 
@@ -99,18 +99,18 @@ export function viewerBack(nav: ViewerNav): ViewerNav {
   return previous ? { current: previous, back: nav.back.slice(0, -1) } : nav;
 }
 
-/** The tab holding the viewer: layout blocks are not panes, so a githerd pane is the viewer. */
+/** The tab holding the viewer: layout blocks are not panes, so a gitdeck pane is the viewer. */
 export function findViewerTab(panes: readonly { mod?: string; tab: string }[]): string | null {
-  return panes.find((p) => p.mod === "githerd")?.tab ?? null;
+  return panes.find((p) => p.mod === "gitdeck")?.tab ?? null;
 }
 
 /** Focus is in the viewer's tab: it has no terminal, so the panel keeps the repo it shows. */
 export function viewerFocused(focus: { tab: string } | null, panes: readonly { mod?: string; tab: string }[]): boolean {
-  return focus !== null && panes.some((p) => p.tab === focus.tab && p.mod === "githerd");
+  return focus !== null && panes.some((p) => p.tab === focus.tab && p.mod === "gitdeck");
 }
 
 /** The shared value holding where the viewer was opened from, for its "← Terminal" button. */
-export const RETURN_KEY = "githerd.viewer.from";
+export const RETURN_KEY = "gitdeck.viewer.from";
 
 /** The tab (and terminal in it) to go back to from the viewer. */
 export interface ReturnPoint {
@@ -136,11 +136,11 @@ export function parseReturn(v: unknown, spaces: readonly { tabs: readonly { id: 
 }
 
 /** The viewer tab's name. */
-export const VIEWER_TAB_NAME = "GitHerd";
+export const VIEWER_TAB_NAME = "GitDeck";
 /** What the viewer tab was named before. */
-const OLD_VIEWER_TAB_NAME = "githerd";
+const OLD_VIEWER_TAB_NAME = "GitHerd";
 
-/** A viewer tab opened under the old lowercase name, to rename (one the person renamed is left alone). */
+/** A viewer tab opened under the old name, to rename (one the person renamed is left alone). */
 export function staleViewerTab(
   spaces: readonly { tabs: readonly { id: string; name: string }[] }[],
   panes: readonly { mod?: string; tab: string }[],

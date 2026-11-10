@@ -11,7 +11,7 @@ import { UNCOMMITTED, type HistoryView } from "../core/historyView.ts";
 import { dateTime } from "../core/time.ts";
 import { monoFont, textButton, type Palette } from "./style.ts";
 
-const DIFF_LIST = "githerd-diff";
+const DIFF_LIST = "gitdeck-diff";
 const DIFF_ROW = 18;
 const MAX_FILES = 500;
 

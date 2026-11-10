@@ -29,7 +29,7 @@ test("with environment settings, git runs through env with them first", async ()
   assert.deepEqual(calls[0]?.args, ["GIT_TERMINAL_PROMPT=0", "git", ...GIT_FLAGS, "fetch"]);
 });
 
-test("a repo's own config can't make githerd run a program (fsmonitor off)", () => {
+test("a repo's own config can't make gitdeck run a program (fsmonitor off)", () => {
   const flags = GIT_FLAGS.join(" ");
   assert.match(flags, /-c core\.fsmonitor=false/);
   assert.match(flags, /-c log\.showSignature=false/);

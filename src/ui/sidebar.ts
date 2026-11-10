@@ -44,7 +44,7 @@ export function sidebar(history: History | null, p: Palette, onPick: (hash: stri
   const stashItems = stashes.slice(0, MAX_PER_SECTION).map((s) => item(`st:${s.name}`, `${s.name}  ${s.subject}`, "", false, p, (cx) => onPick(s.hash, cx)));
   const [branches, remotes, tags] = [of("branch"), of("remote"), of("tag")];
   return v_flex()
-    .id("githerd-sidebar")
+    .id("gitdeck-sidebar")
     .when(full, (el) => el.flex_1().min_w_0())
     .when(!full, (el) => el.w(190).flex_shrink_0())
     .h_full()

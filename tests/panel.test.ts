@@ -84,26 +84,26 @@ test("a request from the panel replaces the viewer; one from inside it can go ba
   assert.equal(viewerBack(start), start);
 });
 
-test("findViewerTab finds the tab of a githerd pane", () => {
-  const panes = [{ mod: "files", tab: "t1" }, { tab: "t2" }, { mod: "githerd", tab: "t3" }];
+test("findViewerTab finds the tab of a gitdeck pane", () => {
+  const panes = [{ mod: "files", tab: "t1" }, { tab: "t2" }, { mod: "gitdeck", tab: "t3" }];
   assert.equal(findViewerTab(panes), "t3");
   assert.equal(findViewerTab([{ mod: "files", tab: "t1" }]), null);
 });
 
 test("viewerFocused: focus in the viewer's tab keeps the panel on its repo", () => {
-  const panes = [{ mod: "githerd", tab: "t3" }, { tab: "t1" }];
+  const panes = [{ mod: "gitdeck", tab: "t3" }, { tab: "t1" }];
   assert.equal(viewerFocused({ tab: "t3" }, panes), true);
   assert.equal(viewerFocused({ tab: "t1" }, panes), false);
   assert.equal(viewerFocused(null, panes), false);
 });
 
-test("staleViewerTab finds a viewer tab still under the old lowercase name", () => {
-  const panes = [{ mod: "githerd", tab: "t3" }, { tab: "t1" }];
+test("staleViewerTab finds a viewer tab still under the old name", () => {
+  const panes = [{ mod: "gitdeck", tab: "t3" }, { tab: "t1" }];
   const spaces = (name: string) => [{ tabs: [{ id: "t1", name: "1" }, { id: "t3", name }] }];
-  assert.equal(staleViewerTab(spaces("githerd"), panes), "t3");
+  assert.equal(staleViewerTab(spaces("GitHerd"), panes), "t3");
   assert.equal(staleViewerTab(spaces(VIEWER_TAB_NAME), panes), null);
   assert.equal(staleViewerTab(spaces("my diff"), panes), null);
-  assert.equal(staleViewerTab(spaces("githerd"), [{ tab: "t1" }]), null);
+  assert.equal(staleViewerTab(spaces("GitHerd"), [{ tab: "t1" }]), null);
 });
 
 test("liveDiff: only an uncommitted diff can change under the viewer", () => {
@@ -117,7 +117,7 @@ test("liveDiff: only an uncommitted diff can change under the viewer", () => {
 });
 
 test("returnPoint remembers the tab and terminal the viewer was opened from, not the viewer itself", () => {
-  const panes = [{ tab: "t1", mod: undefined }, { tab: "tv", mod: "githerd" }];
+  const panes = [{ tab: "t1", mod: undefined }, { tab: "tv", mod: "gitdeck" }];
   const term = { space: "s", tab: "t1", pane: "p1", terminal: "x1", shown: null, agent: null, cwd: "/r" };
   assert.deepEqual(returnPoint(term, panes, null), { tab: "t1", terminal: "x1" });
   const prev = { tab: "t0", terminal: null };

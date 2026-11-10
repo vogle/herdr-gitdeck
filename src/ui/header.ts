@@ -1,5 +1,5 @@
-// The 40px bar: githerd, the shown repo (a dropdown when there's a herd), its branch, refresh.
-// The panel is hidden from the tab bar's GitHerd button, so it has no close of its own.
+// The 40px bar: gitdeck, the shown repo (a dropdown when there's a herd), its branch, refresh.
+// The panel is hidden from the tab bar's GitDeck button, so it has no close of its own.
 
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex } from "gpui-base";

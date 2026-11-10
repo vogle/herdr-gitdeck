@@ -103,7 +103,7 @@ async function recentSubjects(git: Git, target: Target): Promise<string> {
 async function privateFolder(exec: Exec): Promise<{ dir: string } | { error: string }> {
   const why = "Couldn't make a private folder for the agent";
   try {
-    const made = await exec("mktemp", ["-d", "-t", "githerd.XXXXXX"], {});
+    const made = await exec("mktemp", ["-d", "-t", "gitdeck.XXXXXX"], {});
     const dir = made.stdout.trim();
     if (made.code === 0 && dir !== "") return { dir };
     return { error: `${why}: ${made.stderr.trim().split("\n")[0] ?? ""}` };

@@ -1,4 +1,4 @@
-// Real git: an interactive rebase run from githerd's own todo list.
+// Real git: an interactive rebase run from gitdeck's own todo list.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
@@ -26,7 +26,7 @@ let at = { cwd: "", on: null as string | null };
 const subjects = async () => (await git(at, ["log", "--format=%s"])).trim().split("\n");
 
 before(async () => {
-  at = { cwd: await realpath(await mkdtemp(join(tmpdir(), "githerd-rebase-"))), on: null };
+  at = { cwd: await realpath(await mkdtemp(join(tmpdir(), "gitdeck-rebase-"))), on: null };
   for (const a of [["init", "-q", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "t"], ["config", "commit.gpgsign", "false"]]) await git(at, a);
   for (const n of ["base", "one", "two", "three"]) {
     await writeFile(join(at.cwd, `${n}.txt`), `${n}\n`);
@@ -49,7 +49,7 @@ test("reorder and drop, with no editor", async () => {
   assert.equal(await runPlan(git, files, at, plan), null);
   assert.deepEqual(await subjects(), ["three", "one", "base"]);
   const gitDir = (await git(at, ["rev-parse", "--absolute-git-dir"])).trim();
-  assert.deepEqual((await readdir(gitDir)).filter((n) => n.startsWith("githerd")), [], "todo file removed");
+  assert.deepEqual((await readdir(gitDir)).filter((n) => n.startsWith("gitdeck")), [], "todo file removed");
 });
 
 test("a squash keeps both messages without opening an editor", async () => {

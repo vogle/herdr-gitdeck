@@ -1,4 +1,4 @@
-// The one place githerd runs git. Everything else asks through a `Git`,
+// The one place gitdeck runs git. Everything else asks through a `Git`,
 // so the logic can be tested with a fake and the engine swapped later.
 
 export interface ExecResult {
@@ -23,7 +23,7 @@ export type Git = (target: Target, args: string[]) => Promise<string>;
  * Applied to every call:
  * - no optional locks, so reading never blocks an agent's git in the same repo;
  * - plain output: no colors, paths unquoted (UTF-8 names stay readable);
- * - no fsmonitor: githerd reads every repo `find` turns up, and a repo's own
+ * - no fsmonitor: gitdeck reads every repo `find` turns up, and a repo's own
  *   `.git/config` could name a program as its fsmonitor and have it run;
  * - literal paths: a file named `:(glob)*` means that file, not a pattern
  *   (discarding it must never reach other files);

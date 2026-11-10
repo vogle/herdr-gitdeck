@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { githubRepo, prListArgs, parsePrs, loadPrs } from "../src/core/github.ts";
 
 test("githubRepo reads owner/repo from the usual remote URL shapes, and nothing else", () => {
-  assert.equal(githubRepo("https://github.com/vogle/herdr-githerd.git"), "vogle/herdr-githerd");
+  assert.equal(githubRepo("https://github.com/vogle/herdr-gitdeck.git"), "vogle/herdr-gitdeck");
   assert.equal(githubRepo("git@github.com:vogle/x.y"), "vogle/x.y");
   assert.equal(githubRepo("ssh://git@github.com/a/b.git"), "a/b");
   assert.equal(githubRepo("https://gitlab.com/a/b.git"), null);

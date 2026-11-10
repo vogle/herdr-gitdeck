@@ -39,7 +39,7 @@ test("loadTree and loadBlob report errors as text and skip what can't be shown",
 });
 
 const OID = "b".repeat(64);
-test("a Git LFS pointer is named as one: githerd never runs git-lfs to fetch it", () => {
+test("a Git LFS pointer is named as one: gitdeck never runs git-lfs to fetch it", () => {
   const ptr = `version https://git-lfs.github.com/spec/v1\noid sha256:${OID}\nsize 12345\n`;
   assert.deepEqual(lfsPointer(ptr), { oid: OID, size: 12345 });
   assert.equal(lfsPointer("version 1\n"), null);

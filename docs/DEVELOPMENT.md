@@ -1,4 +1,4 @@
-# Developing githerd
+# Developing gitdeck
 
 ## Layout
 
@@ -32,7 +32,7 @@ pnpm verify      # typecheck + coverage + build
 Write the test first. Logic goes in `src/core` behind injected `Git`/`Exec`, so
 it can be tested without Herdr; `src/ui` stays thin. After `pnpm dev`, look at
 it: `herdr-app shot /tmp/x.png`, and `herdr-app status` must show no errors.
-Commands reach a shown copy: `herdr-app do githerd.picker`.
+Commands reach a shown copy: `herdr-app do gitdeck.picker`.
 
 ## Herdr rules that bite
 
@@ -47,7 +47,7 @@ Commands reach a shown copy: `herdr-app do githerd.picker`.
   Anything that needs input writes a file first (`writeTextFile`, under
   `~/.config/herdr-app`). Long operations (clone, big push) belong in a
   terminal (`hc`), not `exec`.
-- Every git call uses `--no-optional-locks`, so githerd never blocks an
+- Every git call uses `--no-optional-locks`, so gitdeck never blocks an
   agent's git in the same repo.
 - Each saved file reloads the mod, and herdr-app 0.1.x keeps old code alive per
   reload: install with `scripts/dev-install.sh` (one rename), never by copying
@@ -60,5 +60,5 @@ Commands reach a shown copy: `herdr-app do githerd.picker`.
 ## Release (later)
 
 Semver in `package.json`; tag `vX.Y.Z`; a GitHub release with the built
-`dist/githerd` folder. For herdr.dev/mods: a public repo with the topic
+`dist/gitdeck` folder. For herdr.dev/mods: a public repo with the topic
 `herdr-mod`, a `RECIPE.md` and a `preview.png`.

@@ -87,7 +87,7 @@ export async function loadBlob(git: Git, target: Target, rev: string, file: Tree
   if (file.kind === "submodule") {
     // .gitmodules is read raw from the commit, never through git config or git submodule.
     const url = await git(target, blobArgs(rev, ".gitmodules")).then((t) => parseGitmodules(t).get(file.path) ?? null, () => null);
-    return { lines: [], note: `Submodule at ${file.hash.slice(0, 10)}, ${url ? `from ${url}` : "no URL recorded"}. githerd never enters or updates one` };
+    return { lines: [], note: `Submodule at ${file.hash.slice(0, 10)}, ${url ? `from ${url}` : "no URL recorded"}. gitdeck never enters or updates one` };
   }
   if (file.size > MAX_BLOB) return blobText("", file.size);
   try {

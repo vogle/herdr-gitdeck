@@ -11,7 +11,7 @@ import type { AgentNote } from "../core/repoAgents.ts";
 import type { ChangeFile, Changes } from "../core/staging.ts";
 import { ICONS, iconButton, monoFont, textButton, type Palette } from "./style.ts";
 
-const LIST = "githerd-stage-diff";
+const LIST = "gitdeck-stage-diff";
 const ROW = 18;
 const MAX_FILES = 500;
 
@@ -302,7 +302,7 @@ function resolvePane(r: Resolving, p: Palette, a: ChangesActions): Element {
     .child(
       total === 0
         ? div().p(12).text_color(p.dim).child("No conflict markers in this file: edit it, or mark it resolved.")
-        : v_flex().id("githerd-resolve").flex_1().min_h_0().overflow_y_scrollbar().font_family(monoFont()).text_xs().children(blocks),
+        : v_flex().id("gitdeck-resolve").flex_1().min_h_0().overflow_y_scrollbar().font_family(monoFont()).text_xs().children(blocks),
     );
 }
 

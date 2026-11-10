@@ -82,7 +82,7 @@ test("applyPicks writes the patch into the git folder and applies it to the inde
   };
   assert.equal(await applyPicks(r.git, files, at, raw, [{ hunk: 0, lines: null }], false), null);
   const [path = "", text] = writes[0] ?? [];
-  assert.match(path, /^\/r\/\.git\/githerd-[a-z0-9]+-[a-z0-9]+\.patch$/);
+  assert.match(path, /^\/r\/\.git\/gitdeck-[a-z0-9]+-[a-z0-9]+\.patch$/);
   assert.equal(text, raw.replace("@@ -1 +1 @@", "@@ -1,1 +1,1 @@"));
   assert.deepEqual(r.calls.at(-1), ["apply", "--cached", "--recount", "--whitespace=nowarn", path]);
   assert.deepEqual(removed, [path], "removed after use");

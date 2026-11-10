@@ -36,7 +36,7 @@ const commit = async (file: string, text: string, msg: string, t = at) => {
 };
 
 before(async () => {
-  root = await realpath(await mkdtemp(join(tmpdir(), "githerd-ops-")));
+  root = await realpath(await mkdtemp(join(tmpdir(), "gitdeck-ops-")));
   await git({ cwd: root, on: null }, ["init", "-q", "--bare", "-b", "main", "remote.git"]);
   for (const name of ["a", "b"]) {
     await mkdir(join(root, name));

@@ -29,7 +29,7 @@ let at = { cwd: "", on: null as string | null };
 const lines = (n: number, f: (i: number) => string) => `${Array.from({ length: n }, (_, i) => f(i)).join("\n")}\n`;
 
 before(async () => {
-  at = { cwd: await realpath(await mkdtemp(join(tmpdir(), "githerd-stage-"))), on: null };
+  at = { cwd: await realpath(await mkdtemp(join(tmpdir(), "gitdeck-stage-"))), on: null };
   for (const a of [["init", "-q", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "t"], ["config", "commit.gpgsign", "false"]]) await git(at, a);
   await writeFile(join(at.cwd, "f.txt"), lines(20, (i) => `line ${i}`));
   await stageFiles(git, at, ["f.txt"]);
@@ -83,6 +83,6 @@ test("the patch file is new each time and gone afterwards", async () => {
   assert.equal(await applyPicks(git, files, at, d.raw, [{ hunk: 0, lines: null }], false), null);
   const left = (await git(at, ["rev-parse", "--absolute-git-dir"])).trim();
   const { readdir } = await import("node:fs/promises");
-  assert.deepEqual((await readdir(left)).filter((n) => n.startsWith("githerd")), []);
+  assert.deepEqual((await readdir(left)).filter((n) => n.startsWith("gitdeck")), []);
   assert.equal(await unstageFiles(git, at, ["f.txt"], true), null);
 });

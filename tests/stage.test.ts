@@ -25,7 +25,7 @@ test("commit and amend take the message as an argument", () => {
 });
 
 test("applyArgs applies a patch file to the index, reversed to unstage", () => {
-  assert.deepEqual(applyArgs("/g/githerd.patch", false), ["apply", "--cached", "--recount", "--whitespace=nowarn", "/g/githerd.patch"]);
+  assert.deepEqual(applyArgs("/g/gitdeck.patch", false), ["apply", "--cached", "--recount", "--whitespace=nowarn", "/g/gitdeck.patch"]);
   assert.deepEqual(applyArgs("/g/p", true), ["apply", "--cached", "--recount", "--whitespace=nowarn", "--reverse", "/g/p"]);
 });
 

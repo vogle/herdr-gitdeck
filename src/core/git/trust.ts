@@ -2,7 +2,7 @@
 // downloaded archive's `.git/config`, or a file it includes) can name a
 // clean/smudge/process filter, and `git status` runs that program on any
 // changed file `.gitattributes` routes through it. Reading config never runs
-// anything, so githerd looks first and leaves such a repo alone.
+// anything, so gitdeck looks first and leaves such a repo alone.
 
 /** Every filter command with the scope it came from (an include reports its includer's scope). */
 export const FILTER_CHECK_ARGS: readonly string[] = ["config", "--show-scope", "--get-regexp", "^filter\\..+\\.(clean|smudge|process)$"];

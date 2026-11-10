@@ -8,7 +8,7 @@ import { MAX_STATS, type Stats } from "../core/stats.ts";
 import { ago } from "../core/time.ts";
 import { monoFont, textButton, type Palette } from "./style.ts";
 
-const LIST = "githerd-inspect";
+const LIST = "gitdeck-inspect";
 const ROW = 18;
 
 export interface InspectActions {

@@ -1,4 +1,4 @@
-// githerd: a git client for Herdr. This file wires Herdr's live data to the core
+// gitdeck: a git client for Herdr. This file wires Herdr's live data to the core
 // (src/core, tested without Herdr) and the views (src/ui).
 
 import { View, div, type AsyncContext, type Context, type Element, type FocusHandle } from "gpui-kit";
@@ -41,7 +41,7 @@ const CONCURRENCY = 4;
 /** Redraw after this many statuses while a big herd loads. */
 const NOTIFY_EVERY = 8;
 
-export const DEPTH_KEY = "githerd.depth";
+export const DEPTH_KEY = "gitdeck.depth";
 
 function depthSetting(): number {
   const value = Number(shared(DEPTH_KEY));
@@ -57,7 +57,7 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export default class Githerd extends View {
+export default class GitDeck extends View {
   herd: HerdState = emptyHerd();
   /** The folder the herd was scanned for. */
   shown: Target | null = null;
@@ -139,7 +139,7 @@ export default class Githerd extends View {
         await this.sync(cx);
       }
     });
-    // Commands from keys.json or `herdr-app do githerd.<command>` (shown copies only).
+    // Commands from keys.json or `herdr-app do gitdeck.<command>` (shown copies only).
     cx.spawn(async (cx) => {
       for (;;) {
         const command = await nextCommand();
@@ -462,7 +462,7 @@ export default class Githerd extends View {
   override render(_cx: Context): Element {
     const p = palette();
     if (this.viewer) {
-      return v_flex().id("githerd-viewer").size_full().bg(p.surface).text_size(13).text_color(p.foreground).child(this.viewer.render(p));
+      return v_flex().id("gitdeck-viewer").size_full().bg(p.surface).text_size(13).text_color(p.foreground).child(this.viewer.render(p));
     }
     this.notice();
     const repo = selectedRepo(this.herd);
@@ -488,7 +488,7 @@ export default class Githerd extends View {
           )
         : summary(this.herd, p, this.busy && this.herd.root === null);
     return v_flex()
-      .id("githerd")
+      .id("gitdeck")
       .size_full()
       .track_focus(this.focus)
       .on_key_down((e, cx) => {

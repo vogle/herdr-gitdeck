@@ -66,17 +66,17 @@ export function palette(): Palette {
 }
 
 export const ICONS = {
-  refresh: "mods/githerd/icons/refresh.svg",
-  chevron: "mods/githerd/icons/chevron-down.svg",
-  branch: "mods/githerd/icons/branch.svg",
-  herd: "mods/githerd/icons/herd.svg",
-  stage: "mods/githerd/icons/plus.svg",
-  unstage: "mods/githerd/icons/minus.svg",
-  discard: "mods/githerd/icons/undo.svg",
-  delete: "mods/githerd/icons/trash.svg",
-  ignore: "mods/githerd/icons/eye-off.svg",
-  unignore: "mods/githerd/icons/eye.svg",
-  lines: "mods/githerd/icons/scissors.svg",
+  refresh: "mods/gitdeck/icons/refresh.svg",
+  chevron: "mods/gitdeck/icons/chevron-down.svg",
+  branch: "mods/gitdeck/icons/branch.svg",
+  herd: "mods/gitdeck/icons/herd.svg",
+  stage: "mods/gitdeck/icons/plus.svg",
+  unstage: "mods/gitdeck/icons/minus.svg",
+  discard: "mods/gitdeck/icons/undo.svg",
+  delete: "mods/gitdeck/icons/trash.svg",
+  ignore: "mods/gitdeck/icons/eye-off.svg",
+  unignore: "mods/gitdeck/icons/eye.svg",
+  lines: "mods/gitdeck/icons/scissors.svg",
 } as const;
 
 export function icon(path: string, color: Color, size = 14): Element {

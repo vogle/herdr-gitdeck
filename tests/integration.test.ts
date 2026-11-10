@@ -39,7 +39,7 @@ async function repo(path: string): Promise<void> {
 }
 
 before(async () => {
-  herd = await realpath(await mkdtemp(join(tmpdir(), "githerd-")));
+  herd = await realpath(await mkdtemp(join(tmpdir(), "gitdeck-")));
   await repo(herd);
   await repo(join(herd, "svc-a"));
   await repo(join(herd, "libs", "core"));
@@ -92,7 +92,7 @@ test("real porcelain v2 output parses into the expected entries and summary", as
 });
 
 test("git outside a repo fails with a GitError, and findHerdRoot treats it as no repo", async () => {
-  const outside = await realpath(await mkdtemp(join(tmpdir(), "githerd-none-")));
+  const outside = await realpath(await mkdtemp(join(tmpdir(), "gitdeck-none-")));
   try {
     const r = await findHerdRoot(git, { cwd: outside, on: null }, "/nonexistent-home");
     assert.deepEqual(r, { root: outside, focused: null });

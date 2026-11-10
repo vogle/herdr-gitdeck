@@ -1,8 +1,8 @@
 {
-  "name": "herdr-githerd",
+  "name": "herdr-gitdeck",
   "version": "0.1.0",
   "private": true,
-  "description": "githerd: a git client mod for the Herdr desktop app",
+  "description": "gitdeck: a git client mod for the Herdr desktop app",
   "type": "module",
   "packageManager": "pnpm@11.9.0",
   "engines": {

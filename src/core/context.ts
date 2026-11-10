@@ -1,4 +1,4 @@
-// Which folder githerd follows: the focused terminal's, else a terminal in the
+// Which folder gitdeck follows: the focused terminal's, else a terminal in the
 // same tab, else the space's folder. Typed structurally so it can be tested
 // without the Herdr runtime.
 

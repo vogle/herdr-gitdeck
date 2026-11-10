@@ -91,11 +91,11 @@ function trustNeeded(path: string, filters: readonly string[], p: Palette): Elem
     .flex_1()
     .p(14)
     .gap(8)
-    .child(div().text_color(p.changed).font_medium().child("Needs your trust before githerd reads it"))
+    .child(div().text_color(p.changed).font_medium().child("Needs your trust before gitdeck reads it"))
     .child(
       div()
         .text_color(p.muted)
-        .child("This repository's own git config names filter programs, which git status would run. githerd left it unread."),
+        .child("This repository's own git config names filter programs, which git status would run. gitdeck left it unread."),
     )
     .children(filters.map((f) => div().text_xs().text_color(p.foreground).child(f)))
     .child(div().text_xs().text_color(p.dim).child(`Check ${path}/.git/config. If you trust it, run git status there in a terminal.`));

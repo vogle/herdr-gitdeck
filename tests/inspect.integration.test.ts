@@ -23,7 +23,7 @@ const commit = async (msg: string) => git(at, ["commit", "-q", "-m", msg]);
 const head = async () => (await git(at, ["rev-parse", "HEAD"])).trim();
 
 before(async () => {
-  at = { cwd: await realpath(await mkdtemp(join(tmpdir(), "githerd-inspect-"))), on: null };
+  at = { cwd: await realpath(await mkdtemp(join(tmpdir(), "gitdeck-inspect-"))), on: null };
   for (const a of [["init", "-q", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "Tess"], ["config", "commit.gpgsign", "false"]]) await git(at, a);
   await writeFile(join(at.cwd, "a.txt"), "one\ntwo\n");
   await git(at, ["add", "a.txt"]);
@@ -105,7 +105,7 @@ test("stats count the commits, the author and the files", async () => {
 
 test("an LFS pointer and a submodule at a commit are described, never fetched or entered", async () => {
   const { loadTree, loadBlob } = await import("../src/core/tree.ts");
-  const t = { cwd: await realpath(await mkdtemp(join(tmpdir(), "githerd-lfs-"))), on: null as string | null };
+  const t = { cwd: await realpath(await mkdtemp(join(tmpdir(), "gitdeck-lfs-"))), on: null as string | null };
   try {
     for (const a of [["init", "-q", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "Tess"], ["config", "commit.gpgsign", "false"]]) await git(t, a);
     await writeFile(join(t.cwd, "big.bin"), `version https://git-lfs.github.com/spec/v1\noid sha256:${"d".repeat(64)}\nsize 999\n`);
@@ -127,8 +127,8 @@ test("an LFS pointer and a submodule at a commit are described, never fetched or
 
 test("an image diff writes both versions byte for byte, once each", async () => {
   const { loadImagePair } = await import("../src/core/imageDiff.ts");
-  const t = { cwd: await realpath(await mkdtemp(join(tmpdir(), "githerd-img-"))), on: null as string | null };
-  const cacheDir = await mkdtemp(join(tmpdir(), "githerd-cache-"));
+  const t = { cwd: await realpath(await mkdtemp(join(tmpdir(), "gitdeck-img-"))), on: null as string | null };
+  const cacheDir = await mkdtemp(join(tmpdir(), "gitdeck-cache-"));
   try {
     for (const a of [["init", "-q", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "Tess"], ["config", "commit.gpgsign", "false"]]) await git(t, a);
     const v1 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff, 0x00, 0x01]);

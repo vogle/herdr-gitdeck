@@ -1,4 +1,4 @@
-// The viewer tab: a githerd pane in the main area showing what needs the whole
+// The viewer tab: a gitdeck pane in the main area showing what needs the whole
 // width — a diff, a file's blame or history, the repo's statistics. The panel
 // asks for it through the shared VIEWER_KEY value, so a restart shows it again.
 
@@ -22,7 +22,7 @@ import { inspectPane } from "./ui/inspect.ts";
 import { textButton, type Palette } from "./ui/style.ts";
 
 /** Image diffs are written here (hidden, so writing doesn't reload the mod), under the app folder `image()` reads from. */
-export const IMAGE_CACHE = "mods/githerd/.cache/images";
+export const IMAGE_CACHE = "mods/gitdeck/.cache/images";
 /** While an uncommitted diff is on screen, how often it is read again. */
 const LIVE_EVERY_MS = 3_000;
 
@@ -33,7 +33,7 @@ export function openViewer(request: ViewerRequest): void {
   setShared(VIEWER_KEY, request);
   const tab = findViewerTab(panes());
   if (tab) run("tab.select", { id: tab });
-  else run("tab.new", { name: VIEWER_TAB_NAME, mod: "githerd", props: { viewer: true } });
+  else run("tab.new", { name: VIEWER_TAB_NAME, mod: "gitdeck", props: { viewer: true } });
 }
 
 /** Back to the tab the viewer was opened from, and the terminal that had focus there. */
@@ -190,7 +190,7 @@ export class Viewer {
   render(p: Palette): Element {
     this.notice();
     const r = this.nav.current;
-    if (!r) return div().p(16).text_color(p.dim).child("Nothing to show yet: open a file from the githerd panel.");
+    if (!r) return div().p(16).text_color(p.dim).child("Nothing to show yet: open a file from the gitdeck panel.");
     const s = this.shown;
     const body =
       s === null

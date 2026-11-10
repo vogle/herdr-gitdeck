@@ -169,7 +169,7 @@ function planEditor(plan: RebasePlan, p: Palette, a: OpsActions, busy: boolean):
         .child(textButton("plan-run", busy ? "Rebasing…" : "Run", p, a.runPlan, problem === null))
         .child(textButton("plan-cancel", "Cancel", p, a.cancelPlan)),
     )
-    .child(v_flex().id("githerd-plan").max_h(220).overflow_y_scroll().children(rows));
+    .child(v_flex().id("gitdeck-plan").max_h(220).overflow_y_scroll().children(rows));
 }
 
 export function commitBar(parts: OpsParts, p: Palette, a: OpsActions): Element | null {
