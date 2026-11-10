@@ -108,7 +108,7 @@ test("readExcluded and unexcludeLocally use the repo's exclude file", async () =
 // --- Agents working in the shown repo ---
 
 const agent = (pane: string, status: "working" | "blocked" | "done" | "idle", name = "Claude Code") =>
-  ({ pane, status, tab_name: "1", program: { name } });
+  ({ pane, status, tab_name: "1", program: { name, key: name === "Codex" ? "codex" : "claude" } });
 
 test("repoAgents keeps the agents whose pane is in the repo or below it", () => {
   const panes = [
@@ -118,7 +118,7 @@ test("repoAgents keeps the agents whose pane is in the repo or below it", () => 
     { pane: "p4", cwd: null },
   ];
   const all = [agent("p1", "idle"), agent("p2", "working", "Codex"), agent("p3", "working"), agent("p4", "working"), agent("p9", "done")];
-  assert.deepEqual(repoAgents("/w/app", all, panes).map((a) => [a.name, a.status]), [["Claude Code", "idle"], ["Codex", "working"]]);
+  assert.deepEqual(repoAgents("/w/app", all, panes).map((a) => [a.name, a.key, a.status]), [["Claude Code", "claude", "idle"], ["Codex", "codex", "working"]]);
   assert.deepEqual(repoAgents(null, all, panes), []);
 });
 

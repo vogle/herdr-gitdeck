@@ -1,7 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { GitError, type Exec, type ExecResult, type Git, type Target } from "../src/core/git/runner.ts";
-import { aiPrompt, cleanMessage, suggestWithAi, MAX_DIFF } from "../src/core/aiMessage.ts";
+import { aiPrompt, cleanMessage, pickWriter, suggestWithAi, writerArgs, WRITERS, MAX_DIFF } from "../src/core/aiMessage.ts";
+
+const claude = WRITERS.claude;
 
 const at: Target = { cwd: "/r", on: null };
 
@@ -51,7 +53,7 @@ test("cleanMessage trims and drops code fences", () => {
 
 test("suggestWithAi asks claude about the staged diff, with no tools and no hooks", async () => {
   const { exec, calls } = fakeExec({ code: 0, stdout: "feat: new thing\n", stderr: "" });
-  assert.deepEqual(await suggestWithAi(recorder(staged), exec, at), { message: "feat: new thing" });
+  assert.deepEqual(await suggestWithAi(recorder(staged), exec, at, claude), { message: "feat: new thing" });
   const call = calls[0];
   assert.equal(call?.command, "claude");
   const args = call?.args ?? [];
@@ -66,21 +68,61 @@ test("suggestWithAi asks claude about the staged diff, with no tools and no hook
 test("suggestWithAi works before the first commit (no log yet)", async () => {
   const { exec } = fakeExec({ code: 0, stdout: "chore: start\n", stderr: "" });
   const git = recorder({ ...staged, "log -8 --format=%s": new GitError("no commits", [], 128, "") });
-  assert.deepEqual(await suggestWithAi(git, exec, at), { message: "chore: start" });
+  assert.deepEqual(await suggestWithAi(git, exec, at, claude), { message: "chore: start" });
 });
 
 test("suggestWithAi explains why it can't suggest", async () => {
   const ok = fakeExec({ code: 0, stdout: "x", stderr: "" }).exec;
-  assert.deepEqual(await suggestWithAi(recorder(), ok, at), { error: "Stage a file first: the suggestion reads the staged changes" });
-  assert.deepEqual(await suggestWithAi(recorder(staged), ok, { cwd: "/r", on: "m1" }), { error: "AI suggestions work only for repos on this machine" });
+  assert.deepEqual(await suggestWithAi(recorder(), ok, at, claude), { error: "Stage a file first: the suggestion reads the staged changes" });
+  assert.deepEqual(await suggestWithAi(recorder(staged), ok, { cwd: "/r", on: "m1" }, claude), { error: "AI suggestions work only for repos on this machine" });
   const missing = fakeExec(new Error("spawn claude ENOENT")).exec;
-  assert.deepEqual(await suggestWithAi(recorder(staged), missing, at), { error: "Claude Code (claude) couldn't start: is it installed?" });
+  assert.deepEqual(await suggestWithAi(recorder(staged), missing, at, claude), { error: "Claude Code (claude) couldn't start: is it installed?" });
   const failed = fakeExec({ code: 1, stdout: "", stderr: "Invalid API key · Please run /login\nmore\n" }).exec;
-  assert.deepEqual(await suggestWithAi(recorder(staged), failed, at), { error: "Claude Code: Invalid API key · Please run /login" });
+  assert.deepEqual(await suggestWithAi(recorder(staged), failed, at, claude), { error: "Claude Code: Invalid API key · Please run /login" });
   const silent = fakeExec({ code: 1, stdout: "", stderr: "" }).exec;
-  assert.deepEqual(await suggestWithAi(recorder(staged), silent, at), { error: "Claude Code stopped without a message" });
+  assert.deepEqual(await suggestWithAi(recorder(staged), silent, at, claude), { error: "Claude Code stopped without a message" });
   const empty = fakeExec({ code: 0, stdout: "  \n", stderr: "" }).exec;
-  assert.deepEqual(await suggestWithAi(recorder(staged), empty, at), { error: "Claude Code stopped without a message" });
+  assert.deepEqual(await suggestWithAi(recorder(staged), empty, at, claude), { error: "Claude Code stopped without a message" });
   const broken = recorder({ "diff --no-ext-diff --no-textconv --no-color --cached --stat": new GitError("index locked", [], 128, "") });
-  assert.deepEqual(await suggestWithAi(broken, ok, at), { error: "index locked" });
+  assert.deepEqual(await suggestWithAi(broken, ok, at, claude), { error: "index locked" });
+});
+
+// --- Which agent writes the message ---
+
+test("pickWriter prefers an agent working in this repo, then the installed ones in menu order", () => {
+  assert.equal(pickWriter(["codex"], ["claude", "gemini"])?.key, "codex");
+  assert.equal(pickWriter(["amp", "gemini"], ["claude"])?.key, "gemini");
+  assert.equal(pickWriter(["amp"], ["kiro", "gemini", "claude"])?.key, "gemini");
+  assert.equal(pickWriter([], ["claude"])?.key, "claude");
+  assert.equal(pickWriter(["amp"], ["kiro"]), null);
+});
+
+test("writerArgs asks each agent for one plain-text answer, without tools that edit", () => {
+  const codex = writerArgs(WRITERS.codex, "PROMPT");
+  assert.equal(WRITERS.codex.command, "codex");
+  assert.equal(codex[0], "exec");
+  assert.equal(codex.at(-1), "PROMPT");
+  assert.equal(codex[codex.indexOf("--sandbox") + 1], "read-only");
+  assert.ok(codex.includes("--skip-git-repo-check"));
+  const gemini = writerArgs(WRITERS.gemini, "PROMPT");
+  assert.equal(WRITERS.gemini.command, "gemini");
+  assert.equal(gemini[gemini.indexOf("-p") + 1], "PROMPT");
+  assert.equal(gemini[gemini.indexOf("--output-format") + 1], "text");
+  assert.equal(writerArgs(claude, "PROMPT")[1], "PROMPT");
+});
+
+test("suggestWithAi runs the picked agent and names it in errors", async () => {
+  const { exec, calls } = fakeExec({ code: 0, stdout: "fix: thing\n", stderr: "" });
+  assert.deepEqual(await suggestWithAi(recorder(staged), exec, at, WRITERS.codex), { message: "fix: thing" });
+  assert.equal(calls[0]?.command, "codex");
+  const missing = fakeExec(new Error("spawn gemini ENOENT")).exec;
+  assert.deepEqual(await suggestWithAi(recorder(staged), missing, at, WRITERS.gemini), { error: "Gemini (gemini) couldn't start: is it installed?" });
+  const failed = fakeExec({ code: 1, stdout: "", stderr: "not logged in\n" }).exec;
+  assert.deepEqual(await suggestWithAi(recorder(staged), failed, at, WRITERS.codex), { error: "Codex: not logged in" });
+});
+
+test("suggestWithAi says so when no agent can write the message", async () => {
+  const { exec, calls } = fakeExec({ code: 0, stdout: "x", stderr: "" });
+  assert.deepEqual(await suggestWithAi(recorder(staged), exec, at, null), { error: "No coding agent to write the message: install Claude Code, Codex or Gemini" });
+  assert.equal(calls.length, 0);
 });

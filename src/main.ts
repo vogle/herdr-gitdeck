@@ -3,7 +3,7 @@
 
 import { View, div, type AsyncContext, type Context, type Element, type FocusHandle } from "gpui-kit";
 import { v_flex, InputState, VirtualListScrollHandle } from "gpui-base";
-import { agents, exec, focused, home, nextCommand, panes, props, run, shared, spaces } from "herdr";
+import { agents, exec, focused, home, knownAgents, nextCommand, panes, props, run, shared, spaces } from "herdr";
 import { ChangesPanel } from "./changes.ts";
 import { loadReflog, type InspectView } from "./core/inspect.ts";
 import { loadBlob, loadTree } from "./core/tree.ts";
@@ -79,6 +79,13 @@ export default class Githerd extends View {
     status: () => this.trustedStatus(),
     changed: (cx) => this.reloadShown(cx),
     agents: () => repoAgents(this.herd.selected, agents(), panes()),
+    installedAgents: async () => {
+      try {
+        return (await knownAgents()).filter((a) => a.installed).map((a) => a.key);
+      } catch {
+        return []; // Unknown: the agents working in the repo still count.
+      }
+    },
   });
   readonly opsPanel = new OpsPanel({
     git: this.git,

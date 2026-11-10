@@ -17,7 +17,7 @@ import {
   type ChangeFile, type Changes, type Files,
 } from "./core/staging.ts";
 import { allChosen, parseConflicts, resolveFile } from "./core/conflict.ts";
-import { suggestWithAi } from "./core/aiMessage.ts";
+import { pickWriter, suggestWithAi } from "./core/aiMessage.ts";
 import { draftMessage, followDraft } from "./core/draft.ts";
 import { excludeLocally, readExcluded, unexcludeLocally } from "./core/exclude.ts";
 import { agentNote, type RepoAgent } from "./core/repoAgents.ts";
@@ -39,6 +39,8 @@ export interface ChangesHost {
   changed: (cx: AsyncContext) => Promise<void>;
   /** The coding agents whose terminal is in the shown repo. */
   agents: () => readonly RepoAgent[];
+  /** Herdr keys of the coding agents installed here, most picked first. */
+  installedAgents: () => Promise<readonly string[]>;
 }
 
 export class ChangesPanel {
@@ -90,7 +92,7 @@ export class ChangesPanel {
     });
   }
 
-  /** Claude Code writes the message; a box edited meanwhile is left alone. */
+  /** The person's coding agent writes the message; a box edited meanwhile is left alone. */
   suggest(cx: Context): void {
     const target = this.host.target();
     if (!target || this.suggesting) return;
@@ -98,7 +100,8 @@ export class ChangesPanel {
     const before = this.message.value();
     cx.notify();
     cx.spawn(async (cx) => {
-      const result = await suggestWithAi(this.host.git, exec, target);
+      const writer = pickWriter(this.host.agents().map((a) => a.key), await this.host.installedAgents());
+      const result = await suggestWithAi(this.host.git, exec, target, writer);
       this.suggesting = false;
       const untouched = this.message.value() === before;
       if ("message" in result) {
