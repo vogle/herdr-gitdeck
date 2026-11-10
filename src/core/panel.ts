@@ -109,6 +109,32 @@ export function viewerFocused(focus: { tab: string } | null, panes: readonly { m
   return focus !== null && panes.some((p) => p.tab === focus.tab && p.mod === "githerd");
 }
 
+/** The shared value holding where the viewer was opened from, for its "← Terminal" button. */
+export const RETURN_KEY = "githerd.viewer.from";
+
+/** The tab (and terminal in it) to go back to from the viewer. */
+export interface ReturnPoint {
+  tab: string;
+  terminal: string | null;
+}
+
+/** Where the person was when they opened the viewer; from inside the viewer, where they were before. */
+export function returnPoint(
+  focus: { tab: string; terminal: string | null } | null,
+  panes: readonly { mod?: string; tab: string }[],
+  previous: ReturnPoint | null,
+): ReturnPoint | null {
+  if (focus === null || viewerFocused(focus, panes)) return previous;
+  return { tab: focus.tab, terminal: focus.terminal };
+}
+
+/** A return point read back from shared state, while its tab is still open. */
+export function parseReturn(v: unknown, spaces: readonly { tabs: readonly { id: string }[] }[]): ReturnPoint | null {
+  if (!isObj(v) || !isText(v.tab) || (v.terminal !== null && !isText(v.terminal))) return null;
+  const tab = v.tab;
+  return spaces.some((s) => s.tabs.some((t) => t.id === tab)) ? { tab, terminal: v.terminal } : null;
+}
+
 /** The viewer tab's name. */
 export const VIEWER_TAB_NAME = "GitHerd";
 /** What the viewer tab was named before. */

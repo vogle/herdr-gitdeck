@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  backStep, findViewerTab, isWide, liveDiff, staleViewerTab, viewerFocused, VIEWER_TAB_NAME, parseViewer, viewerBack, viewerKey, viewerShow, viewerTitle, WIDE_PX,
+  backStep, findViewerTab, isWide, liveDiff, parseReturn, returnPoint, staleViewerTab, viewerFocused, VIEWER_TAB_NAME, parseViewer, viewerBack, viewerKey, viewerShow, viewerTitle, WIDE_PX,
   type ViewerRequest,
 } from "../src/core/panel.ts";
 
@@ -114,4 +114,23 @@ test("liveDiff: only an uncommitted diff can change under the viewer", () => {
   assert.equal(liveDiff({ ...at, view: "diff", source: { kind: "commit", hash: "h", parents: [], path: "p", oldPath: null } }), false);
   assert.equal(liveDiff({ ...at, view: "stats" }), false);
   assert.equal(liveDiff(null), false);
+});
+
+test("returnPoint remembers the tab and terminal the viewer was opened from, not the viewer itself", () => {
+  const panes = [{ tab: "t1", mod: undefined }, { tab: "tv", mod: "githerd" }];
+  const term = { space: "s", tab: "t1", pane: "p1", terminal: "x1", shown: null, agent: null, cwd: "/r" };
+  assert.deepEqual(returnPoint(term, panes, null), { tab: "t1", terminal: "x1" });
+  const prev = { tab: "t0", terminal: null };
+  // Opening another file from inside the viewer tab keeps where it came from.
+  assert.deepEqual(returnPoint({ ...term, tab: "tv", terminal: null }, panes, prev), prev);
+  assert.deepEqual(returnPoint(null, panes, prev), prev);
+});
+
+test("parseReturn keeps a well-formed point whose tab still exists", () => {
+  const spaces = [{ tabs: [{ id: "t1", name: "1" }] }];
+  assert.deepEqual(parseReturn({ tab: "t1", terminal: "x1" }, spaces), { tab: "t1", terminal: "x1" });
+  assert.deepEqual(parseReturn({ tab: "t1", terminal: null }, spaces), { tab: "t1", terminal: null });
+  for (const bad of [null, "t1", { tab: "gone", terminal: null }, { tab: "t1", terminal: 3 }, { tab: "", terminal: null }]) {
+    assert.equal(parseReturn(bad, spaces), null);
+  }
 });

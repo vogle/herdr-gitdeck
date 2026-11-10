@@ -11,8 +11,8 @@ import { loadDiff } from "./core/history.ts";
 import { loadImagePair } from "./core/imageDiff.ts";
 import { loadBlame, loadFileLog, type InspectView } from "./core/inspect.ts";
 import {
-  findViewerTab, liveDiff, parseViewer, staleViewerTab, VIEWER_TAB_NAME, viewerBack, viewerKey, viewerShow, viewerFocused, viewerTitle, VIEWER_KEY,
-  type ViewerNav, type ViewerRequest,
+  findViewerTab, liveDiff, parseReturn, parseViewer, RETURN_KEY, returnPoint, staleViewerTab, VIEWER_TAB_NAME, viewerBack, viewerKey, viewerShow, viewerFocused, viewerTitle, VIEWER_KEY,
+  type ReturnPoint, type ViewerNav, type ViewerRequest,
 } from "./core/panel.ts";
 import { loadStatus } from "./core/scan.ts";
 import { Signal } from "./core/signal.ts";
@@ -28,10 +28,19 @@ const LIVE_EVERY_MS = 3_000;
 
 /** Asks the viewer tab to show a request: switches to it, or opens it. */
 export function openViewer(request: ViewerRequest): void {
+  const from = returnPoint(focused(), panes(), parseReturn(shared(RETURN_KEY), spaces()));
+  if (from) setShared(RETURN_KEY, from);
   setShared(VIEWER_KEY, request);
   const tab = findViewerTab(panes());
   if (tab) run("tab.select", { id: tab });
   else run("tab.new", { name: VIEWER_TAB_NAME, mod: "githerd", props: { viewer: true } });
+}
+
+/** Back to the tab the viewer was opened from, and the terminal that had focus there. */
+function goBack(from: ReturnPoint | null): void {
+  if (!from) return;
+  run("tab.select", { id: from.tab });
+  if (from.terminal) run("pane.focus", { terminal: from.terminal });
 }
 
 type Shown = { kind: "diff"; diff: Diff } | { kind: "inspect"; view: InspectView } | { kind: "note"; text: string };
@@ -159,6 +168,7 @@ export class Viewer {
         ? // Read again every few seconds anyway; this is for right now.
           [textButton("viewer-reload", "Reload", p, () => this.tick.fire())]
         : [];
+    const from = parseReturn(shared(RETURN_KEY), spaces());
     const side = r.view === "diff" && r.source.kind === "index" ? (r.source.staged ? "Staged: " : "Unstaged: ") : "";
     const where = r.view === "diff" ? `${side}${r.source.path}` : r.view === "stats" ? r.repo : `${r.path} at ${r.rev.slice(0, 10)}`;
     return h_flex()
@@ -170,6 +180,7 @@ export class Viewer {
       .border_b_1()
       .border_color(p.border)
       .bg(p.chrome)
+      .when(from !== null, (el) => el.child(textButton("viewer-return", "← Terminal", p, () => goBack(from))))
       .when(this.nav.back.length > 0, (el) => el.child(textButton("viewer-back", "← Back", p, (cx) => this.back(cx))))
       .child(div().flex_shrink_0().font_medium().child(viewerTitle(r)))
       .child(div().flex_1().min_w_0().truncate().text_xs().text_color(p.dim).child(where))
