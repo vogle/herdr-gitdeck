@@ -25,6 +25,8 @@ export interface HistoryActions extends GraphActions, DetailActions {
   stats: (cx: Context) => void;
   prs: (cx: Context) => void;
   closeInspect: (cx: Context) => void;
+  /** Takes the repo as it is now as seen: the new-file dots and counts clear. */
+  markSeen: (cx: Context) => void;
   treeFile: (index: number | null, cx: Context) => void;
 }
 
@@ -44,6 +46,8 @@ export interface HistoryParts {
   tab: PanelTab;
   /** The panel is wide enough for two columns. */
   wide: boolean;
+  /** What is new since the person last looked; null before the first look. */
+  news: { files: number; commits: number | null } | null;
   /** The branch against main, for the Review tab. */
   review: { parts: ReviewParts; actions: ReviewActions };
 }
@@ -165,12 +169,36 @@ function tabBody(parts: HistoryParts, p: Palette, actions: HistoryActions): Elem
   return historyTab(parts, p, actions);
 }
 
+/** "● 3 files, 2 commits new since you looked  [Seen]" above Changes and History. */
+function newsLine(parts: HistoryParts, p: Palette, actions: HistoryActions): Element | null {
+  const n = parts.news;
+  if (n === null || (parts.tab !== "changes" && parts.tab !== "history")) return null;
+  const commits = n.commits ?? 0;
+  if (n.files === 0 && commits === 0) return null;
+  const files = n.files === 0 ? null : `${n.files} file${n.files === 1 ? "" : "s"}`;
+  const made = commits === 0 ? null : `${commits} commit${commits === 1 ? "" : "s"}`;
+  return h_flex()
+    .h(26)
+    .px(10)
+    .gap(6)
+    .items_center()
+    .flex_shrink_0()
+    .text_xs()
+    .bg(p.raised)
+    .border_b_1()
+    .border_color(p.border)
+    .child(div().text_color(p.accent).child("●"))
+    .child(div().flex_1().min_w_0().truncate().text_color(p.muted).child(`${[files, made].filter(Boolean).join(", ")} new since you looked`))
+    .child(textButton("mark-seen", "Seen", p, actions.markSeen));
+}
+
 export function historyPane(parts: HistoryParts, p: Palette, actions: HistoryActions): Element {
   return v_flex()
     .flex_1()
     .min_h_0()
     .child(tabRow(parts, p, actions))
     .when(parts.untrusted !== null, (el) => el.child(trustBanner(parts.untrusted ?? [], p)))
+    .children([newsLine(parts, p, actions)].filter((e): e is Element => e !== null))
     .child(v_flex().flex_1().min_h_0().child(tabBody(parts, p, actions)))
     .when(parts.ops !== null, (el) =>
       el.child(v_flex().flex_shrink_0().border_t_1().border_color(p.border).children(parts.ops ? syncBar(parts.ops.parts, p, parts.ops.actions) : [])),

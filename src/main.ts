@@ -27,6 +27,7 @@ import { loadStatus, scanHerd } from "./core/scan.ts";
 import { Signal } from "./core/signal.ts";
 import { MAX_REPOS } from "./core/repos/discover.ts";
 import { agentChips, repoAgents } from "./core/repoAgents.ts";
+import { freshPaths, markSeen, newCommits, touch, type Seen } from "./core/seen.ts";
 import { baseBranch, loadCompare, loadReview, type Compare, type Review } from "./core/review.ts";
 import { header } from "./ui/header.ts";
 import { historyPane, type HistoryActions } from "./ui/historyPane.ts";
@@ -85,6 +86,8 @@ export default class GitDeck extends View {
   /** What the history was last read for: the log is read again only when it changes. */
   historyKey: string | null = null;
   historyFor: string | null = null;
+  /** Each repo as the person last looked at it (memory only). */
+  readonly seen = new Map<string, Seen>();
   /** The agents working in the shown repo, as last drawn. */
   agentsSeen = "";
   readonly changesPanel = new ChangesPanel({
@@ -319,6 +322,8 @@ export default class GitDeck extends View {
         while (this.herd.selected === root) {
           const paths = await watchFolder(root);
           if (this.herd.selected !== root) break;
+          const mark = this.seen.get(root);
+          if (mark) this.seen.set(root, touch(mark, root, paths));
           if (relevantChange(root, paths)) this.liveWake.fire();
         }
       } catch {
@@ -343,6 +348,7 @@ export default class GitDeck extends View {
     }
     this.watch(target, cx);
     const status = this.herd.statuses[target.cwd]?.status;
+    if (status && !this.seen.has(target.cwd)) this.seen.set(target.cwd, markSeen(target.cwd, status));
     const known = this.historyFor === target.cwd && this.view.history ? this.historyKey : null;
     const read = await refreshHistory(this.git, target, this.view.limit, known, `${status?.oid ?? ""}|${status?.stash ?? 0}`);
     if (this.herd.selected !== target.cwd) return;
@@ -548,6 +554,13 @@ export default class GitDeck extends View {
         this.inspect = null;
         cx.notify();
       },
+      markSeen: (cx) => {
+        const path = this.herd.selected;
+        const status = path ? this.herd.statuses[path]?.status : null;
+        if (!path || !status) return;
+        this.seen.set(path, markSeen(path, status));
+        cx.notify();
+      },
     };
   }
 
@@ -564,6 +577,14 @@ export default class GitDeck extends View {
     cx.notify();
   }
 
+  /** What changed since the person last looked at the repo (pure: a few set lookups). */
+  news(path: string | null, status: RepoStatus | null): { paths: Set<string>; commits: number | null } | null {
+    const mark = path ? this.seen.get(path) : undefined;
+    if (!mark || !status) return null;
+    const log = this.view.repo === path ? (this.view.history?.commits ?? []) : [];
+    return { paths: freshPaths(mark, status), commits: newCommits(mark, status.oid, log) };
+  }
+
   override render(_cx: Context): Element {
     const p = palette();
     if (this.viewer) {
@@ -572,6 +593,7 @@ export default class GitDeck extends View {
     this.notice();
     const repo = selectedRepo(this.herd);
     const result = repo ? this.herd.statuses[repo.path] : undefined;
+    const news = this.news(repo?.path ?? null, result?.status ?? null);
     const body = this.herd.picking
       ? repoList(this.herd, p, (path, cx) => this.pick(path, cx))
       : repo && this.view.repo === repo.path
@@ -582,7 +604,8 @@ export default class GitDeck extends View {
               untrusted: result?.untrusted ?? null,
               search: this.search,
               scroll: this.scroll,
-              changes: this.trustedStatus() ? { parts: this.changesPanel.parts(), actions: this.changesPanel.actions() } : null,
+              changes: this.trustedStatus() ? { parts: { ...this.changesPanel.parts(), fresh: news?.paths ?? new Set() }, actions: this.changesPanel.actions() } : null,
+              news: news ? { files: news.paths.size, commits: news.commits } : null,
               inspect: this.inspect?.repo === repo.path ? this.inspect.view : null,
               ops: this.trustedStatus() ? { parts: this.opsPanel.parts(), actions: this.opsPanel.actions() } : null,
               tab: this.tab,

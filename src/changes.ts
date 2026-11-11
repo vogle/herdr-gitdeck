@@ -144,6 +144,7 @@ export class ChangesPanel {
       undoable: this.undoable,
       ignored: this.ignored,
       suggesting: this.suggesting,
+      fresh: new Set(),
     };
   }
 

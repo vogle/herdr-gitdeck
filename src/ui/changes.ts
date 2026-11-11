@@ -60,6 +60,8 @@ export interface ChangesParts {
   ignored: readonly string[];
   /** Claude Code is writing a message. */
   suggesting: boolean;
+  /** Files changed since the person last looked (a dot marks them). */
+  fresh: ReadonlySet<string>;
 }
 
 function letterColor(letter: string, p: Palette) {
@@ -69,7 +71,7 @@ function letterColor(letter: string, p: Palette) {
   return p.changed;
 }
 
-function fileRow(id: string, f: ChangeFile, p: Palette, onOpen: (cx: Context) => void, buttons: Element[]): Element {
+function fileRow(id: string, f: ChangeFile, p: Palette, onOpen: (cx: Context) => void, buttons: Element[], fresh = false): Element {
   const cut = f.path.lastIndexOf("/");
   return h_flex()
     .id(id)
@@ -82,6 +84,7 @@ function fileRow(id: string, f: ChangeFile, p: Palette, onOpen: (cx: Context) =>
     .hover((el) => el.bg(p.hover))
     .on_click((_e, cx) => onOpen(cx))
     .child(div().w(14).flex_shrink_0().text_color(letterColor(f.letter, p)).child(f.letter))
+    .child(div().w(6).flex_shrink_0().text_xs().text_color(p.accent).child(fresh ? "●" : ""))
     .child(div().flex_shrink_0().child(cut >= 0 ? f.path.slice(cut + 1) : f.path))
     .child(div().min_w_0().flex_1().truncate().text_color(p.dim).child(cut >= 0 ? f.path.slice(0, cut + 1) : ""))
     .children(buttons);
@@ -103,7 +106,7 @@ function fileLists(parts: ChangesParts, p: Palette, a: ChangesActions): Element[
     fileRow(`sf:${i}`, f, p, (cx) => a.open(f, true, cx), [
       iconButton(`sl:${i}`, ICONS.lines, "Unstage lines…", p, (cx) => a.lines(f, true, cx)),
       iconButton(`un:${i}`, ICONS.unstage, "Unstage", p, (cx) => a.unstage([f.path], cx)),
-    ]),
+    ], parts.fresh.has(f.path)),
   );
   const unstaged = changes.unstaged.slice(0, MAX_FILES).map((f, i) => {
     const key = `discard:${f.path}`;
@@ -117,7 +120,7 @@ function fileLists(parts: ChangesParts, p: Palette, a: ChangesActions): Element[
         ? textButton(`dc:${i}`, f.untracked ? "Delete file?" : "Discard?", p, (cx) => a.discard(f, cx), true)
         : iconButton(`dc:${i}`, f.untracked ? ICONS.delete : ICONS.discard, f.untracked ? "Delete file" : "Discard changes", p, (cx) => a.discard(f, cx)),
       iconButton(`st:${i}`, ICONS.stage, "Stage", p, (cx) => a.stage([f.path], cx)),
-    ]);
+    ], parts.fresh.has(f.path));
   });
   const conflicts = changes.conflicts.map((f, i) => fileRow(`cf:${i}`, f, p, (cx) => a.open(f, false, cx), [
     ...(parts.local ? [textButton(`cr:${i}`, "Resolve…", p, (cx) => a.resolve(f, cx))] : []),
