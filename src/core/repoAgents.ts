@@ -60,6 +60,22 @@ export function agentHold(agents: readonly Named[], action: string): string | nu
   return `${name} ${one ? "is" : "are"} working here: ${action.toLowerCase()} now can mix with ${one ? "its" : "their"} changes`;
 }
 
+export interface AgentChip {
+  name: string;
+  status: AgentStatus;
+  text: string;
+}
+
+const CHIP_ORDER: readonly AgentStatus[] = ["working", "blocked", "done", "idle"];
+const CHIP_WORD: Record<AgentStatus, string> = { working: "working", blocked: "needs you", done: "done", idle: "idle" };
+
+/** One short label per agent in the repo, the busiest first (for the header). */
+export function agentChips(agents: readonly Named[]): AgentChip[] {
+  return [...agents]
+    .sort((x, y) => CHIP_ORDER.indexOf(x.status) - CHIP_ORDER.indexOf(y.status))
+    .map((a) => ({ name: a.name, status: a.status, text: `${a.name} ${CHIP_WORD[a.status]}` }));
+}
+
 /** The most urgent thing to say (working, then waiting, then finished), or null when all are idle. */
 export function agentNote(agents: readonly Named[]): AgentNote | null {
   for (const kind of ["working", "blocked", "done"] as const) {

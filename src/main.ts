@@ -26,7 +26,8 @@ import { mapLimit } from "./core/pool.ts";
 import { loadStatus, scanHerd } from "./core/scan.ts";
 import { Signal } from "./core/signal.ts";
 import { MAX_REPOS } from "./core/repos/discover.ts";
-import { repoAgents } from "./core/repoAgents.ts";
+import { agentChips, repoAgents } from "./core/repoAgents.ts";
+import { baseBranch, loadCompare, type Compare } from "./core/review.ts";
 import { header } from "./ui/header.ts";
 import { historyPane, type HistoryActions } from "./ui/historyPane.ts";
 import { repoList } from "./ui/repoList.ts";
@@ -116,7 +117,9 @@ export default class GitDeck extends View {
   search!: InputState;
   scroll!: VirtualListScrollHandle;
   /** The panel's open tab. */
-  tab: PanelTab = "history";
+  tab: PanelTab = "changes";
+  /** The shown repo's branch against main (read with its history). */
+  compare: { repo: string; data: Compare | null } | null = null;
   /** Wide enough for the list and the commit side by side. */
   wide = false;
   /** Takes the keyboard so Esc goes back one level. */
@@ -343,7 +346,12 @@ export default class GitDeck extends View {
     if (this.herd.selected !== target.cwd) return;
     this.historyKey = read.key;
     this.historyFor = target.cwd;
-    if (read.history) this.view = withHistory(this.view, target.cwd, read.history);
+    if (read.history) {
+      this.view = withHistory(this.view, target.cwd, read.history);
+      const base = baseBranch(read.history.refs, status?.branch ?? null);
+      const data = base === null || !status?.oid ? null : await loadCompare(this.git, target, base);
+      if (this.herd.selected === target.cwd) this.compare = { repo: target.cwd, data };
+    }
     this.syncRows();
     cx.notify();
   }
@@ -569,10 +577,16 @@ export default class GitDeck extends View {
       .text_size(13)
       .text_color(p.foreground)
       .child(
-        header(this.herd, this.busy, p, {
-          togglePicker: (cx) => this.togglePicker(cx),
-          refresh: (cx) => this.refresh(cx),
-        }),
+        header(
+          this.herd,
+          this.busy,
+          p,
+          { togglePicker: (cx) => this.togglePicker(cx), refresh: (cx) => this.refresh(cx) },
+          {
+            agents: agentChips(repoAgents(this.herd.selected, agents(), panes())),
+            compare: this.compare?.repo === this.herd.selected ? this.compare.data : null,
+          },
+        ),
       )
       .when(this.error !== null, (el) =>
         el.child(div().px(12).py(6).text_xs().text_color(p.removed).bg(p.raised).child(this.error ?? "")),

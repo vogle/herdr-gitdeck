@@ -173,3 +173,16 @@ test("agentHold stops a work-tree change only while an agent is working", async 
   assert.equal(agentHold([{ name: "Claude", status: "working" }], "Merging"), "Claude is working here: merging now can mix with its changes");
   assert.equal(agentHold([{ name: "A", status: "working" }, { name: "B", status: "working" }], "Resetting"), "2 agents are working here: resetting now can mix with their changes");
 });
+
+test("agentChips lists who works here with a short state, busiest first", async () => {
+  const { agentChips } = await import("../src/core/repoAgents.ts");
+  assert.deepEqual(agentChips([]), []);
+  assert.deepEqual(
+    agentChips([{ name: "Codex", status: "idle" }, { name: "Claude", status: "working" }, { name: "Pi", status: "blocked" }]),
+    [
+      { name: "Claude", status: "working", text: "Claude working" },
+      { name: "Pi", status: "blocked", text: "Pi needs you" },
+      { name: "Codex", status: "idle", text: "Codex idle" },
+    ],
+  );
+});
