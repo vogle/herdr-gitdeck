@@ -146,7 +146,7 @@ function moreTab(p: Palette, actions: HistoryActions): Element {
     .flex_1()
     .min_h_0()
     .child(row("more-reflog", "Reflog", "Where HEAD has been", actions.reflog))
-    .child(row("more-prs", "Pull requests", "GitHub, via gh (read-only)", actions.prs))
+    .child(row("more-prs", "Pull / merge requests", "GitHub via gh, GitLab via glab (read-only)", actions.prs))
     .child(row("more-stats", "Statistics", "Authors and commits per month, in a tab", actions.stats));
 }
 

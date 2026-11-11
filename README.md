@@ -11,7 +11,7 @@ one you're in, with its branch and where it stands.
 > Status: **M5**. Repo discovery, the repo picker, the history (commit graph,
 > commit details and diffs, refs sidebar, search), staging and committing, and
 > branch work and sync, blame, file history, the reflog, the files at a commit
-> interactive rebase, statistics, git-flow branches and GitHub pull requests
+> interactive rebase, statistics, git-flow branches and GitHub/GitLab review requests
 > (see [Roadmap](#roadmap)).
 
 ## What it does now
@@ -74,11 +74,14 @@ one you're in, with its branch and where it stands.
   **+ release** start `feature/<name>` or `release/<name>` from `develop`; with
   `main` or `master`, **+ hotfix** starts `hotfix/<name>` from it. No git-flow
   tool is needed; finishing one is an ordinary merge.
-- **GitHub.** **PRs** in the toolbar lists the repo's pull requests (open,
-  merged and closed, the latest 100) through the `gh` CLI, read-only. A click
-  jumps to the PR's head commit. gitdeck reads `owner/repo` from `origin` and
-  runs `gh --repo owner/repo` outside the repo, so gh never reads the work
-  tree; sign in once with `gh auth login`.
+- **GitHub and GitLab.** **More → Pull / merge requests** lists the repo's
+  PRs (GitHub, through `gh`) or MRs (GitLab, through `glab`): open, merged
+  and closed, the latest 100, read-only. A click jumps to the head commit.
+  gitdeck reads the project from `origin` and runs the CLI with `--repo`
+  outside the repo, so it never reads the work tree; sign in once with
+  `gh auth login` or `glab auth login`. github.com, gitlab.com and hosts whose
+  name contains `github` or `gitlab` are recognised; for any other host, set
+  `git config gitdeck.forge gitlab` (or `github`).
 
 Reading uses `git status`, `git log`, `git show -s`, `git diff-tree`,
 `git diff`, `git for-each-ref`, `git stash list`, `git rev-parse`, `git blame`

@@ -5,7 +5,7 @@ import { logArgs, parseLog, type Commit } from "./git/log.ts";
 import type { Git, Target } from "./git/runner.ts";
 import type { BlobView, TreeFile } from "./tree.ts";
 import type { Stats } from "./stats.ts";
-import type { PrList } from "./github.ts";
+import type { PrList } from "./forge/index.ts";
 
 /** A commit's version of the file: the work-tree one would run clean filters. */
 export const blameArgs = (rev: string, path: string): string[] =>

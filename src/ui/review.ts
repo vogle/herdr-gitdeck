@@ -4,7 +4,7 @@
 
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import type { BranchPr } from "../core/github.ts";
+import type { BranchPr } from "../core/forge/index.ts";
 import type { Review } from "../core/review.ts";
 import { counts, fileRow } from "./details.ts";
 import { textButton, type Palette } from "./style.ts";
@@ -14,7 +14,7 @@ export interface ReviewParts {
   review: Review | null;
   /** The base to compare with; null on main (or no main line). */
   base: string | null;
-  pr: { pr: BranchPr | null; error: string | null } | null;
+  pr: { pr: BranchPr | null; error: string | null; label: "PR" | "MR" } | null;
 }
 
 export interface ReviewActions {
@@ -24,17 +24,17 @@ export interface ReviewActions {
 
 function prLine(state: ReviewParts["pr"], p: Palette): Element {
   const row = h_flex().px(10).py(5).gap(8).items_center().flex_shrink_0().text_xs().border_b_1().border_color(p.border);
-  if (state === null) return row.text_color(p.dim).child("Reading the pull request…");
+  if (state === null) return row.text_color(p.dim).child("Reading the review request…");
   if (state.error !== null) return row.text_color(p.removed).child(state.error);
   const pr = state.pr;
-  if (pr === null) return row.text_color(p.dim).child("No pull request for this branch");
+  if (pr === null) return row.text_color(p.dim).child(`No ${state.label} for this branch`);
   const { passed, failed, pending } = pr.checks;
   const total = passed + failed + pending;
   const checks = total === 0 ? "no checks" : `checks ${passed}✓${failed > 0 ? ` ${failed}✗` : ""}${pending > 0 ? ` ${pending}…` : ""}`;
   const state_ = pr.draft ? "DRAFT" : pr.state;
   const review = pr.review === "APPROVED" ? " · approved" : pr.review === "CHANGES_REQUESTED" ? " · changes requested" : "";
   return row
-    .child(div().flex_shrink_0().text_color(p.accent).child(`#${pr.number}`))
+    .child(div().flex_shrink_0().text_color(p.accent).child(`${state.label === "MR" ? "!" : "#"}${pr.number}`))
     .child(div().flex_1().min_w_0().truncate().text_color(p.foreground).child(pr.title))
     .child(div().flex_shrink_0().text_color(p.dim).child(`${state_}${review}`))
     .child(div().flex_shrink_0().text_color(failed > 0 ? p.removed : pending > 0 ? p.changed : p.added).child(checks));

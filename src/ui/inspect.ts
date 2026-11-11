@@ -109,7 +109,10 @@ function title(v: InspectView): string {
   if (v.kind === "blame") return `Blame: ${v.path} at ${v.rev.slice(0, 10)}`;
   if (v.kind === "file-log") return `History: ${v.path}`;
   if (v.kind === "stats") return "Repository statistics";
-  if (v.kind === "prs") return `Pull requests${v.data?.repo ? ` of ${v.data.repo}` : ""} (via gh, read-only): a click jumps to the head commit`;
+  if (v.kind === "prs") {
+    const mr = v.data?.label === "MR";
+    return `${mr ? "Merge requests" : "Pull requests"}${v.data?.repo ? ` of ${v.data.repo}` : ""} (via ${mr ? "glab" : "gh"}, read-only): a click jumps to the head commit`;
+  }
   if (v.kind === "tree") return v.file ? `${v.file.path} at ${v.rev.slice(0, 10)}` : `Files at ${v.rev.slice(0, 10)} (${v.data?.items.length ?? 0})`;
   return "Reflog: where HEAD has been";
 }

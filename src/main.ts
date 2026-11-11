@@ -7,7 +7,7 @@ import { agents, exec, focused, home, knownAgents, nextCommand, panes, props, ru
 import { ChangesPanel } from "./changes.ts";
 import { loadReflog, type InspectView } from "./core/inspect.ts";
 import { loadBlob, loadTree } from "./core/tree.ts";
-import { loadBranchPr, loadPrs, type BranchPr } from "./core/github.ts";
+import { loadBranchPr, loadPrs, type BranchPr } from "./core/forge/index.ts";
 import { backStep, isWide, viewerFocused, type PanelTab } from "./core/panel.ts";
 import { openViewer, Viewer } from "./viewer.ts";
 import { NET_ENV } from "./core/ops.ts";
@@ -124,7 +124,7 @@ export default class GitDeck extends View {
   /** The shown repo's branch against main (read with its history). */
   compare: { repo: string; data: Compare | null; base: string | null } | null = null;
   /** The Review tab's files and pull request, for one repo. */
-  review: { repo: string; data: Review | null; pr: { pr: BranchPr | null; error: string | null } | null } | null = null;
+  review: { repo: string; data: Review | null; pr: { pr: BranchPr | null; error: string | null; label: "PR" | "MR" } | null } | null = null;
   /** Wide enough for the list and the commit side by side. */
   wide = false;
   /** Takes the keyboard so Esc goes back one level. */
@@ -430,7 +430,7 @@ export default class GitDeck extends View {
       pr && branch ? loadBranchPr(this.git, exec, target, await this.homeFor(target), branch) : Promise.resolve(kept),
     ]);
     if (this.herd.selected !== target.cwd) return;
-    this.review = { repo: target.cwd, data, pr: branch ? prState : { pr: null, error: null } };
+    this.review = { repo: target.cwd, data, pr: branch ? prState : { pr: null, error: null, label: "PR" } };
     cx.notify();
   }
 
