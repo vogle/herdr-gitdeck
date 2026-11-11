@@ -19,12 +19,15 @@ test("parseRemote reads host and path from the usual remote URL shapes", () => {
   assert.equal(parseRemote(""), null);
 });
 
-test("forgeOf knows github.com and gitlab.com, names that say which, and an override", () => {
+test("forgeOf knows github.com and gitlab.com; any other host only by the override", () => {
   assert.deepEqual(forgeOf(parseRemote("git@github.com:a/b.git"), null), { kind: "github", label: "PR", cli: "gh", repo: "a/b" });
   assert.equal(forgeOf(parseRemote("https://github.com/a/b/c"), null), null, "a GitHub repo is owner/name");
-  assert.deepEqual(forgeOf(parseRemote("https://github.corp.io/a/b"), null), { kind: "github", label: "PR", cli: "gh", repo: "github.corp.io/a/b" });
+  assert.equal(forgeOf(parseRemote("https://github.corp.io/a/b"), null), null, "a look-alike host is never guessed");
+  assert.equal(forgeOf(parseRemote("https://github.com.evil.io/a/b"), null), null);
+  assert.deepEqual(forgeOf(parseRemote("https://github.corp.io/a/b"), "github"), { kind: "github", label: "PR", cli: "gh", repo: "github.corp.io/a/b" });
   assert.deepEqual(forgeOf(parseRemote("git@gitlab.com:g/s/app.git"), null), { kind: "gitlab", label: "MR", cli: "glab", repo: "g/s/app" });
-  assert.deepEqual(forgeOf(parseRemote("https://gitlab.acme.dev/g/app"), null), { kind: "gitlab", label: "MR", cli: "glab", repo: "https://gitlab.acme.dev/g/app" });
+  assert.equal(forgeOf(parseRemote("https://gitlab.acme.dev/g/app"), null), null);
+  assert.deepEqual(forgeOf(parseRemote("https://gitlab.acme.dev/g/app"), "gitlab"), { kind: "gitlab", label: "MR", cli: "glab", repo: "https://gitlab.acme.dev/g/app" });
   assert.equal(forgeOf(parseRemote("https://git.acme.dev/g/app"), null), null, "an unknown host needs the override");
   assert.equal(forgeOf(parseRemote("https://git.acme.dev/g/app"), "gitlab")?.repo, "https://git.acme.dev/g/app");
   assert.equal(forgeOf(parseRemote("https://git.acme.dev/g/app"), "github")?.repo, "git.acme.dev/g/app");

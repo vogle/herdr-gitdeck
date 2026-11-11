@@ -21,12 +21,13 @@ export function parseRemote(url: string): { host: string; path: string } | null 
 
 function kindOf(host: string, override: string | null): ForgeKind | null {
   if (override !== null) return override === "github" || override === "gitlab" ? override : null;
-  if (host === "github.com" || host.includes("github")) return "github";
-  if (host === "gitlab.com" || host.includes("gitlab")) return "gitlab";
+  // Only the public hosts are guessed: a look-alike name must not get the CLI pointed at it.
+  if (host === "github.com") return "github";
+  if (host === "gitlab.com") return "gitlab";
   return null;
 }
 
-/** The forge behind a remote; `override` is `git config gitdeck.forge` for any other host. */
+/** The forge behind a remote; `override` (`git config gitdeck.forge`) names it for your own host. */
 export function forgeOf(remote: { host: string; path: string } | null, override: string | null): Forge | null {
   if (remote === null) return null;
   const kind = kindOf(remote.host, override);

@@ -79,9 +79,9 @@ one you're in, with its branch and where it stands.
   and closed, the latest 100, read-only. A click jumps to the head commit.
   gitdeck reads the project from `origin` and runs the CLI with `--repo`
   outside the repo, so it never reads the work tree; sign in once with
-  `gh auth login` or `glab auth login`. github.com, gitlab.com and hosts whose
-  name contains `github` or `gitlab` are recognised; for any other host, set
-  `git config gitdeck.forge gitlab` (or `github`).
+  `gh auth login` or `glab auth login`. Only github.com and gitlab.com are
+  recognised on their own; for your own host, set
+  `git config gitdeck.forge gitlab` (or `github`) in that repo.
 
 Reading uses `git status`, `git log`, `git show -s`, `git diff-tree`,
 `git diff`, `git for-each-ref`, `git stash list`, `git rev-parse`, `git blame`
