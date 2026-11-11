@@ -5,10 +5,10 @@
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { selectedRepo, type HerdState } from "../core/herd.ts";
-import type { AgentChip, AgentStatus } from "../core/repoAgents.ts";
+import type { AgentChip } from "../core/repoAgents.ts";
 import type { Compare } from "../core/review.ts";
 import { statusBadges } from "./repoList.ts";
-import { ICONS, icon, type Palette } from "./style.ts";
+import { agentColor, ICONS, icon, type Palette } from "./style.ts";
 
 export interface HeaderFacts {
   /** The agents whose terminal is in the shown repo. */
@@ -67,9 +67,6 @@ function compareLabel(c: Compare, p: Palette): Element {
     .child(`${c.base.replace(/^origin\//, "")} ${counts}`);
 }
 
-function agentColor(status: AgentStatus, p: Palette): Palette["added"] {
-  return status === "working" ? p.changed : status === "blocked" ? p.removed : status === "done" ? p.added : p.dim;
-}
 
 /** A dot per agent; the first one also says its state, and gives way first when narrow. */
 function agentChip(a: AgentChip, i: number, p: Palette): Element {

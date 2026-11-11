@@ -3,6 +3,7 @@
 import { div, svg, type Color, type Context, type Element } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { settings, theme } from "herdr";
+import type { AgentStatus } from "../core/repoAgents.ts";
 
 export interface Palette {
   surface: Color;
@@ -130,4 +131,9 @@ export function textButton(id: string, label: string, p: Palette, onClick: (cx: 
       onClick(cx);
     })
     .child(label);
+}
+
+/** An agent's state as a dot color: working, needs you, done, idle. */
+export function agentColor(status: AgentStatus, p: Palette): Palette["added"] {
+  return status === "working" ? p.changed : status === "blocked" ? p.removed : status === "done" ? p.added : p.dim;
 }

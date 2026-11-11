@@ -84,3 +84,20 @@ export function agentNote(agents: readonly Named[]): AgentNote | null {
   }
   return null;
 }
+
+/** The agents of every repo in the herd: each one in the deepest repo its terminal is in. */
+export function herdAgents(repos: readonly string[], agents: readonly AgentLike[], panes: readonly PaneLike[]): Record<string, AgentChip[]> {
+  const deepestFirst = [...repos].sort((a, b) => b.length - a.length);
+  const cwd = new Map(panes.map((p) => [p.pane, p.cwd]));
+  const by = new Map<string, Named[]>();
+  for (const a of agents) {
+    const repo = deepestFirst.find((r) => inside(r, cwd.get(a.pane) ?? null));
+    if (repo !== undefined) by.set(repo, [...(by.get(repo) ?? []), { name: a.program.name, status: a.status }]);
+  }
+  return Object.fromEntries([...by].map(([repo, who]) => [repo, agentChips(who)]));
+}
+
+/** The repos to list: all of them, or (agents only) those with agents plus the shown one. */
+export function reposShown<R extends { path: string }>(repos: readonly R[], by: Readonly<Record<string, readonly AgentChip[]>>, agentsOnly: boolean, selected: string | null): R[] {
+  return agentsOnly ? repos.filter((r) => r.path === selected || (by[r.path]?.length ?? 0) > 0) : [...repos];
+}

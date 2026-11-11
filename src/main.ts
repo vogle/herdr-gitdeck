@@ -26,7 +26,7 @@ import { mapLimit } from "./core/pool.ts";
 import { loadStatus, scanHerd } from "./core/scan.ts";
 import { Signal } from "./core/signal.ts";
 import { MAX_REPOS } from "./core/repos/discover.ts";
-import { agentChips, repoAgents } from "./core/repoAgents.ts";
+import { agentChips, herdAgents, repoAgents } from "./core/repoAgents.ts";
 import { freshPaths, markSeen, newCommits, touch, type Seen } from "./core/seen.ts";
 import { baseBranch, loadCompare, loadReview, type Compare, type Review } from "./core/review.ts";
 import { header } from "./ui/header.ts";
@@ -86,6 +86,8 @@ export default class GitDeck extends View {
   /** What the history was last read for: the log is read again only when it changes. */
   historyKey: string | null = null;
   historyFor: string | null = null;
+  /** The repo picker lists only the repos with agents. */
+  agentsOnly = false;
   /** Each repo as the person last looked at it (memory only). */
   readonly seen = new Map<string, Seen>();
   /** The agents working in the shown repo, as last drawn. */
@@ -187,7 +189,9 @@ export default class GitDeck extends View {
     cx.timer.every(CONTEXT_EVERY_MS, (cx) => {
       this.notice();
       // Herdr's agent list is live; redraw only when the agents here changed.
-      const seen = agentsKey(repoAgents(this.herd.selected, agents(), panes()));
+      const seen = this.herd.picking
+        ? JSON.stringify(herdAgents(this.herd.repos.map((r) => r.path), agents(), panes()))
+        : agentsKey(repoAgents(this.herd.selected, agents(), panes()));
       if (seen !== this.agentsSeen) {
         this.agentsSeen = seen;
         cx.notify();
@@ -595,7 +599,14 @@ export default class GitDeck extends View {
     const result = repo ? this.herd.statuses[repo.path] : undefined;
     const news = this.news(repo?.path ?? null, result?.status ?? null);
     const body = this.herd.picking
-      ? repoList(this.herd, p, (path, cx) => this.pick(path, cx))
+      ? repoList(this.herd, p, (path, cx) => this.pick(path, cx), {
+          byRepo: herdAgents(this.herd.repos.map((r) => r.path), agents(), panes()),
+          only: this.agentsOnly,
+          toggle: (cx) => {
+            this.agentsOnly = !this.agentsOnly;
+            cx.notify();
+          },
+        })
       : repo && this.view.repo === repo.path
         ? historyPane(
             {
