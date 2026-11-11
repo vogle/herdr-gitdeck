@@ -36,6 +36,10 @@ test("a repo's own config can't make gitdeck run a program (fsmonitor off)", () 
   assert.ok(GIT_FLAGS.includes("--literal-pathspecs"), "a path is never a pattern");
 });
 
+test("reading a diff never rewrites the index (an agent's git add would hit index.lock)", () => {
+  assert.match(GIT_FLAGS.join(" "), /-c diff\.autoRefreshIndex=false/);
+});
+
 test("a nonzero exit becomes a GitError carrying stderr's first line", async () => {
   const { exec } = recorder({ code: 128, stdout: "", stderr: "fatal: not a git repository\nmore\n" });
   const git = createGit(exec);

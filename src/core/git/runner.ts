@@ -28,7 +28,10 @@ export type Git = (target: Target, args: string[]) => Promise<string>;
  * - literal paths: a file named `:(glob)*` means that file, not a pattern
  *   (discarding it must never reach other files);
  * - no signature checks: a repo's `log.showSignature` would make every
- *   log-like command (log, show, stash list) run its `gpg.program`.
+ *   log-like command (log, show, stash list) run its `gpg.program`;
+ * - no index refresh from a diff: `--no-optional-locks` covers status but not
+ *   `git diff`, which otherwise rewrites .git/index under index.lock and makes an
+ *   agent's `git add`/`git commit` in the same repo fail with "index.lock exists".
  */
 export const GIT_FLAGS: readonly string[] = [
   "--no-optional-locks",
@@ -41,6 +44,8 @@ export const GIT_FLAGS: readonly string[] = [
   "core.fsmonitor=false",
   "-c",
   "log.showSignature=false",
+  "-c",
+  "diff.autoRefreshIndex=false",
 ];
 
 export class GitError extends Error {
