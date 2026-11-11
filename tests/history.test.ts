@@ -129,3 +129,21 @@ test("withUncommitted puts a dashed row above HEAD when the tree has changes", (
   assert.equal(rows.length, 2);
   assert.equal(withUncommitted([], null, 2)[0]?.parents.length, 0);
 });
+
+test("refreshHistory skips the log when refs, HEAD and the limit are unchanged", async () => {
+  const { refreshHistory } = await import("../src/core/history.ts");
+  const calls: string[][] = [];
+  const git = fake({ log: LOG, "for-each-ref": REFS, stash: STASH }, calls);
+  const first = await refreshHistory(git, T, 500, null, "head1");
+  assert.ok(first.history, "first read loads");
+  assert.equal(first.history?.commits.length, 2);
+  const logs = () => calls.filter((c) => c[0] === "log").length;
+  assert.equal(logs(), 1);
+  const same = await refreshHistory(git, T, 500, first.key, "head1");
+  assert.equal(same.history, null, "nothing changed");
+  assert.equal(same.key, first.key);
+  assert.equal(logs(), 1, "no second log");
+  assert.ok((await refreshHistory(git, T, 500, first.key, "head2")).history, "HEAD moved");
+  assert.ok((await refreshHistory(git, T, 1000, first.key, "head1")).history, "more commits asked for");
+  assert.equal(calls.filter((c) => c[0] === "for-each-ref").length, 4, "refs read once per refresh");
+});

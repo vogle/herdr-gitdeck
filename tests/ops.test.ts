@@ -68,7 +68,8 @@ test("readOperation finds the merge, rebase, cherry-pick or revert under way", a
     throw new GitError("no", args, 1, "");
   };
   const none = async () => null;
-  const at = { cwd: "/r", on: null };
+  // On another machine the markers are asked of git; a local repo reads them (below).
+  const at = { cwd: "/r", on: "box" };
   assert.equal(await readOperation(gitWith("MERGE_HEAD"), at, none), "merge");
   assert.equal(await readOperation(gitWith("CHERRY_PICK_HEAD"), at, none), "cherry-pick");
   assert.equal(await readOperation(gitWith("REVERT_HEAD"), at, none), "revert");
@@ -80,6 +81,28 @@ test("readOperation finds the merge, rebase, cherry-pick or revert under way", a
     throw new GitError("no", args, 1, "");
   };
   assert.equal(await readOperation(gitDir, at, async (p) => (p === "/r/.git/rebase-merge/head-name" ? "refs/heads/x\n" : null)), "rebase");
+});
+
+test("a local repo's operation is read from its git dir: one git call, not five", async () => {
+  const calls: string[][] = [];
+  const gitDir: Git = async (_t, args) => {
+    calls.push(args);
+    if (args.includes("--absolute-git-dir")) return "/r/.git\n";
+    throw new GitError("no", args, 1, "");
+  };
+  const local = { cwd: "/r", on: null };
+  const only = (file: string) => async (p: string) => (p === `/r/.git/${file}` ? "x\n" : null);
+  assert.equal(await readOperation(gitDir, local, only("MERGE_HEAD")), "merge");
+  assert.equal(await readOperation(gitDir, local, only("CHERRY_PICK_HEAD")), "cherry-pick");
+  assert.equal(await readOperation(gitDir, local, only("REVERT_HEAD")), "revert");
+  assert.equal(await readOperation(gitDir, local, only("REBASE_HEAD")), "rebase");
+  assert.equal(await readOperation(gitDir, local, only("rebase-apply/head-name")), "rebase");
+  assert.equal(await readOperation(gitDir, local, async () => null), null);
+  assert.equal(calls.length, 6, "one rev-parse per read");
+  const broken: Git = async (_t, args) => {
+    throw new GitError("no", args, 128, "");
+  };
+  assert.equal(await readOperation(broken, local, only("MERGE_HEAD")), null);
 });
 
 test("runOp reports a conflict from stdout, else git's own message", async () => {

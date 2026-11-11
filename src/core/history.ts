@@ -37,8 +37,11 @@ async function stashesOf(git: Git, target: Target): Promise<Stash[]> {
   }
 }
 
-export async function loadHistory(git: Git, target: Target, limit: number): Promise<History> {
-  const [refsOut, stashes] = await Promise.all([git(target, [...REFS_ARGS]).catch(() => ""), stashesOf(git, target)]);
+export async function loadHistory(git: Git, target: Target, limit: number, knownRefs?: string): Promise<History> {
+  const [refsOut, stashes] = await Promise.all([
+    knownRefs ?? git(target, [...REFS_ARGS]).catch(() => ""),
+    stashesOf(git, target),
+  ]);
   const refs = parseRefs(refsOut);
   let commits: Commit[];
   try {
@@ -49,6 +52,24 @@ export async function loadHistory(git: Git, target: Target, limit: number): Prom
     return { ...EMPTY_HISTORY, refs, byCommit: refsByCommit(refs), stashes, error: message(error) };
   }
   return { commits, lanes: layoutLanes(commits), refs, byCommit: refsByCommit(refs), stashes, limited: commits.length >= limit, error: null };
+}
+
+/**
+ * Reads the history again only when something it shows can have changed: the
+ * refs (one cheap for-each-ref), `extra` (HEAD and the stash count, from the
+ * status already read) or the limit. `history` is null when nothing changed.
+ */
+export async function refreshHistory(
+  git: Git,
+  target: Target,
+  limit: number,
+  key: string | null,
+  extra: string,
+): Promise<{ key: string; history: History | null }> {
+  const refsOut = await git(target, [...REFS_ARGS]).catch(() => "");
+  const next = `${limit}\x1e${extra}\x1e${refsOut}`;
+  if (next === key) return { key, history: null };
+  return { key: next, history: await loadHistory(git, target, limit, refsOut) };
 }
 
 /** The graph row standing for the work tree's changes. */

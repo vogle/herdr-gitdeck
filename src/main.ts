@@ -3,7 +3,7 @@
 
 import { View, div, type AsyncContext, type Context, type Element, type FocusHandle } from "gpui-kit";
 import { v_flex, InputState, VirtualListScrollHandle } from "gpui-base";
-import { agents, exec, focused, home, knownAgents, nextCommand, panes, props, run, shared, spaces } from "herdr";
+import { agents, exec, focused, home, knownAgents, nextCommand, panes, props, run, shared, spaces, watchFolder } from "herdr";
 import { ChangesPanel } from "./changes.ts";
 import { loadReflog, type InspectView } from "./core/inspect.ts";
 import { loadBlob, loadTree } from "./core/tree.ts";
@@ -16,7 +16,8 @@ import { contextOf, sameContext } from "./core/context.ts";
 import { createGit, type Git, type Target } from "./core/git/runner.ts";
 import type { RepoStatus } from "./core/git/status.ts";
 import { closePicker, emptyHerd, select, selectedRepo, togglePicker, withRepos, withStatus, type HerdState } from "./core/herd.ts";
-import { loadCommit, loadHistory, type DiffSource } from "./core/history.ts";
+import { loadCommit, refreshHistory, type DiffSource } from "./core/history.ts";
+import { agentsKey, liveGap, QUIET_MS, relevantChange } from "./core/live.ts";
 import {
   closeFile, emptyView, forRepo, jumpTo, rebuild, scrolled, selectCommit, setQuery, showMore,
   withCommit, withHistory, UNCOMMITTED, type HistoryView,
@@ -73,6 +74,18 @@ export default class GitDeck extends View {
   view: HistoryView = emptyView();
   /** Wakes the task that reads the shown repo's history. */
   readonly historyWake = new Signal();
+  /** The shown repo's folder changed on disk (watched): read its status again soon. */
+  readonly liveWake = new Signal();
+  /** Repos with a watch loop running (at most one each). */
+  readonly watching = new Set<string>();
+  /** How long the last live read took, and when it ended (ms). */
+  lastLiveMs = 0;
+  lastLiveAt = 0;
+  /** What the history was last read for: the log is read again only when it changes. */
+  historyKey: string | null = null;
+  historyFor: string | null = null;
+  /** The agents working in the shown repo, as last drawn. */
+  agentsSeen = "";
   readonly changesPanel = new ChangesPanel({
     git: this.git,
     target: () => (this.trustedStatus() ? this.repoTarget() : null),
@@ -148,7 +161,29 @@ export default class GitDeck extends View {
         else if (command === "search") this.search.focus();
       }
     });
-    cx.timer.every(CONTEXT_EVERY_MS, () => this.notice());
+    // Live reads of the shown repo: a burst of saves settles first, and a slow
+    // repo gets a wider gap, so the watch never runs git back to back.
+    cx.spawn(async (cx) => {
+      for (;;) {
+        await this.liveWake.wait();
+        await cx.sleep(QUIET_MS);
+        const wait = liveGap(this.lastLiveMs) - (Date.now() - this.lastLiveAt);
+        if (wait > 0) await cx.sleep(wait);
+        const started = Date.now();
+        await this.reloadShown(cx);
+        this.lastLiveAt = Date.now();
+        this.lastLiveMs = this.lastLiveAt - started;
+      }
+    });
+    cx.timer.every(CONTEXT_EVERY_MS, (cx) => {
+      this.notice();
+      // Herdr's agent list is live; redraw only when the agents here changed.
+      const seen = agentsKey(repoAgents(this.herd.selected, agents(), panes()));
+      if (seen !== this.agentsSeen) {
+        this.agentsSeen = seen;
+        cx.notify();
+      }
+    });
     cx.timer.every(STATUS_EVERY_MS, () => this.wake.fire());
     this.notice();
   }
@@ -265,6 +300,29 @@ export default class GitDeck extends View {
     cx.notify();
   }
 
+  /**
+   * Watches the shown repo's folder (local repos only; a remote one keeps the
+   * timer). The loop ends at the first event after another repo is shown.
+   */
+  watch(target: Target, cx: AsyncContext): void {
+    const root = target.cwd;
+    if (target.on !== null || this.watching.has(root)) return;
+    this.watching.add(root);
+    cx.spawn(async () => {
+      try {
+        while (this.herd.selected === root) {
+          const paths = await watchFolder(root);
+          if (this.herd.selected !== root) break;
+          if (relevantChange(root, paths)) this.liveWake.fire();
+        }
+      } catch {
+        // The watch was refused (a huge tree on Linux): the status timer still runs.
+      } finally {
+        this.watching.delete(root);
+      }
+    });
+  }
+
   async readHistory(cx: AsyncContext): Promise<void> {
     this.view = forRepo(this.view, this.herd.selected);
     this.changesPanel.forRepo(this.herd.selected);
@@ -277,8 +335,14 @@ export default class GitDeck extends View {
       await this.opsPanel.readOperation(cx);
       await this.changesPanel.readIgnored(cx);
     }
-    const history = await loadHistory(this.git, target, this.view.limit);
-    this.view = withHistory(this.view, target.cwd, history);
+    this.watch(target, cx);
+    const status = this.herd.statuses[target.cwd]?.status;
+    const known = this.historyFor === target.cwd && this.view.history ? this.historyKey : null;
+    const read = await refreshHistory(this.git, target, this.view.limit, known, `${status?.oid ?? ""}|${status?.stash ?? 0}`);
+    if (this.herd.selected !== target.cwd) return;
+    this.historyKey = read.key;
+    this.historyFor = target.cwd;
+    if (read.history) this.view = withHistory(this.view, target.cwd, read.history);
     this.syncRows();
     cx.notify();
   }
@@ -454,6 +518,7 @@ export default class GitDeck extends View {
 
   refresh(cx: Context): void {
     this.force = true;
+    this.historyKey = null;
     this.herd = closePicker(this.herd);
     this.wake.fire();
     cx.notify();
