@@ -13,12 +13,12 @@ import {
   type ResetMode,
 } from "./core/ops.ts";
 import {
-  commitActions, confirmOps, emptyOps, finished, forRepoOps, holdOps, started, startNaming, stopNaming, withOperation, withPlan,
+  commitActions, confirmOps, emptyOps, finished, forRepoOps, holdOps, started, toggleMore, startNaming, stopNaming, withOperation, withPlan,
   type CommitAction, type OpsView,
 } from "./core/opsView.ts";
 import { files } from "./changes.ts";
 import { agentHold, type RepoAgent } from "./core/repoAgents.ts";
-import { FLOW_KINDS, flowBase, flowBranch } from "./core/flow.ts";
+import { FLOW_KINDS, flowBase, flowBranch, flowKinds } from "./core/flow.ts";
 import { cycleStep, loadPlan, moveStep, runPlan, type RebasePlan } from "./core/rebase.ts";
 import { actionKey, needsConfirm, type OpsActions, type OpsParts } from "./ui/ops.ts";
 
@@ -91,7 +91,7 @@ export class OpsPanel {
   parts(): OpsParts {
     const status = this.host.status();
     const branches = (this.host.history()?.refs ?? []).filter((r) => r.kind === "branch").map((r) => r.name);
-    const flow = FLOW_KINDS.filter((k) => flowBase(k, branches) !== null);
+    const flow = flowKinds(branches);
     return { view: this.view, ahead: status?.ahead ?? 0, behind: status?.behind ?? 0, commit: this.commitList(), name: this.name, flow };
   }
 
@@ -259,6 +259,10 @@ export class OpsPanel {
         cx.notify();
       },
       runHeld: () => this.pending?.(),
+      toggleMore: (cx) => {
+        this.view = toggleMore(this.view);
+        cx.notify();
+      },
       dismiss: (cx) => {
         this.pending = null;
         this.view = finished(confirmOps(this.view, null), null, null);

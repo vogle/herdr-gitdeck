@@ -5,7 +5,7 @@ import type { FlowKind } from "../core/flow.ts";
 import { planProblem, type RebasePlan } from "../core/rebase.ts";
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex, Input, type InputState } from "gpui-base";
-import type { ActionKind, CommitAction, OpsView } from "../core/opsView.ts";
+import { splitActions, type ActionKind, type CommitAction, type OpsView } from "../core/opsView.ts";
 import type { Operation } from "../core/ops.ts";
 import { textButton, type Palette } from "./style.ts";
 
@@ -21,6 +21,8 @@ export interface OpsActions {
   createName: (cx: Context) => void;
   cancelName: (cx: Context) => void;
   dismiss: (cx: Context) => void;
+  /** Opens or closes More: the rare actions. */
+  toggleMore: (cx: Context) => void;
   /** Runs the action held while an agent works. */
   runHeld: (cx: Context) => void;
   /** Starts naming a git-flow branch. */
@@ -100,8 +102,12 @@ export function syncBar(parts: OpsParts, p: Palette, a: OpsActions): Element[] {
     .child(textButton("op-fetch", "Fetch", p, a.fetch))
     .child(textButton("op-pull", parts.behind > 0 ? `Pull ↓${parts.behind}` : "Pull", p, a.pull))
     .child(textButton("op-push", parts.ahead > 0 ? `Push ↑${parts.ahead}` : "Push", p, a.push))
-    .child(textButton("op-stash", "Stash", p, a.stash))
-    .children(parts.flow.map((k) => textButton(`flow-${k}`, `+ ${k}`, p, (cx) => a.startFlow(k, cx))))
+    .when(view.expanded, (el) =>
+      el
+        .child(textButton("op-stash", "Stash", p, a.stash))
+        .children(parts.flow.map((k) => textButton(`flow-${k}`, `+ ${k}`, p, (cx) => a.startFlow(k, cx)))),
+    )
+    .child(textButton("op-more", view.expanded ? "Less" : "⋯", p, a.toggleMore))
     .child(div().flex_1())
     .when(view.busy !== null, (el) => el.child(div().text_xs().text_color(p.dim).child(`${view.busy}…`)));
   const message = view.error ?? view.notice;
@@ -208,7 +214,9 @@ export function commitBar(parts: OpsParts, p: Palette, a: OpsActions): Element |
       .child(textButton("reset-hard", confirm === "reset-hard" ? "Hard: lose changes?" : "Hard (nothing)", p, (cx) => a.reset("hard", cx), confirm === "reset-hard"))
       .child(textButton("reset-cancel", "Cancel", p, a.dismiss));
   }
-  const buttons = actions.map((action, i) => {
+  const { shown, hidden } = splitActions(actions, parts.view.expanded);
+  const more = hidden === 0 ? [] : [textButton("ca-more", parts.view.expanded ? "Less" : `⋯ ${hidden} more`, p, a.toggleMore)];
+  const buttons = shown.map((action, i) => {
     const key = actionKey(action);
     const asking = confirm === key;
     const label = asking ? (CONFIRM[action.kind] ?? LABEL[action.kind]) : `${LABEL[action.kind]}${action.ref ? ` ${action.ref}` : ""}`;
@@ -223,7 +231,7 @@ export function commitBar(parts: OpsParts, p: Palette, a: OpsActions): Element |
     .flex_shrink_0()
     .border_t_1()
     .border_color(p.border)
-    .children(buttons);
+    .children([...buttons, ...more]);
 }
 
 export const needsConfirm = (kind: ActionKind): boolean => CONFIRM[kind] !== undefined;

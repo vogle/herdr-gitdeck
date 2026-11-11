@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { emptyOps, forRepoOps, started, finished, confirmOps, holdOps, startNaming, stopNaming, withOperation, withPlan, commitActions } from "../src/core/opsView.ts";
+import { emptyOps, forRepoOps, started, finished, confirmOps, holdOps, splitActions, toggleMore, startNaming, stopNaming, withOperation, withPlan, commitActions } from "../src/core/opsView.ts";
 import type { Ref } from "../src/core/git/refs.ts";
 
 const H = "a".repeat(40);
@@ -63,4 +63,27 @@ test("an action held for a working agent waits until run or dismissed", () => {
   assert.equal(started(held, "Merging").held, null, "running it clears the hold");
   assert.equal(finished(held, null, null).held, null, "dismissing clears it");
   assert.equal(holdOps(confirmOps(emptyOps("/r"), "rebase:x"), "t").confirm, null, "a pending second click is dropped");
+});
+
+test("rare commit actions wait behind More; the common ones stay out", () => {
+  const all = [
+    { kind: "checkout-commit" }, { kind: "branch" }, { kind: "tag" }, { kind: "cherry-pick" }, { kind: "revert" },
+    { kind: "merge" }, { kind: "rebase" }, { kind: "edit-after" }, { kind: "reset" },
+    { kind: "checkout-branch", ref: "dev" }, { kind: "delete-branch", ref: "dev" },
+  ] as const;
+  const closed = splitActions(all, false);
+  assert.deepEqual(closed.shown.map((a) => a.kind), ["checkout-commit", "branch", "revert", "checkout-branch"]);
+  assert.equal(closed.hidden, 7);
+  const open = splitActions(all, true);
+  assert.equal(open.shown.length, all.length);
+  assert.equal(open.hidden, 7, "More still says how many it holds");
+  const stash = splitActions([{ kind: "stash-apply" }, { kind: "stash-pop" }, { kind: "stash-drop" }], false);
+  assert.equal(stash.hidden, 0, "a stash's three actions all stay");
+});
+
+test("toggleMore opens and closes, and another repo starts closed", () => {
+  const v = toggleMore(emptyOps("/r"));
+  assert.equal(v.expanded, true);
+  assert.equal(toggleMore(v).expanded, false);
+  assert.equal(forRepoOps(v, "/other").expanded, false);
 });
