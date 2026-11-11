@@ -10,8 +10,8 @@ export const VIEWER_KEY = "gitdeck.viewer";
 /** Panel widths from here up get two columns. */
 export const WIDE_PX = 640;
 
-export type PanelTab = "changes" | "history" | "branches" | "more";
-export const PANEL_TABS: readonly PanelTab[] = ["changes", "history", "branches", "more"];
+export type PanelTab = "changes" | "review" | "history" | "branches" | "more";
+export const PANEL_TABS: readonly PanelTab[] = ["changes", "review", "history", "branches", "more"];
 
 export const isWide = (width: number): boolean => width >= WIDE_PX;
 

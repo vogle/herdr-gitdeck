@@ -43,3 +43,33 @@ test("loadCompare gives the counts with the base, or null when git fails", async
   };
   assert.equal(await loadCompare(bad, T, "main"), null);
 });
+
+test("loadReview diffs HEAD against where it split from the base", async () => {
+  const { loadReview } = await import("../src/core/review.ts");
+  const M = "m".repeat(40);
+  const H = "h".repeat(40);
+  const calls: string[][] = [];
+  const git: Git = async (_t, args) => {
+    calls.push(args);
+    if (args[0] === "merge-base") return `${M}\n`;
+    if (args.includes("--name-status")) return "M\0src/a.ts\0A\0b.md\0";
+    if (args.includes("--numstat")) return "3\t1\tsrc/a.ts\0" + "10\t0\tb.md\0";
+    return "";
+  };
+  const r = await loadReview(git, T, "main", H);
+  assert.deepEqual(calls[0], ["merge-base", "main", H]);
+  assert.equal(r.error, null);
+  assert.equal(r.mergeBase, M);
+  assert.deepEqual(r.files.map((f) => [f.status, f.path, f.added, f.deleted]), [["M", "src/a.ts", 3, 1], ["A", "b.md", 10, 0]]);
+  assert.ok(calls.some((c) => c[0] === "diff-tree" && c.at(-2) === M && c.at(-1) === H), "files between the split and HEAD");
+});
+
+test("loadReview reports git's error instead of a file list", async () => {
+  const { loadReview } = await import("../src/core/review.ts");
+  const bad: Git = async (_t, a) => {
+    throw new GitError("fatal: no merge base", a, 1, "");
+  };
+  const r = await loadReview(bad, T, "main", "h".repeat(40));
+  assert.deepEqual(r.files, []);
+  assert.match(r.error ?? "", /no merge base/);
+});

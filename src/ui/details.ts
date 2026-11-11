@@ -30,7 +30,7 @@ function statusColor(letter: string, p: Palette) {
   return p.changed;
 }
 
-function fileRow(id: string, letter: string, path: string, counts: string, p: Palette, onOpen: (cx: Context) => void): Element {
+export function fileRow(id: string, letter: string, path: string, counts: string, p: Palette, onOpen: (cx: Context) => void): Element {
   const cut = path.lastIndexOf("/");
   return h_flex()
     .id(id)
@@ -47,7 +47,7 @@ function fileRow(id: string, letter: string, path: string, counts: string, p: Pa
     .child(div().flex_shrink_0().text_xs().text_color(p.dim).child(counts));
 }
 
-function counts(f: CommitFile): string {
+export function counts(f: CommitFile): string {
   return f.binary ? "binary" : `+${f.added} −${f.deleted}`;
 }
 

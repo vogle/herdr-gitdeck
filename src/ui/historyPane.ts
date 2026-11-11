@@ -14,6 +14,7 @@ import { details, type DetailActions } from "./details.ts";
 import { graphList, type GraphActions } from "./graph.ts";
 import { inspectPane } from "./inspect.ts";
 import { commitBar, syncBar, type OpsActions, type OpsParts } from "./ops.ts";
+import { reviewPane, type ReviewActions, type ReviewParts } from "./review.ts";
 import { sidebar } from "./sidebar.ts";
 import { textButton, type Palette } from "./style.ts";
 
@@ -43,9 +44,11 @@ export interface HistoryParts {
   tab: PanelTab;
   /** The panel is wide enough for two columns. */
   wide: boolean;
+  /** The branch against main, for the Review tab. */
+  review: { parts: ReviewParts; actions: ReviewActions };
 }
 
-const TAB_LABELS: Record<PanelTab, string> = { changes: "Changes", history: "History", branches: "Branches", more: "More" };
+const TAB_LABELS: Record<PanelTab, string> = { changes: "Changes", review: "Review", history: "History", branches: "Branches", more: "More" };
 
 function tabRow(parts: HistoryParts, p: Palette, actions: HistoryActions): Element {
   const changed = parts.status?.entries.filter((e) => e.kind !== "ignored").length ?? 0;
@@ -156,6 +159,7 @@ function tabBody(parts: HistoryParts, p: Palette, actions: HistoryActions): Elem
     if (parts.changes) return changesPane(parts.changes.parts, p, parts.changes.actions);
     return note(parts.untrusted ? "Work-tree changes are not read for this repo." : "Reading changes…", p);
   }
+  if (parts.tab === "review") return reviewPane(parts.review.parts, p, parts.review.actions);
   if (parts.tab === "branches") return h_flex().flex_1().min_h_0().child(sidebar(parts.view.history, p, actions.jump, true));
   if (parts.tab === "more") return moreTab(p, actions);
   return historyTab(parts, p, actions);

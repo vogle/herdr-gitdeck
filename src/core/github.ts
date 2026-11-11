@@ -77,3 +77,63 @@ export async function loadPrs(git: Git, exec: Exec, target: Target, away: string
     return { items: [], error: `Can't run gh (GitHub CLI): ${error instanceof Error ? error.message : String(error)}`, repo };
   }
 }
+
+export const prViewArgs = (repo: string, branch: string): string[] => [
+  "pr", "view", branch, "--repo", repo, "--json", "number,title,state,isDraft,url,reviewDecision,statusCheckRollup",
+];
+
+export interface Checks {
+  passed: number;
+  failed: number;
+  pending: number;
+}
+
+/** The shown branch's pull request, for the Review tab. */
+export interface BranchPr {
+  number: number;
+  title: string;
+  /** OPEN, CLOSED or MERGED. */
+  state: string;
+  draft: boolean;
+  url: string;
+  /** APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED or "". */
+  review: string;
+  checks: Checks;
+}
+
+const PASS = new Set(["SUCCESS", "NEUTRAL", "SKIPPED"]);
+const WAIT = new Set(["PENDING", "EXPECTED", "QUEUED", "IN_PROGRESS", "WAITING", "REQUESTED"]);
+
+/** A check run (status + conclusion) or a commit status (state), as one verdict. */
+function verdict(c: Record<string, unknown>): keyof Checks {
+  const done = c.__typename !== "CheckRun" || c.status === "COMPLETED";
+  const result = str(c.__typename === "CheckRun" ? c.conclusion : c.state);
+  if (!done || WAIT.has(result)) return "pending";
+  return PASS.has(result) ? "passed" : "failed";
+}
+
+export function parseBranchPr(json: string): BranchPr | null {
+  const d: unknown = JSON.parse(json);
+  if (typeof d !== "object" || d === null || Array.isArray(d)) return null;
+  const o = d as Record<string, unknown>;
+  if (typeof o.number !== "number") return null;
+  const checks: Checks = { passed: 0, failed: 0, pending: 0 };
+  for (const c of Array.isArray(o.statusCheckRollup) ? o.statusCheckRollup : []) {
+    if (typeof c === "object" && c !== null) checks[verdict(c as Record<string, unknown>)] += 1;
+  }
+  return { number: o.number, title: str(o.title), state: str(o.state), draft: o.isDraft === true, url: str(o.url), review: str(o.reviewDecision), checks };
+}
+
+/** The branch's PR; none (and no error) without a GitHub remote or a PR. */
+export async function loadBranchPr(git: Git, exec: Exec, target: Target, away: string, branch: string): Promise<{ pr: BranchPr | null; error: string | null }> {
+  const repo = githubRepo(await git(target, ["remote", "get-url", "origin"]).catch(() => ""));
+  if (repo === null) return { pr: null, error: null };
+  try {
+    const r = await exec("gh", prViewArgs(repo, branch), { cwd: away, on: target.on });
+    if (r.code === 0) return { pr: parseBranchPr(r.stdout), error: null };
+    if (/no pull requests found/i.test(r.stderr)) return { pr: null, error: null };
+    return { pr: null, error: r.stderr.split("\n")[0] || `gh failed (${r.code})` };
+  } catch (error) {
+    return { pr: null, error: `Can't run gh (GitHub CLI): ${error instanceof Error ? error.message : String(error)}` };
+  }
+}

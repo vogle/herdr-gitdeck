@@ -7,7 +7,7 @@ import { agents, exec, focused, home, knownAgents, nextCommand, panes, props, ru
 import { ChangesPanel } from "./changes.ts";
 import { loadReflog, type InspectView } from "./core/inspect.ts";
 import { loadBlob, loadTree } from "./core/tree.ts";
-import { loadPrs } from "./core/github.ts";
+import { loadBranchPr, loadPrs, type BranchPr } from "./core/github.ts";
 import { backStep, isWide, viewerFocused, type PanelTab } from "./core/panel.ts";
 import { openViewer, Viewer } from "./viewer.ts";
 import { NET_ENV } from "./core/ops.ts";
@@ -27,7 +27,7 @@ import { loadStatus, scanHerd } from "./core/scan.ts";
 import { Signal } from "./core/signal.ts";
 import { MAX_REPOS } from "./core/repos/discover.ts";
 import { agentChips, repoAgents } from "./core/repoAgents.ts";
-import { baseBranch, loadCompare, type Compare } from "./core/review.ts";
+import { baseBranch, loadCompare, loadReview, type Compare, type Review } from "./core/review.ts";
 import { header } from "./ui/header.ts";
 import { historyPane, type HistoryActions } from "./ui/historyPane.ts";
 import { repoList } from "./ui/repoList.ts";
@@ -119,7 +119,9 @@ export default class GitDeck extends View {
   /** The panel's open tab. */
   tab: PanelTab = "changes";
   /** The shown repo's branch against main (read with its history). */
-  compare: { repo: string; data: Compare | null } | null = null;
+  compare: { repo: string; data: Compare | null; base: string | null } | null = null;
+  /** The Review tab's files and pull request, for one repo. */
+  review: { repo: string; data: Review | null; pr: { pr: BranchPr | null; error: string | null } | null } | null = null;
   /** Wide enough for the list and the commit side by side. */
   wide = false;
   /** Takes the keyboard so Esc goes back one level. */
@@ -350,7 +352,8 @@ export default class GitDeck extends View {
       this.view = withHistory(this.view, target.cwd, read.history);
       const base = baseBranch(read.history.refs, status?.branch ?? null);
       const data = base === null || !status?.oid ? null : await loadCompare(this.git, target, base);
-      if (this.herd.selected === target.cwd) this.compare = { repo: target.cwd, data };
+      if (this.herd.selected === target.cwd) this.compare = { repo: target.cwd, data, base };
+      if (this.tab === "review") await this.readReview(cx, this.review === null);
     }
     this.syncRows();
     cx.notify();
@@ -408,7 +411,35 @@ export default class GitDeck extends View {
     if (source && target) openViewer({ view: "diff", repo: target.cwd, on: target.on, source });
   }
 
+  /** The Review tab's data: the files since main, and (with `pr`) the pull request over the network. */
+  async readReview(cx: AsyncContext, pr: boolean): Promise<void> {
+    const target = this.repoTarget();
+    const status = target ? this.herd.statuses[target.cwd]?.status : null;
+    const base = target && this.compare?.repo === target.cwd ? this.compare.base : null;
+    if (!target || !status?.oid || base === null) return;
+    const kept = this.review?.repo === target.cwd ? this.review.pr : null;
+    const branch = status.branch;
+    const [data, prState] = await Promise.all([
+      loadReview(this.git, target, base, status.oid),
+      pr && branch ? loadBranchPr(this.git, exec, target, await this.homeFor(target), branch) : Promise.resolve(kept),
+    ]);
+    if (this.herd.selected !== target.cwd) return;
+    this.review = { repo: target.cwd, data, pr: branch ? prState : { pr: null, error: null } };
+    cx.notify();
+  }
+
+  /** A file of the Review tab: its diff since the branch split from main. */
+  openReviewFile(path: string): void {
+    const target = this.repoTarget();
+    const r = target && this.review?.repo === target.cwd ? this.review.data : null;
+    const file = r?.files.find((f) => f.path === path);
+    if (!target || !r?.mergeBase || !file) return;
+    const source: DiffSource = { kind: "commit", hash: r.head, parents: [r.mergeBase], path, oldPath: file.oldPath };
+    openViewer({ view: "diff", repo: target.cwd, on: target.on, source });
+  }
+
   selectTab(tab: PanelTab, cx: Context): void {
+    if (tab === "review" && this.tab !== "review") cx.spawn((cx) => this.readReview(cx, true));
     this.tab = tab;
     this.inspect = null;
     this.focus.focus();
@@ -556,6 +587,19 @@ export default class GitDeck extends View {
               ops: this.trustedStatus() ? { parts: this.opsPanel.parts(), actions: this.opsPanel.actions() } : null,
               tab: this.tab,
               wide: this.wide,
+              review: {
+                parts: {
+                  base: this.compare?.repo === repo.path ? this.compare.base : null,
+                  review: this.review?.repo === repo.path ? this.review.data : null,
+                  pr: this.review?.repo === repo.path ? this.review.pr : null,
+                },
+                actions: {
+                  openFile: (path) => this.openReviewFile(path),
+                  refresh: (cx) => {
+                    cx.spawn((cx) => this.readReview(cx, true));
+                  },
+                },
+              },
             },
             p,
             this.historyActions(),

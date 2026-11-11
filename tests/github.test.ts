@@ -44,3 +44,45 @@ test("loadPrs: no GitHub remote, gh missing or failing, and success", async () =
   const noRemote = async () => { throw new Error("No such remote 'origin'"); };
   assert.match((await loadPrs(noRemote, ok, at, "/home")).error ?? "", /GitHub remote/);
 });
+
+test("prViewArgs asks gh for the branch's PR with its checks", async () => {
+  const { prViewArgs } = await import("../src/core/github.ts");
+  assert.deepEqual(prViewArgs("o/r", "feat/x"), [
+    "pr", "view", "feat/x", "--repo", "o/r", "--json", "number,title,state,isDraft,url,reviewDecision,statusCheckRollup",
+  ]);
+});
+
+test("parseBranchPr counts passed, failed and running checks", async () => {
+  const { parseBranchPr } = await import("../src/core/github.ts");
+  const pr = parseBranchPr(JSON.stringify({
+    number: 7, title: "Add X", state: "OPEN", isDraft: false, url: "https://github.com/o/r/pull/7", reviewDecision: "APPROVED",
+    statusCheckRollup: [
+      { __typename: "CheckRun", status: "COMPLETED", conclusion: "SUCCESS" },
+      { __typename: "CheckRun", status: "COMPLETED", conclusion: "SKIPPED" },
+      { __typename: "CheckRun", status: "COMPLETED", conclusion: "FAILURE" },
+      { __typename: "CheckRun", status: "IN_PROGRESS", conclusion: "" },
+      { __typename: "StatusContext", state: "SUCCESS" },
+      { __typename: "StatusContext", state: "PENDING" },
+      { __typename: "StatusContext", state: "ERROR" },
+    ],
+  }));
+  assert.deepEqual(pr, {
+    number: 7, title: "Add X", state: "OPEN", draft: false, url: "https://github.com/o/r/pull/7", review: "APPROVED",
+    checks: { passed: 3, failed: 2, pending: 2 },
+  });
+  assert.equal(parseBranchPr("[]"), null);
+});
+
+test("loadBranchPr: none when the branch has no PR, an error when gh fails", async () => {
+  const { loadBranchPr } = await import("../src/core/github.ts");
+  const T = { cwd: "/r", on: null };
+  const origin = async () => "git@github.com:o/r.git\n";
+  const none = async () => ({ code: 1, stdout: "", stderr: 'no pull requests found for branch "x"\n' });
+  assert.deepEqual(await loadBranchPr(origin, none, T, "/home", "x"), { pr: null, error: null });
+  const broken = async () => ({ code: 4, stdout: "", stderr: "gh: To get started, run gh auth login\n" });
+  assert.deepEqual(await loadBranchPr(origin, broken, T, "/home", "x"), { pr: null, error: "gh: To get started, run gh auth login" });
+  const ok = async () => ({ code: 0, stdout: JSON.stringify({ number: 1, title: "t", state: "MERGED", isDraft: true, url: "u", reviewDecision: "", statusCheckRollup: [] }), stderr: "" });
+  assert.equal((await loadBranchPr(origin, ok, T, "/home", "x")).pr?.number, 1);
+  const elsewhere = async () => "https://gitlab.com/o/r.git\n";
+  assert.deepEqual(await loadBranchPr(elsewhere, ok, T, "/home", "x"), { pr: null, error: null }, "no GitHub remote: nothing to show");
+});

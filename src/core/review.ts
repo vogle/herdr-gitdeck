@@ -2,6 +2,7 @@
 // Review tab) what changed since they split. Every git call goes through `Git`.
 
 import type { Git, Target } from "./git/runner.ts";
+import { filesArgs, joinFiles, parseNameStatus, parseNumstat, type CommitFile } from "./git/show.ts";
 import type { Ref } from "./git/refs.ts";
 
 /** The main line, most likely first: a local branch beats its remote copy. */
@@ -38,5 +39,28 @@ export async function loadCompare(git: Git, target: Target, base: string): Promi
     return counts ? { base, ...counts } : null;
   } catch {
     return null;
+  }
+}
+
+/** What the branch changed since it split from the base: HEAD against the merge base. */
+export interface Review {
+  base: string;
+  /** Where the branch split off; null when git couldn't tell. */
+  mergeBase: string | null;
+  head: string;
+  files: readonly CommitFile[];
+  error: string | null;
+}
+
+export async function loadReview(git: Git, target: Target, base: string, head: string): Promise<Review> {
+  try {
+    const mergeBase = (await git(target, ["merge-base", base, head])).trim();
+    const [names, counts] = await Promise.all([
+      git(target, filesArgs(head, [mergeBase], "--name-status")),
+      git(target, filesArgs(head, [mergeBase], "--numstat")),
+    ]);
+    return { base, mergeBase, head, files: joinFiles(parseNameStatus(names), parseNumstat(counts)), error: null };
+  } catch (error) {
+    return { base, mergeBase: null, head, files: [], error: error instanceof Error ? error.message : String(error) };
   }
 }
