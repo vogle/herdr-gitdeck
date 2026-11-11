@@ -18,7 +18,7 @@ die() { printf 'dev-install: %s\n' "$*" >&2; exit 1; }
 [ -f "$SRC/main.js" ] || die "no $SRC/main.js: run pnpm build first"
 [ -d "$APP_HOME/mods" ] || die "no Herdr app home at $APP_HOME"
 command -v herdr-app >/dev/null 2>&1 || die "herdr-app not on PATH"
-if [ -e "$DEST" ] && ! grep -q '"title": *"gitdeck"' "$DEST/mod.json" 2>/dev/null; then
+if [ -e "$DEST" ] && ! grep -qi '"title": *"gitdeck"' "$DEST/mod.json" 2>/dev/null; then
   die "$DEST exists and isn't gitdeck's; not touching it"
 fi
 
