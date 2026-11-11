@@ -164,3 +164,12 @@ test("undoLastCommit refuses a pushed commit and the first commit", async () => 
   });
   assert.equal(await undoLastCommit(failing.git, at), "index.lock exists");
 });
+
+test("agentHold stops a work-tree change only while an agent is working", async () => {
+  const { agentHold } = await import("../src/core/repoAgents.ts");
+  assert.equal(agentHold([], "Merging"), null);
+  assert.equal(agentHold([{ name: "Claude", status: "idle" }, { name: "Codex", status: "done" }], "Merging"), null);
+  assert.equal(agentHold([{ name: "Claude", status: "blocked" }], "Merging"), null, "a waiting agent isn't writing");
+  assert.equal(agentHold([{ name: "Claude", status: "working" }], "Merging"), "Claude is working here: merging now can mix with its changes");
+  assert.equal(agentHold([{ name: "A", status: "working" }, { name: "B", status: "working" }], "Resetting"), "2 agents are working here: resetting now can mix with their changes");
+});

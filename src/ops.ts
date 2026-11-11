@@ -13,10 +13,11 @@ import {
   type ResetMode,
 } from "./core/ops.ts";
 import {
-  commitActions, confirmOps, emptyOps, finished, forRepoOps, started, startNaming, stopNaming, withOperation, withPlan,
+  commitActions, confirmOps, emptyOps, finished, forRepoOps, holdOps, started, startNaming, stopNaming, withOperation, withPlan,
   type CommitAction, type OpsView,
 } from "./core/opsView.ts";
 import { files } from "./changes.ts";
+import { agentHold, type RepoAgent } from "./core/repoAgents.ts";
 import { FLOW_KINDS, flowBase, flowBranch } from "./core/flow.ts";
 import { cycleStep, loadPlan, moveStep, runPlan, type RebasePlan } from "./core/rebase.ts";
 import { actionKey, needsConfirm, type OpsActions, type OpsParts } from "./ui/ops.ts";
@@ -28,6 +29,8 @@ export interface OpsHost {
   target: () => Target | null;
   status: () => RepoStatus | null;
   history: () => History | null;
+  /** The coding agents whose terminal is in the shown repo. */
+  agents: () => readonly RepoAgent[];
   /** The selected commit (never the uncommitted row). */
   selected: () => { hash: string; parents: number } | null;
   changed: (cx: AsyncContext) => Promise<void>;
@@ -39,6 +42,8 @@ export class OpsPanel {
   view: OpsView = emptyOps(null);
   name!: InputState;
   private readonly host: OpsHost;
+  /** The action held while an agent works, run by "Run anyway". */
+  private pending: (() => void) | null = null;
 
   constructor(host: OpsHost) {
     this.host = host;
@@ -90,10 +95,21 @@ export class OpsPanel {
     return { view: this.view, ahead: status?.ahead ?? 0, behind: status?.behind ?? 0, commit: this.commitList(), name: this.name, flow };
   }
 
-  /** Runs one action; `done` names it in the notice. */
-  run(cx: Context, label: string, done: string, action: (target: Target) => Promise<string | null>): void {
+  /**
+   * Runs one action; `done` names it in the notice. One that rewrites the work
+   * tree (`safe` false) waits for "Run anyway" while an agent works there.
+   */
+  run(cx: Context, label: string, done: string, action: (target: Target) => Promise<string | null>, safe = false): void {
     const target = this.host.target();
     if (!target || this.view.busy !== null) return;
+    const why = safe ? null : agentHold(this.host.agents(), label);
+    if (why !== null) {
+      this.pending = () => this.run(cx, label, done, action, true);
+      this.view = holdOps(this.view, why);
+      cx.notify();
+      return;
+    }
+    this.pending = null;
     this.view = started(this.view, label);
     cx.notify();
     cx.spawn(async (cx) => {
@@ -105,8 +121,8 @@ export class OpsPanel {
     });
   }
 
-  git(cx: Context, label: string, done: string, args: string[], net = false): void {
-    this.run(cx, label, done, (target) => runOp(net ? this.host.net : this.host.git, target, args));
+  git(cx: Context, label: string, done: string, args: string[], net = false, safe = false): void {
+    this.run(cx, label, done, (target) => runOp(net ? this.host.net : this.host.git, target, args), safe);
   }
 
   /** Reads the commits after `base` into the rebase editor. */
@@ -178,7 +194,7 @@ export class OpsPanel {
 
   actions(): OpsActions {
     return {
-      fetch: (cx) => this.git(cx, "Fetching", "Fetched every remote", fetchArgs(), true),
+      fetch: (cx) => this.git(cx, "Fetching", "Fetched every remote", fetchArgs(), true, true),
       pull: (cx) => this.git(cx, "Pulling", "Pulled", pullArgs(), true),
       push: (cx) =>
         this.run(cx, "Pushing", "Pushed", async (target) => {
@@ -186,7 +202,7 @@ export class OpsPanel {
           const args = pushArgs(status?.branch ?? null, status?.upstream ?? null, await readRemotes(this.host.git, target));
           if (args === null) return status?.branch ? "No remote to push to" : "Check out a branch to push";
           return runOp(this.host.net, target, args);
-        }),
+        }, true),
       stash: (cx) => this.git(cx, "Stashing", "Stashed every change, untracked files too", stashPushArgs("", true)),
       sequence: (step, cx) => {
         const op = this.view.operation;
@@ -213,7 +229,7 @@ export class OpsPanel {
           return cx.notify();
         }
         this.view = stopNaming(this.view);
-        if (naming.kind === "tag") this.git(cx, "Tagging", `Tagged ${name}`, tagArgs(name, naming.at));
+        if (naming.kind === "tag") this.git(cx, "Tagging", `Tagged ${name}`, tagArgs(name, naming.at), false, true);
         else if (naming.kind !== "branch") {
           const branch = flowBranch(naming.kind, name);
           this.git(cx, "Creating branch", `On ${branch}, from ${naming.at}`, createBranchArgs(branch, naming.at, true));
@@ -242,7 +258,9 @@ export class OpsPanel {
         this.name.focus();
         cx.notify();
       },
+      runHeld: () => this.pending?.(),
       dismiss: (cx) => {
+        this.pending = null;
         this.view = finished(confirmOps(this.view, null), null, null);
         cx.notify();
       },

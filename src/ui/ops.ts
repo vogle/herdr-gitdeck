@@ -21,6 +21,8 @@ export interface OpsActions {
   createName: (cx: Context) => void;
   cancelName: (cx: Context) => void;
   dismiss: (cx: Context) => void;
+  /** Runs the action held while an agent works. */
+  runHeld: (cx: Context) => void;
   /** Starts naming a git-flow branch. */
   startFlow: (kind: FlowKind, cx: Context) => void;
   /** The interactive rebase editor. */
@@ -115,8 +117,21 @@ export function syncBar(parts: OpsParts, p: Palette, a: OpsActions): Element[] {
           .bg(p.raised)
           .child(div().flex_1().min_w_0().text_xs().text_color(view.error ? p.removed : p.added).child(message))
           .child(textButton("op-dismiss", "×", p, a.dismiss));
+  const held =
+    view.held === null
+      ? null
+      : h_flex()
+          .px(10)
+          .py(3)
+          .gap(6)
+          .items_center()
+          .flex_shrink_0()
+          .bg(p.raised)
+          .child(div().flex_1().min_w_0().text_xs().text_color(p.changed).child(view.held))
+          .child(textButton("op-run-held", "Run anyway", p, a.runHeld, true))
+          .child(textButton("op-hold-cancel", "Cancel", p, a.dismiss));
   const flowNaming = view.naming && view.naming.kind !== "branch" && view.naming.kind !== "tag" ? namingRow(parts, p, a) : null;
-  return [bar, ...(flowNaming ? [flowNaming] : []), ...(view.operation ? [operationBanner(view.operation, p, a)] : []), ...(result ? [result] : [])];
+  return [bar, ...(flowNaming ? [flowNaming] : []), ...(view.operation ? [operationBanner(view.operation, p, a)] : []), ...(held ? [held] : []), ...(result ? [result] : [])];
 }
 
 function namingRow(parts: OpsParts, p: Palette, a: OpsActions): Element {

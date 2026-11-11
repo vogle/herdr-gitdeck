@@ -48,6 +48,18 @@ function say(kind: AgentNote["kind"], who: readonly Named[]): AgentNote {
   return { kind, text: `${name} finished: review ${one ? "its" : "their"} changes before committing` };
 }
 
+/**
+ * Why an action that rewrites the work tree (switch, reset, merge, stash...)
+ * should wait: an agent is still writing there. Null when none is working.
+ */
+export function agentHold(agents: readonly Named[], action: string): string | null {
+  const who = agents.filter((a) => a.status === "working");
+  if (who.length === 0) return null;
+  const one = who.length === 1;
+  const name = one ? (who[0]?.name ?? "An agent") : `${who.length} agents`;
+  return `${name} ${one ? "is" : "are"} working here: ${action.toLowerCase()} now can mix with ${one ? "its" : "their"} changes`;
+}
+
 /** The most urgent thing to say (working, then waiting, then finished), or null when all are idle. */
 export function agentNote(agents: readonly Named[]): AgentNote | null {
   for (const kind of ["working", "blocked", "done"] as const) {

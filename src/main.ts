@@ -108,6 +108,7 @@ export default class GitDeck extends View {
     status: () => this.trustedStatus(),
     history: () => (this.view.repo === this.herd.selected ? this.view.history : null),
     selected: () => this.selectedCommit(),
+    agents: () => repoAgents(this.herd.selected, agents(), panes()),
     changed: (cx) => this.reloadShown(cx),
   });
   /** Blame, a file's history or the reflog, for one repo. */

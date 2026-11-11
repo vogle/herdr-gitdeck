@@ -22,20 +22,25 @@ export interface OpsView {
   operation: Operation | null;
   /** An interactive rebase being edited before it runs. */
   plan: RebasePlan | null;
+  /** Why the clicked action waits: an agent is working in the repo. */
+  held: string | null;
 }
 
 export const emptyOps = (repo: string | null): OpsView => ({
-  repo, busy: null, error: null, notice: null, confirm: null, naming: null, operation: null, plan: null,
+  repo, busy: null, error: null, notice: null, confirm: null, naming: null, operation: null, plan: null, held: null,
 });
 
 export const forRepoOps = (v: OpsView, repo: string | null): OpsView => (v.repo === repo ? v : emptyOps(repo));
 
 /** Unchanged while another action runs: the caller checks `busy` to know. */
 export const started = (v: OpsView, label: string): OpsView =>
-  v.busy !== null ? v : { ...v, busy: label, error: null, notice: null, confirm: null };
+  v.busy !== null ? v : { ...v, busy: label, error: null, notice: null, confirm: null, held: null };
 
 export const finished = (v: OpsView, error: string | null, notice: string | null): OpsView =>
-  ({ ...v, busy: null, error, notice: error === null ? notice : null, confirm: null });
+  ({ ...v, busy: null, error, notice: error === null ? notice : null, confirm: null, held: null });
+
+/** The action waits for "Run anyway": an agent is still writing in the repo. */
+export const holdOps = (v: OpsView, why: string): OpsView => ({ ...v, held: why, confirm: null });
 
 export const confirmOps = (v: OpsView, key: string | null): OpsView => ({ ...v, confirm: key });
 export const startNaming = (v: OpsView, kind: NameKind, at: string): OpsView => ({ ...v, naming: { kind, at }, confirm: null });

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { emptyOps, forRepoOps, started, finished, confirmOps, startNaming, stopNaming, withOperation, withPlan, commitActions } from "../src/core/opsView.ts";
+import { emptyOps, forRepoOps, started, finished, confirmOps, holdOps, startNaming, stopNaming, withOperation, withPlan, commitActions } from "../src/core/opsView.ts";
 import type { Ref } from "../src/core/git/refs.ts";
 
 const H = "a".repeat(40);
@@ -55,4 +55,12 @@ test("withPlan opens and closes the rebase editor and clears a pending click", (
   assert.equal(v.plan, plan);
   assert.equal(v.confirm, null);
   assert.equal(withPlan(v, null).plan, null);
+});
+
+test("an action held for a working agent waits until run or dismissed", () => {
+  const held = holdOps(emptyOps("/r"), "Claude is working here");
+  assert.equal(held.held, "Claude is working here");
+  assert.equal(started(held, "Merging").held, null, "running it clears the hold");
+  assert.equal(finished(held, null, null).held, null, "dismissing clears it");
+  assert.equal(holdOps(confirmOps(emptyOps("/r"), "rebase:x"), "t").confirm, null, "a pending second click is dropped");
 });
