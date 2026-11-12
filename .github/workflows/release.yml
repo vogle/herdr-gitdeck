@@ -1,0 +1,35 @@
+name: release
+# Push a tag like v0.2.0 (matching package.json's version) to publish a release.
+# Installed copies of gitdeck find it within a day and offer a one-click update
+# (src/updater.ts), which downloads gitdeck.tar.gz from here.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      # Pinned to commits: this job publishes what every installed copy runs.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Tag matches package.json
+        run: |
+          version=$(node -p "require('./package.json').version")
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != package.json v$version"; exit 1; }
+      - run: pnpm exec tsc -p tsconfig.test.json --noEmit
+      - run: pnpm coverage
+      - run: pnpm build
+      - run: tar -czf gitdeck.tar.gz -C dist gitdeck
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" gitdeck.tar.gz --title "gitdeck $GITHUB_REF_NAME" --generate-notes

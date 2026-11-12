@@ -34,6 +34,10 @@ import { historyPane, type HistoryActions } from "./ui/historyPane.ts";
 import { repoList } from "./ui/repoList.ts";
 import { palette } from "./ui/style.ts";
 import { summary } from "./ui/summary.ts";
+import { checkForUpdate, installUpdate } from "./updater.ts";
+
+/** How often to see whether the daily update check is due. */
+const UPDATE_POLL_MS = 60 * 60 * 1000;
 
 /** How often the followed folder is compared (no git: just Herdr's data). */
 const CONTEXT_EVERY_MS = 2_000;
@@ -170,6 +174,14 @@ export default class GitDeck extends View {
         if (command === "picker") this.togglePicker(cx);
         else if (command === "refresh") this.refresh(cx);
         else if (command === "search") this.search.focus();
+        else if (command === "update") void installUpdate();
+      }
+    });
+    // A newer release posts one notification a day; its click sends "update" above.
+    cx.spawn(async (cx) => {
+      for (;;) {
+        await checkForUpdate().catch(() => {});
+        await cx.sleep(UPDATE_POLL_MS);
       }
     });
     // Live reads of the shown repo: a burst of saves settles first, and a slow
