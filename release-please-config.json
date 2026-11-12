@@ -1,0 +1,12 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "bf2ac7db78b094c2715ace70e611215c9dd47e9c",
+  "include-component-in-tag": false,
+  "packages": {
+    ".": {
+      "release-type": "node",
+      "package-name": "herdr-gitdeck",
+      "changelog-path": "CHANGELOG.md"
+    }
+  }
+}
