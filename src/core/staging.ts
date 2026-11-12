@@ -105,7 +105,7 @@ export interface Files {
 }
 
 /** A name nothing can have placed in advance (a link there would redirect the write). */
-const patchName = (): string => `githerd-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}.patch`;
+const patchName = (): string => `gitdeck-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}.patch`;
 
 /**
  * Stages (or, reversed, unstages) the picked hunks and lines. git applies a

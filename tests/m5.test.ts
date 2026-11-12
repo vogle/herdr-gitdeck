@@ -43,3 +43,10 @@ test("loadStats reads the log and the file list, and reports an error as text", 
   };
   assert.equal((await loadStats(failing, at)).error, "no HEAD");
 });
+
+test("git-flow buttons show only in a repo that uses it (has develop)", async () => {
+  const { flowKinds } = await import("../src/core/flow.ts");
+  assert.deepEqual(flowKinds(["main", "feat/x"]), [], "a main-only repo gets no + hotfix");
+  assert.deepEqual(flowKinds(["main", "develop"]), ["feature", "release", "hotfix"]);
+  assert.deepEqual(flowKinds(["develop"]), ["feature", "release"]);
+});

@@ -6,15 +6,20 @@ import { h_flex, v_flex, v_virtual_list, Scrollbar, Textarea, type TextareaState
 import type { ChangesView, Resolving } from "../core/changesView.ts";
 import { allChosen, type Choice } from "../core/conflict.ts";
 import type { DiffRow } from "../core/git/diff.ts";
+import { excludeLabel } from "../core/exclude.ts";
+import type { AgentNote } from "../core/repoAgents.ts";
 import type { ChangeFile, Changes } from "../core/staging.ts";
-import { monoFont, textButton, type Palette } from "./style.ts";
+import { ICONS, iconButton, monoFont, textButton, type Palette } from "./style.ts";
 
-const LIST = "githerd-stage-diff";
+const LIST = "gitdeck-stage-diff";
 const ROW = 18;
 const MAX_FILES = 500;
 
 export interface ChangesActions {
+  /** Shows one side of a file's diff in the viewer tab. */
   open: (file: ChangeFile, staged: boolean, cx: Context) => void;
+  /** Opens one side of a file's diff here in the panel, to stage or unstage single hunks and lines. */
+  lines: (file: ChangeFile, staged: boolean, cx: Context) => void;
   closeDiff: (cx: Context) => void;
   stage: (paths: string[], cx: Context) => void;
   unstage: (paths: string[], cx: Context) => void;
@@ -30,8 +35,15 @@ export interface ChangesActions {
   diffClick: (row: number, cx: Context) => void;
   applyPicked: (cx: Context) => void;
   toggleAmend: (cx: Context) => void;
+  /** Claude Code writes a message from the staged diff into the box. */
+  suggest: (cx: Context) => void;
   commit: (cx: Context) => void;
-  close: (cx: Context) => void;
+  /** Moves HEAD back one commit; its changes stay staged. */
+  undo: (cx: Context) => void;
+  /** Lists an untracked file in .git/info/exclude so it stops showing. */
+  ignore: (file: ChangeFile, cx: Context) => void;
+  /** Takes a pattern back out of .git/info/exclude, so its files show again. */
+  unignore: (line: string, cx: Context) => void;
 }
 
 export interface ChangesParts {
@@ -40,6 +52,16 @@ export interface ChangesParts {
   message: TextareaState;
   /** Partial staging writes a patch file: this machine only. */
   local: boolean;
+  /** What a coding agent working in this repo means for the commit, if anything. */
+  agentNote: AgentNote | null;
+  /** The last commit was made here and can be undone. */
+  undoable: boolean;
+  /** The patterns in .git/info/exclude (this machine's repos only). */
+  ignored: readonly string[];
+  /** Claude Code is writing a message. */
+  suggesting: boolean;
+  /** Files changed since the person last looked (a dot marks them). */
+  fresh: ReadonlySet<string>;
 }
 
 function letterColor(letter: string, p: Palette) {
@@ -49,7 +71,7 @@ function letterColor(letter: string, p: Palette) {
   return p.changed;
 }
 
-function fileRow(id: string, f: ChangeFile, p: Palette, onOpen: (cx: Context) => void, buttons: Element[]): Element {
+function fileRow(id: string, f: ChangeFile, p: Palette, onOpen: (cx: Context) => void, buttons: Element[], fresh = false): Element {
   const cut = f.path.lastIndexOf("/");
   return h_flex()
     .id(id)
@@ -62,6 +84,7 @@ function fileRow(id: string, f: ChangeFile, p: Palette, onOpen: (cx: Context) =>
     .hover((el) => el.bg(p.hover))
     .on_click((_e, cx) => onOpen(cx))
     .child(div().w(14).flex_shrink_0().text_color(letterColor(f.letter, p)).child(f.letter))
+    .child(div().w(6).flex_shrink_0().text_xs().text_color(p.accent).child(fresh ? "●" : ""))
     .child(div().flex_shrink_0().child(cut >= 0 ? f.path.slice(cut + 1) : f.path))
     .child(div().min_w_0().flex_1().truncate().text_color(p.dim).child(cut >= 0 ? f.path.slice(0, cut + 1) : ""))
     .children(buttons);
@@ -80,15 +103,24 @@ function heading(title: string, p: Palette, button: Element | null): Element {
 function fileLists(parts: ChangesParts, p: Palette, a: ChangesActions): Element[] {
   const { changes, view } = parts;
   const staged = changes.staged.slice(0, MAX_FILES).map((f, i) =>
-    fileRow(`sf:${i}`, f, p, (cx) => a.open(f, true, cx), [textButton(`un:${i}`, "Unstage", p, (cx) => a.unstage([f.path], cx))]),
+    fileRow(`sf:${i}`, f, p, (cx) => a.open(f, true, cx), [
+      iconButton(`sl:${i}`, ICONS.lines, "Unstage lines…", p, (cx) => a.lines(f, true, cx)),
+      iconButton(`un:${i}`, ICONS.unstage, "Unstage", p, (cx) => a.unstage([f.path], cx)),
+    ], parts.fresh.has(f.path)),
   );
   const unstaged = changes.unstaged.slice(0, MAX_FILES).map((f, i) => {
     const key = `discard:${f.path}`;
     const asking = view.confirm === key;
     return fileRow(`uf:${i}`, f, p, (cx) => a.open(f, false, cx), [
-      textButton(`dc:${i}`, asking ? (f.untracked ? "Delete file?" : "Discard?") : "Discard", p, (cx) => a.discard(f, cx), asking),
-      textButton(`st:${i}`, "Stage", p, (cx) => a.stage([f.path], cx)),
-    ]);
+      // A new file has no lines to pick from yet: stage it whole.
+      ...(f.untracked ? [] : [iconButton(`ul:${i}`, ICONS.lines, "Stage lines…", p, (cx) => a.lines(f, false, cx))]),
+      ...(f.untracked && parts.local ? [iconButton(`ig:${i}`, ICONS.ignore, "Ignore locally (.git/info/exclude)", p, (cx) => a.ignore(f, cx))] : []),
+      // Discarding can't be undone, so its confirmation is spelled out.
+      asking
+        ? textButton(`dc:${i}`, f.untracked ? "Delete file?" : "Discard?", p, (cx) => a.discard(f, cx), true)
+        : iconButton(`dc:${i}`, f.untracked ? ICONS.delete : ICONS.discard, f.untracked ? "Delete file" : "Discard changes", p, (cx) => a.discard(f, cx)),
+      iconButton(`st:${i}`, ICONS.stage, "Stage", p, (cx) => a.stage([f.path], cx)),
+    ], parts.fresh.has(f.path));
   });
   const conflicts = changes.conflicts.map((f, i) => fileRow(`cf:${i}`, f, p, (cx) => a.open(f, false, cx), [
     ...(parts.local ? [textButton(`cr:${i}`, "Resolve…", p, (cx) => a.resolve(f, cx))] : []),
@@ -96,6 +128,18 @@ function fileLists(parts: ChangesParts, p: Palette, a: ChangesActions): Element[
     textButton(`ct:${i}`, "Take theirs", p, (cx) => a.takeSide(f, "theirs", cx)),
     textButton(`cs:${i}`, "Mark resolved", p, (cx) => a.stage([f.path], cx)),
   ]));
+  const ignored = parts.ignored.map((line, i) =>
+    h_flex()
+      .id(`ig-row:${i}`)
+      .h(24)
+      .pl(10)
+      .pr(4)
+      .gap(8)
+      .items_center()
+      .child(div().w(14).flex_shrink_0().text_color(p.dim).child("–"))
+      .child(div().min_w_0().flex_1().truncate().text_color(p.muted).child(excludeLabel(line)))
+      .child(iconButton(`ui:${i}`, ICONS.unignore, "Unignore", p, (cx) => a.unignore(line, cx))),
+  );
   const all = (files: readonly ChangeFile[]) => files.map((f) => f.path);
   return [
     ...(conflicts.length > 0 ? [heading(`Conflicts ${conflicts.length}`, p, null), ...conflicts] : []),
@@ -103,7 +147,32 @@ function fileLists(parts: ChangesParts, p: Palette, a: ChangesActions): Element[
     ...staged,
     heading(`Changes ${changes.unstaged.length}`, p, changes.unstaged.length > 0 ? textButton("stage-all", "Stage all", p, (cx) => a.stage(all(changes.unstaged), cx)) : null),
     ...unstaged,
+    ...(ignored.length > 0 ? [heading(`Ignored locally ${ignored.length}`, p, null), ...ignored] : []),
   ];
+}
+
+const NOTE_ICON = { working: "⏳", blocked: "✋", done: "✅" } as const;
+
+function agentBanner(note: AgentNote, p: Palette): Element {
+  const color = note.kind === "working" ? p.changed : note.kind === "blocked" ? p.removed : p.added;
+  return h_flex()
+    .px(10)
+    .py(4)
+    .gap(6)
+    .flex_shrink_0()
+    .items_center()
+    .text_xs()
+    .bg(p.raised)
+    .text_color(color)
+    .child(NOTE_ICON[note.kind])
+    .child(div().min_w_0().flex_1().truncate().child(note.text));
+}
+
+function commitLabel(parts: ChangesParts): string {
+  const { view } = parts;
+  if (view.busy) return "Working…";
+  if (view.confirm === "commit") return "Commit anyway?";
+  return view.amend ? "Amend" : `Commit ${parts.changes.staged.length}`;
 }
 
 function commitBox(parts: ChangesParts, p: Palette, a: ChangesActions): Element {
@@ -119,9 +188,11 @@ function commitBox(parts: ChangesParts, p: Palette, a: ChangesActions): Element 
       h_flex()
         .gap(6)
         .items_center()
+        .child(textButton("suggest", parts.suggesting ? "✨ Writing…" : "✨ Suggest", p, a.suggest, parts.suggesting))
         .child(textButton("amend", view.amend ? "☑ Amend last commit" : "☐ Amend last commit", p, a.toggleAmend, view.amend))
         .child(div().flex_1())
-        .child(textButton("commit", view.busy ? "Working…" : view.amend ? "Amend" : `Commit ${parts.changes.staged.length}`, p, a.commit, true)),
+        .when(parts.undoable && !view.busy, (el) => el.child(textButton("undo-commit", "↶ Undo commit", p, a.undo)))
+        .child(textButton("commit", commitLabel(parts), p, a.commit, true)),
     );
 }
 
@@ -234,22 +305,12 @@ function resolvePane(r: Resolving, p: Palette, a: ChangesActions): Element {
     .child(
       total === 0
         ? div().p(12).text_color(p.dim).child("No conflict markers in this file: edit it, or mark it resolved.")
-        : v_flex().id("githerd-resolve").flex_1().min_h_0().overflow_y_scrollbar().font_family(monoFont()).text_xs().children(blocks),
+        : v_flex().id("gitdeck-resolve").flex_1().min_h_0().overflow_y_scrollbar().font_family(monoFont()).text_xs().children(blocks),
     );
 }
 
 export function changesPane(parts: ChangesParts, p: Palette, a: ChangesActions): Element {
   const { view } = parts;
-  const top = h_flex()
-    .h(28)
-    .px(8)
-    .gap(6)
-    .items_center()
-    .flex_shrink_0()
-    .border_b_1()
-    .border_color(p.border)
-    .child(div().flex_1().text_xs().text_color(p.muted).child("Uncommitted changes"))
-    .child(textButton("changes-close", "×", p, a.close));
   const error = view.error === null ? null : div().px(10).py(4).flex_shrink_0().text_xs().text_color(p.removed).bg(p.raised).child(view.error);
   return v_flex()
     .flex_1()
@@ -257,8 +318,8 @@ export function changesPane(parts: ChangesParts, p: Palette, a: ChangesActions):
     .border_t_1()
     .border_color(p.border)
     .bg(p.surface)
-    .child(top)
     .when(error !== null, (el) => el.child(error ?? div()))
+    .when(parts.agentNote !== null, (el) => el.child(parts.agentNote ? agentBanner(parts.agentNote, p) : div()))
     .child(
       view.resolving
         ? resolvePane(view.resolving, p, a)

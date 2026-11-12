@@ -11,9 +11,12 @@ import {
   resetArgs, sequenceArgs, stashArgs, stashPushArgs,
 } from "../src/core/ops.ts";
 
+// A commit hook runs with GIT_INDEX_FILE and friends set; the test repos must not inherit them.
+const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+
 const exec: Exec = (command, args, options) =>
   new Promise((resolve, reject) => {
-    execFile(command, args, { cwd: options.cwd, encoding: "utf8", timeout: 20_000 }, (error, stdout, stderr) => {
+    execFile(command, args, { cwd: options.cwd, encoding: "utf8", timeout: 20_000, env }, (error, stdout, stderr) => {
       if (error && typeof error.code !== "number") return reject(error);
       resolve({ code: error ? Number(error.code) : 0, stdout, stderr });
     });
@@ -33,7 +36,7 @@ const commit = async (file: string, text: string, msg: string, t = at) => {
 };
 
 before(async () => {
-  root = await realpath(await mkdtemp(join(tmpdir(), "githerd-ops-")));
+  root = await realpath(await mkdtemp(join(tmpdir(), "gitdeck-ops-")));
   await git({ cwd: root, on: null }, ["init", "-q", "--bare", "-b", "main", "remote.git"]);
   for (const name of ["a", "b"]) {
     await mkdir(join(root, name));

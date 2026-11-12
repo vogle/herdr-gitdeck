@@ -10,4 +10,10 @@ export function flowBase(kind: FlowKind, branches: readonly string[]): string | 
   return ["main", "master"].find((b) => branches.includes(b)) ?? null;
 }
 
+/** The git-flow branches to offer: none unless the repo uses git-flow (it has develop). */
+export function flowKinds(branches: readonly string[]): FlowKind[] {
+  if (!branches.includes("develop")) return [];
+  return FLOW_KINDS.filter((k) => flowBase(k, branches) !== null);
+}
+
 export const flowBranch = (kind: FlowKind, name: string): string => `${kind}/${name}`;

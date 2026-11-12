@@ -9,6 +9,7 @@ import {
   untrackedDiffArgs, worktreeDiffArgs, type CommitDetail, type CommitFile,
 } from "./git/show.ts";
 import { parseDiff, type Diff } from "./git/diff.ts";
+import { stagedDiffArgs, unstagedDiffArgs } from "./stage.ts";
 import { layoutLanes, type Lanes } from "./graph/lanes.ts";
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -36,8 +37,11 @@ async function stashesOf(git: Git, target: Target): Promise<Stash[]> {
   }
 }
 
-export async function loadHistory(git: Git, target: Target, limit: number): Promise<History> {
-  const [refsOut, stashes] = await Promise.all([git(target, [...REFS_ARGS]).catch(() => ""), stashesOf(git, target)]);
+export async function loadHistory(git: Git, target: Target, limit: number, knownRefs?: string): Promise<History> {
+  const [refsOut, stashes] = await Promise.all([
+    knownRefs ?? git(target, [...REFS_ARGS]).catch(() => ""),
+    stashesOf(git, target),
+  ]);
   const refs = parseRefs(refsOut);
   let commits: Commit[];
   try {
@@ -48,6 +52,24 @@ export async function loadHistory(git: Git, target: Target, limit: number): Prom
     return { ...EMPTY_HISTORY, refs, byCommit: refsByCommit(refs), stashes, error: message(error) };
   }
   return { commits, lanes: layoutLanes(commits), refs, byCommit: refsByCommit(refs), stashes, limited: commits.length >= limit, error: null };
+}
+
+/**
+ * Reads the history again only when something it shows can have changed: the
+ * refs (one cheap for-each-ref), `extra` (HEAD and the stash count, from the
+ * status already read) or the limit. `history` is null when nothing changed.
+ */
+export async function refreshHistory(
+  git: Git,
+  target: Target,
+  limit: number,
+  key: string | null,
+  extra: string,
+): Promise<{ key: string; history: History | null }> {
+  const refsOut = await git(target, [...REFS_ARGS]).catch(() => "");
+  const next = `${limit}\x1e${extra}\x1e${refsOut}`;
+  if (next === key) return { key, history: null };
+  return { key: next, history: await loadHistory(git, target, limit, refsOut) };
 }
 
 /** The graph row standing for the work tree's changes. */
@@ -81,11 +103,14 @@ export async function loadCommit(git: Git, target: Target, hash: string, parents
 export type DiffSource =
   | { kind: "commit"; hash: string; parents: readonly string[]; path: string; oldPath: string | null }
   | { kind: "worktree"; path: string; hasHead: boolean }
-  | { kind: "untracked"; path: string };
+  | { kind: "untracked"; path: string }
+  /** One side of an uncommitted file: what is staged, or what is not yet. */
+  | { kind: "index"; path: string; staged: boolean };
 
 function diffArgs(source: DiffSource): string[] {
   if (source.kind === "commit") return commitDiffArgs(source.hash, source.parents, source);
   if (source.kind === "worktree") return worktreeDiffArgs(source.path, source.hasHead);
+  if (source.kind === "index") return source.staged ? stagedDiffArgs(source.path) : unstagedDiffArgs(source.path);
   return untrackedDiffArgs(source.path);
 }
 

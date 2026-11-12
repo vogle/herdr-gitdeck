@@ -29,11 +29,15 @@ test("with environment settings, git runs through env with them first", async ()
   assert.deepEqual(calls[0]?.args, ["GIT_TERMINAL_PROMPT=0", "git", ...GIT_FLAGS, "fetch"]);
 });
 
-test("a repo's own config can't make githerd run a program (fsmonitor off)", () => {
+test("a repo's own config can't make gitdeck run a program (fsmonitor off)", () => {
   const flags = GIT_FLAGS.join(" ");
   assert.match(flags, /-c core\.fsmonitor=false/);
   assert.match(flags, /-c log\.showSignature=false/);
   assert.ok(GIT_FLAGS.includes("--literal-pathspecs"), "a path is never a pattern");
+});
+
+test("reading a diff never rewrites the index (an agent's git add would hit index.lock)", () => {
+  assert.match(GIT_FLAGS.join(" "), /-c diff\.autoRefreshIndex=false/);
 });
 
 test("a nonzero exit becomes a GitError carrying stderr's first line", async () => {

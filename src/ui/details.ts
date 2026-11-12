@@ -3,7 +3,7 @@
 
 import { div, image, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex, v_virtual_list, Scrollbar } from "gpui-base";
-import type { DiffRow } from "../core/git/diff.ts";
+import type { Diff, DiffRow } from "../core/git/diff.ts";
 import type { ImagePair } from "../core/imageDiff.ts";
 import type { CommitFile } from "../core/git/show.ts";
 import type { RepoStatus, StatusEntry } from "../core/git/status.ts";
@@ -11,16 +11,14 @@ import { UNCOMMITTED, type HistoryView } from "../core/historyView.ts";
 import { dateTime } from "../core/time.ts";
 import { monoFont, textButton, type Palette } from "./style.ts";
 
-const DIFF_LIST = "githerd-diff";
+const DIFF_LIST = "gitdeck-diff";
 const DIFF_ROW = 18;
 const MAX_FILES = 500;
 
 export interface DetailActions {
+  /** Opens the file's diff in the viewer tab. */
   openFile: (path: string, cx: Context) => void;
-  closeFile: (cx: Context) => void;
   close: (cx: Context) => void;
-  /** A committed file's blame or history. */
-  inspectFile: (kind: "blame" | "file-log", path: string, cx: Context) => void;
   /** Every file as it was at the selected commit. */
   browseTree: (cx: Context) => void;
 }
@@ -32,7 +30,7 @@ function statusColor(letter: string, p: Palette) {
   return p.changed;
 }
 
-function fileRow(id: string, letter: string, path: string, counts: string, p: Palette, onOpen: (cx: Context) => void): Element {
+export function fileRow(id: string, letter: string, path: string, counts: string, p: Palette, onOpen: (cx: Context) => void): Element {
   const cut = path.lastIndexOf("/");
   return h_flex()
     .id(id)
@@ -49,7 +47,7 @@ function fileRow(id: string, letter: string, path: string, counts: string, p: Pa
     .child(div().flex_shrink_0().text_xs().text_color(p.dim).child(counts));
 }
 
-function counts(f: CommitFile): string {
+export function counts(f: CommitFile): string {
   return f.binary ? "binary" : `+${f.added} −${f.deleted}`;
 }
 
@@ -145,26 +143,12 @@ function imagePair(pair: ImagePair, p: Palette): Element {
   return pair.note !== null ? box.child(div().text_xs().text_color(p.dim).child(pair.note)) : box.child(side("Before", pair.old, p)).child(side("After", pair.new, p));
 }
 
-function diffView(view: HistoryView, p: Palette, actions: DetailActions): Element {
-  const diff = view.diff;
+/** A diff's rows (and a changed image's two sides), filling the space it is given. */
+export function diffBody(diff: Diff | null, p: Palette): Element {
   const rows = diff ? [...diff.rows, ...(diff.truncated ? [{ kind: "note", old: null, new: null, text: "Diff cut short: too many lines" } as DiffRow] : [])] : [];
   return v_flex()
     .flex_1()
     .min_h_0()
-    .child(
-      bar(
-        view.file ?? "",
-        p,
-        textButton("diff-back", "← Files", p, actions.closeFile),
-        ...(view.selected !== UNCOMMITTED && view.file !== null
-          ? [
-              textButton("diff-blame", "Blame", p, (cx) => actions.inspectFile("blame", view.file ?? "", cx)),
-              textButton("diff-history", "History", p, (cx) => actions.inspectFile("file-log", view.file ?? "", cx)),
-            ]
-          : []),
-        textButton("diff-close", "×", p, actions.close),
-      ),
-    )
     .when(Boolean(diff?.images), (el) => el.child(diff?.images ? imagePair(diff.images, p) : div()))
     .child(
       diff
@@ -183,7 +167,6 @@ function diffView(view: HistoryView, p: Palette, actions: DetailActions): Elemen
 export function details(view: HistoryView, status: RepoStatus | null, p: Palette, actions: DetailActions): Element | null {
   if (view.selected === null) return null;
   const pane = v_flex().flex_1().min_h_0().border_t_1().border_color(p.border).bg(p.surface);
-  if (view.file !== null) return pane.child(diffView(view, p, actions));
   const uncommitted = view.selected === UNCOMMITTED;
   const title = uncommitted ? "Uncommitted changes" : `Commit ${view.selected.slice(0, 10)}`;
   const body = uncommitted ? worktreeBody(status, p, actions) : commitBody(view, p, actions);
@@ -193,7 +176,7 @@ export function details(view: HistoryView, status: RepoStatus | null, p: Palette
         title,
         p,
         ...(uncommitted ? [] : [textButton("details-tree", "Files at commit", p, actions.browseTree)]),
-        textButton("details-close", "×", p, actions.close),
+        textButton("details-close", "← Back", p, actions.close),
       ),
     )
     .child(v_flex().id("details-body").flex_1().min_h_0().overflow_y_scrollbar().pb(6).children(body));

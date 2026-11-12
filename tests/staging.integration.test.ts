@@ -8,9 +8,12 @@ import { join } from "node:path";
 import { createGit, type Exec } from "../src/core/git/runner.ts";
 import { applyPicks, commitChanges, discardFiles, loadStageDiff, stageFiles, unstageFiles } from "../src/core/staging.ts";
 
+// A commit hook runs with GIT_INDEX_FILE and friends set; the test repos must not inherit them.
+const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+
 const exec: Exec = (command, args, options) =>
   new Promise((resolve, reject) => {
-    execFile(command, args, { cwd: options.cwd, encoding: "utf8" }, (error, stdout, stderr) => {
+    execFile(command, args, { cwd: options.cwd, encoding: "utf8", env }, (error, stdout, stderr) => {
       if (error && typeof error.code !== "number") return reject(error);
       resolve({ code: error ? Number(error.code) : 0, stdout, stderr });
     });
@@ -26,7 +29,7 @@ let at = { cwd: "", on: null as string | null };
 const lines = (n: number, f: (i: number) => string) => `${Array.from({ length: n }, (_, i) => f(i)).join("\n")}\n`;
 
 before(async () => {
-  at = { cwd: await realpath(await mkdtemp(join(tmpdir(), "githerd-stage-"))), on: null };
+  at = { cwd: await realpath(await mkdtemp(join(tmpdir(), "gitdeck-stage-"))), on: null };
   for (const a of [["init", "-q", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "t"], ["config", "commit.gpgsign", "false"]]) await git(at, a);
   await writeFile(join(at.cwd, "f.txt"), lines(20, (i) => `line ${i}`));
   await stageFiles(git, at, ["f.txt"]);
@@ -80,6 +83,6 @@ test("the patch file is new each time and gone afterwards", async () => {
   assert.equal(await applyPicks(git, files, at, d.raw, [{ hunk: 0, lines: null }], false), null);
   const left = (await git(at, ["rev-parse", "--absolute-git-dir"])).trim();
   const { readdir } = await import("node:fs/promises");
-  assert.deepEqual((await readdir(left)).filter((n) => n.startsWith("githerd")), []);
+  assert.deepEqual((await readdir(left)).filter((n) => n.startsWith("gitdeck")), []);
   assert.equal(await unstageFiles(git, at, ["f.txt"], true), null);
 });

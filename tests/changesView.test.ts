@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  emptyChanges, openSide, withStageDiff, togglePick, picks, hunkPick, askConfirm, setAmend, setBusy, withResult, closeSide, forRepoChanges,
+  emptyChanges, openSide, withStageDiff, togglePick, picks, hunkPick, askConfirm, setAmend, setBusy, withResult, closeSide, forRepoChanges, changeSource,
 } from "../src/core/changesView.ts";
 import { parseDiff } from "../src/core/git/diff.ts";
 
@@ -78,4 +78,10 @@ test("resolving a conflict: open, choose a block, close", async () => {
   assert.equal(chosen.resolving?.segments[0]?.kind === "conflict" && chosen.resolving.segments[0].choice, "theirs");
   assert.equal(chooseBlock(emptyChanges("/r"), 0, "ours").resolving, null);
   assert.equal(startResolving(chosen, null).resolving, null);
+});
+
+test("changeSource: a file's side for the viewer, untracked files shown whole", () => {
+  assert.deepEqual(changeSource({ path: "a", letter: "M", untracked: false }, true), { kind: "index", path: "a", staged: true });
+  assert.deepEqual(changeSource({ path: "a", letter: "M", untracked: false }, false), { kind: "index", path: "a", staged: false });
+  assert.deepEqual(changeSource({ path: "n", letter: "U", untracked: true }, false), { kind: "untracked", path: "n" });
 });

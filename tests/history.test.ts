@@ -94,6 +94,15 @@ test("loadDiff of a commit file, a work-tree file and an untracked file", async 
   assert.equal(u.rows.length, 3);
 });
 
+test("loadDiff of a file's staged or unstaged side", async () => {
+  const calls: string[][] = [];
+  const git: Git = async (_t, args) => { calls.push(args); return ""; };
+  await loadDiff(git, T, { kind: "index", path: "f", staged: true });
+  await loadDiff(git, T, { kind: "index", path: "f", staged: false });
+  assert.deepEqual(calls[0], ["diff", "--no-ext-diff", "--no-textconv", "--no-color", "--cached", "--", "f"]);
+  assert.deepEqual(calls[1], ["diff", "--no-ext-diff", "--no-textconv", "--no-color", "--", "f"]);
+});
+
 test("loadDiff turns a failure into a note", async () => {
   const d = await loadDiff(fake({ "diff-tree": new GitError("fatal: boom", [], 128, "") }), T, { kind: "commit", hash: H1, parents: [], path: "f", oldPath: null });
   assert.deepEqual(d.rows, [{ kind: "note", old: null, new: null, text: "Can't show this diff: fatal: boom" }]);
@@ -119,4 +128,22 @@ test("withUncommitted puts a dashed row above HEAD when the tree has changes", (
   assert.equal(rows[0]?.subject, "Uncommitted changes (3)");
   assert.equal(rows.length, 2);
   assert.equal(withUncommitted([], null, 2)[0]?.parents.length, 0);
+});
+
+test("refreshHistory skips the log when refs, HEAD and the limit are unchanged", async () => {
+  const { refreshHistory } = await import("../src/core/history.ts");
+  const calls: string[][] = [];
+  const git = fake({ log: LOG, "for-each-ref": REFS, stash: STASH }, calls);
+  const first = await refreshHistory(git, T, 500, null, "head1");
+  assert.ok(first.history, "first read loads");
+  assert.equal(first.history?.commits.length, 2);
+  const logs = () => calls.filter((c) => c[0] === "log").length;
+  assert.equal(logs(), 1);
+  const same = await refreshHistory(git, T, 500, first.key, "head1");
+  assert.equal(same.history, null, "nothing changed");
+  assert.equal(same.key, first.key);
+  assert.equal(logs(), 1, "no second log");
+  assert.ok((await refreshHistory(git, T, 500, first.key, "head2")).history, "HEAD moved");
+  assert.ok((await refreshHistory(git, T, 1000, first.key, "head1")).history, "more commits asked for");
+  assert.equal(calls.filter((c) => c[0] === "for-each-ref").length, 4, "refs read once per refresh");
 });

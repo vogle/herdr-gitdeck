@@ -1,4 +1,4 @@
-# githerd
+# gitdeck
 
 A Herdr desktop-app mod (git client), written in TypeScript and bundled to one
 `main.js`. Read `docs/DEVELOPMENT.md` before changing code: it lists the Herdr

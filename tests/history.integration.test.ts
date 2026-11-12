@@ -9,9 +9,12 @@ import { join } from "node:path";
 import { createGit, type Exec } from "../src/core/git/runner.ts";
 import { loadHistory, loadCommit, loadDiff } from "../src/core/history.ts";
 
+// A commit hook runs with GIT_INDEX_FILE and friends set; the test repos must not inherit them.
+const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+
 const exec: Exec = (command, args, options) =>
   new Promise((resolve, reject) => {
-    execFile(command, args, { cwd: options.cwd, encoding: "utf8" }, (error, stdout, stderr) => {
+    execFile(command, args, { cwd: options.cwd, encoding: "utf8", env }, (error, stdout, stderr) => {
       if (error && typeof error.code !== "number") return reject(error);
       resolve({ code: error ? Number(error.code) : 0, stdout, stderr });
     });
@@ -24,7 +27,7 @@ let marker = "";
 let at = { cwd: "", on: null as string | null };
 
 before(async () => {
-  dir = await realpath(await mkdtemp(join(tmpdir(), "githerd-hist-")));
+  dir = await realpath(await mkdtemp(join(tmpdir(), "gitdeck-hist-")));
   marker = join(dir, "..", `${dir.split("/").pop()}-ran`);
   at = { cwd: dir, on: null };
   const trap = join(dir, ".trap.sh");
@@ -78,7 +81,7 @@ test("the history, a commit, its diff and a work-tree diff run none of the repo'
   assert.equal(await exists(marker), false, "a repo-configured program ran");
 });
 
-test("the trap is real: git without githerd's flags runs gpg.program from stash list", async () => {
+test("the trap is real: git without gitdeck's flags runs gpg.program from stash list", async () => {
   // Straight to git, past createGit: proves the repo's config would run its program.
   await exec("git", ["stash", "list"], { cwd: dir });
   assert.equal(await exists(marker), true);

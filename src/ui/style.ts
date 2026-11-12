@@ -3,6 +3,7 @@
 import { div, svg, type Color, type Context, type Element } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { settings, theme } from "herdr";
+import type { AgentStatus } from "../core/repoAgents.ts";
 
 export interface Palette {
   surface: Color;
@@ -66,10 +67,17 @@ export function palette(): Palette {
 }
 
 export const ICONS = {
-  refresh: "mods/githerd/icons/refresh.svg",
-  chevron: "mods/githerd/icons/chevron-down.svg",
-  branch: "mods/githerd/icons/branch.svg",
-  herd: "mods/githerd/icons/herd.svg",
+  refresh: "mods/gitdeck/icons/refresh.svg",
+  chevron: "mods/gitdeck/icons/chevron-down.svg",
+  branch: "mods/gitdeck/icons/branch.svg",
+  herd: "mods/gitdeck/icons/herd.svg",
+  stage: "mods/gitdeck/icons/plus.svg",
+  unstage: "mods/gitdeck/icons/minus.svg",
+  discard: "mods/gitdeck/icons/undo.svg",
+  delete: "mods/gitdeck/icons/trash.svg",
+  ignore: "mods/gitdeck/icons/eye-off.svg",
+  unignore: "mods/gitdeck/icons/eye.svg",
+  lines: "mods/gitdeck/icons/scissors.svg",
 } as const;
 
 export function icon(path: string, color: Color, size = 14): Element {
@@ -88,7 +96,24 @@ export function monoFont(): string {
   return typeof f === "string" && f !== "" ? f : "Menlo";
 }
 
-/** A small clickable text button. */
+/** A small icon button for a row action, named by its tooltip. Its click stays with it, like textButton's. */
+export function iconButton(id: string, path: string, tip: string, p: Palette, onClick: (cx: Context) => void): Element {
+  return div()
+    .id(id)
+    .p(4)
+    .rounded(4)
+    .flex_shrink_0()
+    .cursor_pointer()
+    .tooltip(tip)
+    .hover((el) => el.bg(p.hover))
+    .on_click((_e, cx) => {
+      cx.stop_propagation();
+      onClick(cx);
+    })
+    .child(icon(path, p.muted, 14));
+}
+
+/** A small clickable text button. Its click stays with it: a button in a clickable row doesn't also click the row. */
 export function textButton(id: string, label: string, p: Palette, onClick: (cx: Context) => void, active = false): Element {
   return div()
     .id(id)
@@ -101,6 +126,14 @@ export function textButton(id: string, label: string, p: Palette, onClick: (cx: 
     .text_color(active ? p.foreground : p.muted)
     .when(active, (el) => el.bg(p.selected))
     .hover((el) => el.bg(p.hover).text_color(p.foreground))
-    .on_click((_e, cx) => onClick(cx))
+    .on_click((_e, cx) => {
+      cx.stop_propagation();
+      onClick(cx);
+    })
     .child(label);
+}
+
+/** An agent's state as a dot color: working, needs you, done, idle. */
+export function agentColor(status: AgentStatus, p: Palette): Palette["added"] {
+  return status === "working" ? p.changed : status === "blocked" ? p.removed : status === "done" ? p.added : p.dim;
 }

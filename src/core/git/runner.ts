@@ -1,4 +1,4 @@
-// The one place githerd runs git. Everything else asks through a `Git`,
+// The one place gitdeck runs git. Everything else asks through a `Git`,
 // so the logic can be tested with a fake and the engine swapped later.
 
 export interface ExecResult {
@@ -8,7 +8,7 @@ export interface ExecResult {
 }
 
 /** Herdr's `exec` (or a fake): runs a program in a folder, on a machine (null: this one). */
-export type Exec = (command: string, args: string[], options: { cwd?: string; on?: string | null }) => Promise<ExecResult>;
+export type Exec = (command: string, args: string[], options: { cwd?: string; on?: string | null; timeout?: number }) => Promise<ExecResult>;
 
 /** Where a git command runs. */
 export interface Target {
@@ -23,12 +23,15 @@ export type Git = (target: Target, args: string[]) => Promise<string>;
  * Applied to every call:
  * - no optional locks, so reading never blocks an agent's git in the same repo;
  * - plain output: no colors, paths unquoted (UTF-8 names stay readable);
- * - no fsmonitor: githerd reads every repo `find` turns up, and a repo's own
+ * - no fsmonitor: gitdeck reads every repo `find` turns up, and a repo's own
  *   `.git/config` could name a program as its fsmonitor and have it run;
  * - literal paths: a file named `:(glob)*` means that file, not a pattern
  *   (discarding it must never reach other files);
  * - no signature checks: a repo's `log.showSignature` would make every
- *   log-like command (log, show, stash list) run its `gpg.program`.
+ *   log-like command (log, show, stash list) run its `gpg.program`;
+ * - no index refresh from a diff: `--no-optional-locks` covers status but not
+ *   `git diff`, which otherwise rewrites .git/index under index.lock and makes an
+ *   agent's `git add`/`git commit` in the same repo fail with "index.lock exists".
  */
 export const GIT_FLAGS: readonly string[] = [
   "--no-optional-locks",
@@ -41,6 +44,8 @@ export const GIT_FLAGS: readonly string[] = [
   "core.fsmonitor=false",
   "-c",
   "log.showSignature=false",
+  "-c",
+  "diff.autoRefreshIndex=false",
 ];
 
 export class GitError extends Error {

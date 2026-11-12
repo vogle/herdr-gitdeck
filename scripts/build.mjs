@@ -1,9 +1,9 @@
-// Builds the mod folder dist/githerd/: one bundled main.js plus mod.json and assets.
+// Builds the mod folder dist/gitdeck/: one bundled main.js plus mod.json and assets.
 // One file means one reload when installed (each reload keeps old code alive in herdr-app 0.1.x).
 import { build } from "esbuild";
 import { cp, mkdir, rm } from "node:fs/promises";
 
-const out = "dist/githerd";
+const out = "dist/gitdeck";
 
 await rm(out, { recursive: true, force: true });
 await mkdir(out, { recursive: true });

@@ -50,7 +50,7 @@ export const sequenceArgs = (op: Operation, step: "continue" | "abort" | "skip")
 
 /**
  * Stash matches files with pathspec patterns of its own (it is broken by
- * --literal-pathspecs); it takes no paths from githerd, so patterns are back on.
+ * --literal-pathspecs); it takes no paths from gitdeck, so patterns are back on.
  */
 const STASH = ["--no-literal-pathspecs", "stash"];
 
@@ -88,11 +88,19 @@ async function present(git: Git, target: Target, ref: string): Promise<boolean> 
 
 /** The operation stopped half way (conflicts, or a rebase stopped to edit), or null. */
 export async function readOperation(git: Git, target: Target, read: (path: string) => Promise<string | null>): Promise<Operation | null> {
-  const found = await Promise.all(MARKERS.map(([ref]) => present(git, target, ref)));
-  const index = found.indexOf(true);
-  if (index >= 0) return MARKERS[index]?.[1] ?? null;
+  // `read` sees this machine's files only: elsewhere each marker costs a git call.
+  if (target.on !== null) {
+    const found = await Promise.all(MARKERS.map(([ref]) => present(git, target, ref)));
+    const index = found.indexOf(true);
+    if (index >= 0) return MARKERS[index]?.[1] ?? null;
+  }
   try {
     const gitDir = (await git(target, ["rev-parse", "--absolute-git-dir"])).trim();
+    if (target.on === null) {
+      const found = await Promise.all(MARKERS.map(([ref]) => read(`${gitDir}/${ref}`)));
+      const index = found.findIndex((text) => text !== null);
+      if (index >= 0) return MARKERS[index]?.[1] ?? null;
+    }
     const merge = await read(`${gitDir}/rebase-merge/head-name`);
     const apply = merge === null ? await read(`${gitDir}/rebase-apply/head-name`) : merge;
     return apply === null ? null : "rebase";

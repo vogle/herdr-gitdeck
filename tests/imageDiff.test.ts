@@ -6,7 +6,7 @@ const A = "a".repeat(40);
 const P = "p".repeat(40).replace(/p/g, "b");
 const OLD = "1".repeat(40);
 const NEW = "2".repeat(40);
-const cache = { abs: "/app/mods/githerd/.cache/img", rel: "mods/githerd/.cache/img" };
+const cache = { abs: "/app/mods/gitdeck/.cache/img", rel: "mods/gitdeck/.cache/img" };
 const local = { cwd: "/r", on: null };
 
 test("imageExt knows the raster formats Herdr draws, and nothing else", () => {

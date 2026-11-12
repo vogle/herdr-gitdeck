@@ -3,7 +3,8 @@
 
 import type { Pick } from "./stage.ts";
 import { lineRef } from "./stage.ts";
-import type { StageDiff } from "./staging.ts";
+import type { ChangeFile, StageDiff } from "./staging.ts";
+import type { DiffSource } from "./history.ts";
 import { choose, type Choice, type Segment } from "./conflict.ts";
 
 export interface OpenSide {
@@ -93,3 +94,7 @@ export const startResolving = (v: ChangesView, r: Resolving | null): ChangesView
 export function chooseBlock(v: ChangesView, index: number, choice: Choice): ChangesView {
   return v.resolving ? { ...v, resolving: { ...v.resolving, segments: choose(v.resolving.segments, index, choice) } } : v;
 }
+
+/** What the viewer tab shows for a clicked file: one side of it, or a new file whole. */
+export const changeSource = (file: ChangeFile, staged: boolean): DiffSource =>
+  file.untracked && !staged ? { kind: "untracked", path: file.path } : { kind: "index", path: file.path, staged };
