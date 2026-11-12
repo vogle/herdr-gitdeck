@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/vogle/herdr-gitdeck/compare/v0.2.0...v0.2.1) (2026-11-12)
+
+
+### Bug Fixes
+
+* keep the update offer reachable after its notification closes ([407ab7d](https://github.com/vogle/herdr-gitdeck/commit/407ab7df871f30fd50d83ade829ef48e437976a8))
+* keep the update offer reachable after its notification closes ([8198e03](https://github.com/vogle/herdr-gitdeck/commit/8198e035a31d8004ff5d5a542dc5fdf985929de6))
+
 ## [0.2.0](https://github.com/vogle/herdr-gitdeck/compare/v0.1.0...v0.2.0) (2026-11-12)
 
 
