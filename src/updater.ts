@@ -9,6 +9,10 @@ import { isNewer, readRelease, RELEASES_API, shouldCheck, type Release } from ".
 declare const __GITDECK_VERSION__: string;
 export const VERSION: string = __GITDECK_VERSION__;
 
+/** How long the update notification stays up (ms). */
+const NOTICE_MS = 10 * 60 * 1000;
+/** Shown on every update notification, so it reads as GitDeck's. */
+const ICON = "mods/gitdeck/icons/logo.svg";
 const MODS = () => `${home()}/.config/herdr-app/mods`;
 /** Hidden (the app doesn't watch it) and outside gitdeck/, so an update keeps it. Shared by every copy. */
 const STATE = () => `${MODS()}/.gitdeck-update.json`;
@@ -53,39 +57,50 @@ async function lastChecked(): Promise<number | null> {
   }
 }
 
+/** The latest release when it is newer than this copy; null when not, or when GitHub can't be reached. */
+async function newerRelease(): Promise<Release | null> {
+  try {
+    const res = await fetch(RELEASES_API, { headers: { Accept: "application/vnd.github+json", "User-Agent": "gitdeck" } });
+    const release = res.ok ? readRelease(await res.json()) : null;
+    return release && isNewer(release.version, VERSION) ? release : null;
+  } catch {
+    return null; // Offline or GitHub unreachable.
+  }
+}
+
 /** Asks GitHub when a day has passed, and posts the notification for a newer release. */
 export async function checkForUpdate(now = Date.now()): Promise<void> {
   if (!shouldCheck(now, await lastChecked())) return;
   // Claim the check first so other copies of the mod don't ask (and notify) too.
   await writeFile(STATE(), JSON.stringify({ checkedAt: now })).catch(() => {});
-  let release: Release | null = null;
-  try {
-    const res = await fetch(RELEASES_API, { headers: { Accept: "application/vnd.github+json", "User-Agent": "gitdeck" } });
-    release = res.ok ? readRelease(await res.json()) : null;
-  } catch {
-    return; // Offline or GitHub unreachable: try again tomorrow.
-  }
-  if (!release || !isNewer(release.version, VERSION)) return;
+  const release = await newerRelease();
+  if (!release) return;
   pending = release;
   notify({
-    title: `gitdeck ${release.version} is out`,
-    body: `You have ${VERSION}. Click to update.`,
+    title: `GitDeck ${release.version} is out`,
+    body: `You have ${VERSION}. Click to update, or run: herdr-app do gitdeck.update`,
     level: "info",
+    icon: ICON,
+    timeout: NOTICE_MS,
     action: { name: "gitdeck.update" },
   });
 }
 
-/** Installs the release the last check found (the notification's click). */
+/** Installs the newest release: the notification's click, or `herdr-app do gitdeck.update` at any time. */
 export async function installUpdate(): Promise<void> {
-  const release = pending;
-  if (!release) return;
+  // A missed notification, a restart or another copy's check leaves nothing pending: ask now.
+  const release = pending ?? (await newerRelease());
+  if (!release) {
+    notify({ title: `GitDeck ${VERSION} is up to date`, level: "success", icon: ICON });
+    return;
+  }
   try {
     const r = await exec("sh", ["-c", INSTALL, "gitdeck-update", release.asset]);
     if (r.code !== 0) throw new Error(r.stderr.trim() || `exit ${r.code}`);
     pending = null;
-    notify({ title: `gitdeck updated to ${release.version}`, level: "success" });
+    notify({ title: `GitDeck updated to ${release.version}`, level: "success", icon: ICON });
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    notify({ title: "gitdeck update failed", body: `${reason}. Your version is unchanged.`, level: "error" });
+    notify({ title: "GitDeck update failed", body: `${reason}. Your version is unchanged.`, level: "error", icon: ICON });
   }
 }
