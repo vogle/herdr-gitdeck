@@ -6,7 +6,7 @@ import { parseDiff, type DiffRow } from "./git/diff.ts";
 import type { Git, Target } from "./git/runner.ts";
 import type { StatusEntry } from "./git/status.ts";
 import {
-  applyArgs, buildPatch, cleanArgs, commitArgs, discardArgs, lastMessageArgs,
+  applyArgs, buildPatch, cleanArgs, cleanFolderArgs, commitArgs, discardArgs, lastMessageArgs,
   stageArgs, stagedDiffArgs, unstageArgs, unstagedDiffArgs, type Pick,
 } from "./stage.ts";
 
@@ -65,6 +65,11 @@ export async function discardFiles(git: Git, target: Target, files: ReadonlyArra
     (tracked.length > 0 ? await run(git, target, discardArgs(tracked)) : null) ??
     (untracked.length > 0 ? await run(git, target, cleanArgs(untracked)) : null)
   );
+}
+
+/** A wholly new folder goes in one clean (its empty folders too); any other folder discards its listed files. */
+export function discardFolder(git: Git, target: Target, folder: string, isNew: boolean, files: ReadonlyArray<{ path: string; untracked: boolean }>): Promise<string | null> {
+  return isNew ? run(git, target, cleanFolderArgs(folder)) : discardFiles(git, target, files);
 }
 
 export function commitChanges(git: Git, target: Target, text: string, amend: boolean): Promise<string | null> {

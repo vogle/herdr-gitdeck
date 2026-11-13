@@ -1,7 +1,7 @@
 // Reading the herd from disk: which repos, and each one's status.
 
 import { GitError, type Exec, type Git, type Target } from "./git/runner.ts";
-import { parseStatus, STATUS_ARGS } from "./git/status.ts";
+import { NEW_FOLDERS_ARGS, parseNewFolders, parseStatus, STATUS_ARGS } from "./git/status.ts";
 import { FILTER_CHECK_ARGS, repoFilterCommands } from "./git/trust.ts";
 import type { ScanResult, StatusResult } from "./herd.ts";
 import { isInside } from "./paths.ts";
@@ -55,7 +55,9 @@ export async function loadStatus(git: Git, target: Target): Promise<StatusResult
   try {
     const untrusted = await repoFilters(git, target);
     if (untrusted.length > 0) return { status: null, error: null, untrusted };
-    return { status: parseStatus(await git(target, [...STATUS_ARGS])), error: null };
+    const status = parseStatus(await git(target, [...STATUS_ARGS]));
+    if (!status.entries.some((e) => e.kind === "untracked")) return { status, error: null };
+    return { status: { ...status, newFolders: parseNewFolders(await git(target, [...NEW_FOLDERS_ARGS])) }, error: null };
   } catch (error) {
     return { status: null, error: message(error) };
   }

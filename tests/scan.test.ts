@@ -88,6 +88,21 @@ test("loadStatus parses status, or reports the error", async () => {
   assert.deepEqual(await loadStatus(throwsPlain, { cwd: "/r", on: null }), { status: null, error: "weird" });
 });
 
+test("loadStatus lists the wholly new folders, only when something is untracked", async () => {
+  const asked: string[][] = [];
+  const git: Git = async (_target, args) => {
+    asked.push([...args]);
+    if (args[0] === "status") return "# branch.head dev\0? .claude/a.md\0";
+    if (args[0] === "ls-files") return ".claude/\0notes.txt\0";
+    throw new GitError("", args, 1, "");
+  };
+  const r = await loadStatus(git, { cwd: "/r", on: null });
+  assert.deepEqual(r.status?.newFolders, [".claude/"]);
+  assert.ok(asked.some((args) => args[0] === "ls-files"));
+  const clean = await loadStatus(gitFor({}, "# branch.head dev\0"), { cwd: "/r", on: null });
+  assert.deepEqual(clean.status?.newFolders ?? [], []);
+});
+
 const recording = (config: () => Promise<string>) => {
   const calls: string[] = [];
   const git: Git = async (_target, args) => {

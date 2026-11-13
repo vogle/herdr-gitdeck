@@ -15,6 +15,9 @@ export const discardArgs = (paths: readonly string[]): string[] => ["restore", "
 /** Deletes untracked files. Cannot be undone. */
 export const cleanArgs = (paths: readonly string[]): string[] => ["clean", "-f", "-q", "--", ...paths];
 
+/** A wholly untracked folder and everything in it (ignored files stay: no -x). */
+export const cleanFolderArgs = (folder: string): string[] => ["clean", "-f", "-d", "-q", "--", folder];
+
 export const commitArgs = (message: string, amend: boolean): string[] => ["commit", "-q", ...(amend ? ["--amend"] : []), "-m", message];
 
 export const lastMessageArgs = (): string[] => ["log", "-1", "--no-show-signature", "--format=%B"];

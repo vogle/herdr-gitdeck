@@ -2,7 +2,7 @@
 // for the shown repo's status (and so its history) to be read again.
 
 import type { AsyncContext, Context } from "gpui-kit";
-import { TextareaState } from "gpui-base";
+import { InputState, TextareaState } from "gpui-base";
 import { exec, readTextFile, writeTextFile } from "herdr";
 import {
   askConfirm, changeSource, chooseBlock, closeSide, startResolving, emptyChanges, forRepoChanges, hunkPick, openSide, picks, setAmend, setBusy, togglePick,
@@ -13,13 +13,14 @@ import type { RepoStatus } from "./core/git/status.ts";
 import type { Pick } from "./core/stage.ts";
 import { remember } from "./core/stage.ts";
 import {
-  applyPicks, commitChanges, takeSide, discardFiles, loadStageDiff, readLastMessage, splitChanges, stageFiles, unstageFiles,
+  applyPicks, commitChanges, takeSide, discardFiles, discardFolder, loadStageDiff, readLastMessage, splitChanges, stageFiles, unstageFiles,
   type ChangeFile, type Changes, type Files,
 } from "./core/staging.ts";
 import { allChosen, parseConflicts, resolveFile } from "./core/conflict.ts";
 import { pickWriter, suggestWithAi } from "./core/aiMessage.ts";
 import { draftMessage, followDraft } from "./core/draft.ts";
 import { excludeLocally, readExcluded, unexcludeLocally } from "./core/exclude.ts";
+import { loadCounts, NO_COUNTS, type ChangeCounts } from "./core/lineCounts.ts";
 import { agentNote, type RepoAgent } from "./core/repoAgents.ts";
 import type { ViewerRequest } from "./core/panel.ts";
 import { undoLastCommit } from "./core/undo.ts";
@@ -65,6 +66,16 @@ export class ChangesPanel {
   composing = false;
   /** The file row under the pointer, which shows all of its buttons. */
   hovered: string | null = null;
+  /** Folders the person turned from their default in the shown repo (see fileGroups.ts). */
+  flipped: ReadonlySet<string> = new Set();
+  /** The file filter's text box. */
+  filter!: InputState;
+  /** Files listed flat, each wholly new folder one row; or all as a folder tree. */
+  list = true;
+  /** Sections folded away. */
+  closed: ReadonlySet<string> = new Set();
+  /** Lines each changed file adds and removes. */
+  counts: ChangeCounts = NO_COUNTS;
 
   private readonly host: ChangesHost;
 
@@ -75,12 +86,16 @@ export class ChangesPanel {
   /** Needs a live host call: from init only. */
   init(): void {
     this.message = TextareaState.new({ placeholder: "Commit message", rows: 3 });
+    this.filter = InputState.new({ placeholder: "Filter files…" });
+    this.filter.on("change", (_e, cx) => cx.notify());
   }
 
   forRepo(repo: string | null): void {
     if (repo !== this.view.repo) {
       this.undoable = false;
       this.ignored = [];
+      this.flipped = new Set();
+      this.counts = NO_COUNTS;
     }
     this.view = forRepoChanges(this.view, repo);
   }
@@ -89,6 +104,14 @@ export class ChangesPanel {
     const target = this.host.target();
     if (!target) return;
     this.ignored = await readExcluded(this.host.git, files, target);
+    cx.notify();
+  }
+
+  /** Reads how many lines each changed file adds and removes; a hint, so a failure shows none. */
+  async readCounts(cx: AsyncContext): Promise<void> {
+    const target = this.host.target();
+    if (!target) return;
+    this.counts = await loadCounts(this.host.git, target);
     cx.notify();
   }
 
@@ -153,6 +176,12 @@ export class ChangesPanel {
       fresh: new Set(),
       composing: this.composing,
       hovered: this.hovered,
+      flipped: this.flipped,
+      newFolders: this.host.status()?.newFolders ?? [],
+      filter: this.filter,
+      list: this.list,
+      closed: this.closed,
+      counts: this.counts,
     };
   }
 
@@ -275,6 +304,37 @@ export class ChangesPanel {
         cx.notify();
       },
       review: (cx) => this.host.showReview(cx),
+      toggleFolder: (key, cx) => {
+        const next = new Set(this.flipped);
+        if (!next.delete(key)) next.add(key);
+        this.flipped = next;
+        cx.notify();
+      },
+      setFlipped: (next, cx) => {
+        this.flipped = next;
+        cx.notify();
+      },
+      setView: (list, cx) => {
+        this.list = list;
+        cx.notify();
+      },
+      toggleSection: (id, cx) => {
+        const next = new Set(this.closed);
+        if (!next.delete(id)) next.add(id);
+        this.closed = next;
+        cx.notify();
+      },
+      discardFolder: (folder, isNew, folderFiles, cx) => {
+        // Like a file's discard, but for everything in the folder: the first click asks.
+        const key = `discard-folder:${folder}`;
+        if (this.view.confirm !== key) {
+          this.view = askConfirm(this.view, key);
+          cx.notify();
+          return;
+        }
+        this.act(cx, (git, target) => discardFolder(git, target, folder, isNew, folderFiles));
+      },
+      ignoreFolder: (folder, cx) => this.editIgnored(cx, (git, target) => excludeLocally(git, files, target, folder)),
       commit: (cx) => {
         // While an agent is still working, the first click asks: its changes may be half-made.
         if (agentNote(this.host.agents())?.kind === "working" && this.view.confirm !== "commit") {

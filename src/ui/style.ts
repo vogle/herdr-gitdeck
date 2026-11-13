@@ -78,6 +78,8 @@ export const ICONS = {
   ignore: "mods/gitdeck/icons/eye-off.svg",
   unignore: "mods/gitdeck/icons/eye.svg",
   lines: "mods/gitdeck/icons/scissors.svg",
+  pr: "mods/gitdeck/icons/pull-request.svg",
+  external: "mods/gitdeck/icons/external.svg",
 } as const;
 
 export function icon(path: string, color: Color, size = 14): Element {

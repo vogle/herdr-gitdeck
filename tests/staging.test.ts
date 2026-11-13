@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { takeSide, splitChanges, stageFiles, unstageFiles, discardFiles, commitChanges, readLastMessage, loadStageDiff, applyPicks } from "../src/core/staging.ts";
+import { takeSide, splitChanges, stageFiles, unstageFiles, discardFiles, discardFolder, commitChanges, readLastMessage, loadStageDiff, applyPicks } from "../src/core/staging.ts";
 import { GitError, type Git, type Target } from "../src/core/git/runner.ts";
 import type { StatusEntry } from "../src/core/git/status.ts";
 
@@ -47,6 +47,17 @@ test("discardFiles restores tracked files and deletes untracked ones", async () 
   const r = recorder();
   assert.equal(await discardFiles(r.git, at, [{ path: "a", untracked: false }, { path: "n", untracked: true }]), null);
   assert.deepEqual(r.calls, [["restore", "--worktree", "--", "a"], ["clean", "-f", "-q", "--", "n"]]);
+});
+
+test("discardFolder removes a wholly new folder with one clean, and discards a folder's files otherwise", async () => {
+  const r = recorder();
+  assert.equal(await discardFolder(r.git, at, ".claude/", true, [{ path: ".claude/a.md", untracked: true }]), null);
+  assert.equal(await discardFolder(r.git, at, "src/", false, [{ path: "src/a.ts", untracked: false }, { path: "src/n.ts", untracked: true }]), null);
+  assert.deepEqual(r.calls, [
+    ["clean", "-f", "-d", "-q", "--", ".claude/"],
+    ["restore", "--worktree", "--", "src/a.ts"],
+    ["clean", "-f", "-q", "--", "src/n.ts"],
+  ]);
 });
 
 test("readLastMessage trims, and is empty with no commit", async () => {
