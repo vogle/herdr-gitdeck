@@ -25,7 +25,7 @@ export interface DetailActions {
 
 function statusColor(letter: string, p: Palette) {
   if (letter === "D" || letter === "!") return p.removed;
-  if (letter === "A" || letter === "U") return p.added;
+  if (letter === "A" || letter === "?") return p.added;
   if (letter === "R" || letter === "C") return p.info;
   return p.changed;
 }
@@ -98,7 +98,7 @@ function commitBody(view: HistoryView, p: Palette, actions: DetailActions): Elem
 }
 
 function entryLetter(e: StatusEntry): string {
-  if (e.kind === "untracked") return "U";
+  if (e.kind === "untracked") return "?";
   if (e.kind === "conflict") return "!";
   if (e.kind === "renamed") return "R";
   return e.index !== "." ? e.index : e.worktree;

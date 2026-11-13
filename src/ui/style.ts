@@ -113,8 +113,12 @@ export function iconButton(id: string, path: string, tip: string, p: Palette, on
     .child(icon(path, p.muted, 14));
 }
 
-/** A small clickable text button. Its click stays with it: a button in a clickable row doesn't also click the row. */
-export function textButton(id: string, label: string, p: Palette, onClick: (cx: Context) => void, active = false): Element {
+/**
+ * A small clickable text button. Its click stays with it: a button in a clickable row doesn't also click the row.
+ * A disabled one is dimmed and ignores clicks: there is nothing for it to do yet.
+ */
+export function textButton(id: string, label: string, p: Palette, onClick: (cx: Context) => void, active = false, enabled = true): Element {
+  if (!enabled) return div().id(id).px(8).py(2).rounded(4).flex_shrink_0().text_xs().text_color(p.dim).child(label);
   return div()
     .id(id)
     .px(8)

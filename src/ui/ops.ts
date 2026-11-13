@@ -1,5 +1,6 @@
-// Branch and sync controls: a sync bar (fetch, pull, push, stash), the
-// operation under way with continue/abort, and the selected commit's actions.
+// Branch controls: the notices every tab shows (the operation under way with
+// continue/abort, the last result); and the selected commit's actions. Pull and
+// push live in the header (header.ts), where every tab can reach them.
 
 import type { FlowKind } from "../core/flow.ts";
 import { planProblem, type RebasePlan } from "../core/rebase.ts";
@@ -88,28 +89,10 @@ function operationBanner(op: Operation, p: Palette, a: OpsActions): Element {
     .child(textButton("op-abort", "Abort", p, (cx) => a.sequence("abort", cx)));
 }
 
-/** The sync bar, plus the operation banner and the last result. */
-export function syncBar(parts: OpsParts, p: Palette, a: OpsActions): Element[] {
+/** What every tab shows at its foot: work under way, an operation to finish, a held action, the last result. */
+export function opsNotices(parts: OpsParts, p: Palette, a: OpsActions): Element[] {
   const { view } = parts;
-  const bar = h_flex()
-    .h(28)
-    .px(8)
-    .gap(4)
-    .items_center()
-    .flex_shrink_0()
-    .border_b_1()
-    .border_color(p.border)
-    .child(textButton("op-fetch", "Fetch", p, a.fetch))
-    .child(textButton("op-pull", parts.behind > 0 ? `Pull ↓${parts.behind}` : "Pull", p, a.pull))
-    .child(textButton("op-push", parts.ahead > 0 ? `Push ↑${parts.ahead}` : "Push", p, a.push))
-    .when(view.expanded, (el) =>
-      el
-        .child(textButton("op-stash", "Stash", p, a.stash))
-        .children(parts.flow.map((k) => textButton(`flow-${k}`, `+ ${k}`, p, (cx) => a.startFlow(k, cx)))),
-    )
-    .child(textButton("op-more", view.expanded ? "Less" : "⋯", p, a.toggleMore))
-    .child(div().flex_1())
-    .when(view.busy !== null, (el) => el.child(div().text_xs().text_color(p.dim).child(`${view.busy}…`)));
+  const busy = view.busy === null ? null : div().px(10).py(3).flex_shrink_0().text_xs().text_color(p.dim).bg(p.raised).child(`${view.busy}…`);
   const message = view.error ?? view.notice;
   const result =
     message === null
@@ -137,7 +120,7 @@ export function syncBar(parts: OpsParts, p: Palette, a: OpsActions): Element[] {
           .child(textButton("op-run-held", "Run anyway", p, a.runHeld, true))
           .child(textButton("op-hold-cancel", "Cancel", p, a.dismiss));
   const flowNaming = view.naming && view.naming.kind !== "branch" && view.naming.kind !== "tag" ? namingRow(parts, p, a) : null;
-  return [bar, ...(flowNaming ? [flowNaming] : []), ...(view.operation ? [operationBanner(view.operation, p, a)] : []), ...(held ? [held] : []), ...(result ? [result] : [])];
+  return [...(busy ? [busy] : []), ...(flowNaming ? [flowNaming] : []), ...(view.operation ? [operationBanner(view.operation, p, a)] : []), ...(held ? [held] : []), ...(result ? [result] : [])];
 }
 
 function namingRow(parts: OpsParts, p: Palette, a: OpsActions): Element {

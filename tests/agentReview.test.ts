@@ -131,7 +131,7 @@ test("repoAgents skips a pane with no folder at all, like the viewer tab's mod p
 test("agentNote says the most urgent state, and nothing for idle agents", () => {
   assert.equal(agentNote([]), null);
   assert.equal(agentNote([{ name: "Claude Code", status: "idle" }]), null);
-  assert.deepEqual(agentNote([{ name: "Claude Code", status: "done" }]), { kind: "done", text: "Claude Code finished: review its changes before committing" });
+  assert.deepEqual(agentNote([{ name: "Claude Code", status: "done" }]), { kind: "done", text: "Claude Code finished: review what it changed" });
   assert.deepEqual(agentNote([{ name: "Claude Code", status: "blocked" }]), { kind: "blocked", text: "Claude Code is waiting for you" });
   assert.deepEqual(
     agentNote([{ name: "Claude Code", status: "done" }, { name: "Codex", status: "working" }]),

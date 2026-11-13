@@ -83,5 +83,5 @@ test("resolving a conflict: open, choose a block, close", async () => {
 test("changeSource: a file's side for the viewer, untracked files shown whole", () => {
   assert.deepEqual(changeSource({ path: "a", letter: "M", untracked: false }, true), { kind: "index", path: "a", staged: true });
   assert.deepEqual(changeSource({ path: "a", letter: "M", untracked: false }, false), { kind: "index", path: "a", staged: false });
-  assert.deepEqual(changeSource({ path: "n", letter: "U", untracked: true }, false), { kind: "untracked", path: "n" });
+  assert.deepEqual(changeSource({ path: "n", letter: "?", untracked: true }, false), { kind: "untracked", path: "n" });
 });

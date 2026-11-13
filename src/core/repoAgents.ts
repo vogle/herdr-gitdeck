@@ -45,7 +45,7 @@ function say(kind: AgentNote["kind"], who: readonly Named[]): AgentNote {
     return { kind, text: `${name} ${one ? "is" : "are"} working here: ${one ? "its" : "their"} changes may not be finished` };
   }
   if (kind === "blocked") return { kind, text: `${name} ${one ? "is" : "are"} waiting for you` };
-  return { kind, text: `${name} finished: review ${one ? "its" : "their"} changes before committing` };
+  return { kind, text: `${name} finished: review what ${one ? "it" : "they"} changed` };
 }
 
 /**

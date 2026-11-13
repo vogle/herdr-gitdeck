@@ -33,7 +33,7 @@ export function splitChanges(entries: readonly StatusEntry[]): Changes {
   for (const e of entries) {
     if (e.kind === "ignored") continue;
     if (e.kind === "conflict") conflicts.push({ path: e.path, letter: `${e.index}${e.worktree}`, untracked: false });
-    else if (e.kind === "untracked") unstaged.push({ path: e.path, letter: "U", untracked: true });
+    else if (e.kind === "untracked") unstaged.push({ path: e.path, letter: "?", untracked: true });
     else {
       if (e.index !== ".") staged.push({ path: e.path, letter: e.index, untracked: false });
       if (e.worktree !== ".") unstaged.push({ path: e.path, letter: e.worktree, untracked: false });

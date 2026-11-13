@@ -44,6 +44,8 @@ export interface ChangesHost {
   installedAgents: () => Promise<readonly string[]>;
   /** Shows a request in the viewer tab in the main area. */
   openViewer: (request: ViewerRequest) => void;
+  /** Switches the panel to the Review tab. */
+  showReview: (cx: Context) => void;
 }
 
 export class ChangesPanel {
@@ -59,6 +61,10 @@ export class ChangesPanel {
   ignored: string[] = [];
   /** Claude Code is writing a message. */
   suggesting = false;
+  /** The commit box is open: agents commit, so it stays folded until the person asks for it. */
+  composing = false;
+  /** The file row under the pointer, which shows all of its buttons. */
+  hovered: string | null = null;
 
   private readonly host: ChangesHost;
 
@@ -145,6 +151,8 @@ export class ChangesPanel {
       ignored: this.ignored,
       suggesting: this.suggesting,
       fresh: new Set(),
+      composing: this.composing,
+      hovered: this.hovered,
     };
   }
 
@@ -256,6 +264,17 @@ export class ChangesPanel {
         cx.notify();
       },
       suggest: (cx) => this.suggest(cx),
+      toggleCompose: (cx) => {
+        this.composing = !this.composing;
+        cx.notify();
+      },
+      hover: (row, on, cx) => {
+        const next = on ? row : this.hovered === row ? null : this.hovered;
+        if (next === this.hovered) return;
+        this.hovered = next;
+        cx.notify();
+      },
+      review: (cx) => this.host.showReview(cx),
       commit: (cx) => {
         // While an agent is still working, the first click asks: its changes may be half-made.
         if (agentNote(this.host.agents())?.kind === "working" && this.view.confirm !== "commit") {

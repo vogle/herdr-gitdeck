@@ -29,7 +29,8 @@ import { MAX_REPOS } from "./core/repos/discover.ts";
 import { agentChips, herdAgents, repoAgents } from "./core/repoAgents.ts";
 import { freshPaths, markSeen, newCommits, touch, type Seen } from "./core/seen.ts";
 import { baseBranch, loadCompare, loadReview, type Compare, type Review } from "./core/review.ts";
-import { header } from "./ui/header.ts";
+import { header, type HeaderSync } from "./ui/header.ts";
+import { syncChips } from "./core/syncChips.ts";
 import { historyPane, type HistoryActions } from "./ui/historyPane.ts";
 import { repoList } from "./ui/repoList.ts";
 import { palette } from "./ui/style.ts";
@@ -110,6 +111,7 @@ export default class GitDeck extends View {
       }
     },
     openViewer,
+    showReview: (cx) => this.selectTab("review", cx),
   });
   readonly opsPanel = new OpsPanel({
     git: this.git,
@@ -593,6 +595,24 @@ export default class GitDeck extends View {
     cx.notify();
   }
 
+  /** The header's refresh: scans again and, for a shown repo it can trust, fetches its remotes too. */
+  refreshAndFetch(cx: Context): void {
+    this.refresh(cx);
+    if (this.trustedStatus() && !this.herd.picking) this.opsPanel.actions().fetch(cx);
+  }
+
+  /** Pull and push in the header, for the shown repo when its status is trusted. */
+  headerSync(): HeaderSync | null {
+    const status = this.herd.picking ? null : this.trustedStatus();
+    if (status === null) return null;
+    const ops = this.opsPanel.actions();
+    return {
+      chips: syncChips(status),
+      busy: this.opsPanel.view.busy !== null,
+      run: (kind, cx) => (kind === "pull" ? ops.pull(cx) : ops.push(cx)),
+    };
+  }
+
   /** What changed since the person last looked at the repo (pure: a few set lookups). */
   news(path: string | null, status: RepoStatus | null): { paths: Set<string>; commits: number | null } | null {
     const mark = path ? this.seen.get(path) : undefined;
@@ -671,10 +691,11 @@ export default class GitDeck extends View {
           this.herd,
           this.busy,
           p,
-          { togglePicker: (cx) => this.togglePicker(cx), refresh: (cx) => this.refresh(cx) },
+          { togglePicker: (cx) => this.togglePicker(cx), refresh: (cx) => this.refreshAndFetch(cx) },
           {
             agents: agentChips(repoAgents(this.herd.selected, agents(), panes())),
             compare: this.compare?.repo === this.herd.selected ? this.compare.data : null,
+            sync: this.headerSync(),
           },
         ),
       )

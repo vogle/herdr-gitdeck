@@ -11,6 +11,7 @@ export const VIEWER_KEY = "gitdeck.viewer";
 export const WIDE_PX = 640;
 
 export type PanelTab = "changes" | "review" | "history" | "branches" | "more";
+/** The tab bar's order, for agent work: what the agent changed, then the branch review; the panel opens on the first. */
 export const PANEL_TABS: readonly PanelTab[] = ["changes", "review", "history", "branches", "more"];
 
 export const isWide = (width: number): boolean => width >= WIDE_PX;

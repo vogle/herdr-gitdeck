@@ -28,7 +28,7 @@ test("splitChanges puts each file in staged, unstaged, or both; conflicts on the
     e("ignored", "!", "!", "i"),
   ]);
   assert.deepEqual(s.staged.map((f) => [f.path, f.letter]), [["a", "M"], ["c", "M"]]);
-  assert.deepEqual(s.unstaged.map((f) => [f.path, f.letter, f.untracked]), [["b", "M", false], ["c", "M", false], ["n", "U", true]]);
+  assert.deepEqual(s.unstaged.map((f) => [f.path, f.letter, f.untracked]), [["b", "M", false], ["c", "M", false], ["n", "?", true]]);
   assert.deepEqual(s.conflicts.map((f) => f.path), ["x"]);
 });
 
