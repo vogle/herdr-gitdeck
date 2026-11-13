@@ -631,6 +631,8 @@ export default class GitDeck extends View {
   refreshAndFetch(cx: Context): void {
     this.refresh(cx);
     if (this.trustedStatus() && !this.herd.picking) this.opsPanel.actions().fetch(cx);
+    // A PR the agent opened since the branch was read shows up on refresh.
+    cx.spawn((cx) => this.readPr(cx, true));
   }
 
   /** Pull and push in the header, for the shown repo when its status is trusted. */
