@@ -64,12 +64,25 @@ export function noteFor(rows: readonly DiffRow[], range: RowRange, path: string,
   return { where, quote, text: text.trim() };
 }
 
+// Control characters but tab (newlines are what join the message's lines).
+// eslint-disable-next-line no-control-regex
+const CONTROL = /[\x00-\x08\x0a-\x1f\x7f-\x9f]/g;
+const hex = (c: string): string => `\\x${c.charCodeAt(0).toString(16).padStart(2, "0")}`;
+
+/**
+ * Text going into a terminal, with control characters written out (`\r`, `\x1b`):
+ * a quoted line from a file must not press Enter or start an escape sequence there.
+ */
+function plain(text: string): string {
+  return text.replace(CONTROL, (c) => (c === "\r" ? "\\r" : c === "\n" ? "\\n" : hex(c)));
+}
+
 /** The notes as one message for the agent's terminal. */
 export function feedbackMessage(context: FeedbackContext, notes: readonly FeedbackNote[]): string {
-  const on = context.branch ? ` on ${context.branch}` : "";
-  const at = context.head ? ` (at ${context.head.slice(0, 7)})` : "";
+  const on = context.branch ? ` on ${plain(context.branch)}` : "";
+  const at = context.head ? ` (at ${plain(context.head.slice(0, 7))})` : "";
   const count = notes.length > 1 ? `, ${notes.length} notes` : "";
-  const blocks = notes.map((n, i) => [`${i + 1}. ${n.where}`, ...n.quote.map((q) => `   > ${q}`), `   ${n.text}`].join("\n"));
+  const blocks = notes.map((n, i) => [`${i + 1}. ${plain(n.where)}`, ...n.quote.map((q) => `   > ${plain(q)}`), `   ${plain(n.text)}`].join("\n"));
   return [`Review feedback${on}${at}${count}:`, "", blocks.join("\n\n")].join("\n");
 }
 

@@ -59,6 +59,14 @@ test("feedbackMessage reads as one message for the agent", () => {
   assert.ok(two.endsWith("2. b.ts\n   add a test"));
 });
 
+test("feedbackMessage shows control characters as text, so nothing types keys into the terminal", () => {
+  const text = feedbackMessage({ branch: "b\x1b[2J", head: null }, [{ where: "a\r.ts:1", quote: ["+ x\r\x1b]0;hi\x07\ty"], text: "fix\rthis\x7f" }]);
+  assert.equal(
+    text,
+    ["Review feedback on b\\x1b[2J:", "", "1. a\\r.ts:1", "   > + x\\r\\x1b]0;hi\\x07\ty", "   fix\\rthis\\x7f"].join("\n"),
+  );
+});
+
 test("feedbackTargets lists the repo's agents: free ones first, then the most recent", () => {
   const seq = (a: ReturnType<typeof agent>, n: number) => ({ ...a, seq: n });
   const list = feedbackTargets("/r", [seq(agent("t1", "p1", "working"), 9), seq(agent("t2", "p2", "idle"), 1), seq(agent("t4", "p1", "done"), 5), agent("t3", "p3", "idle")], panes);
