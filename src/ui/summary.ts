@@ -10,17 +10,17 @@ import type { Palette } from "./style.ts";
 const MAX_FILES = 300;
 
 function letter(e: StatusEntry): string {
-  if (e.kind === "untracked") return "U";
+  if (e.kind === "untracked") return "?";
   if (e.kind === "conflict") return "!";
   if (e.kind === "renamed") return "R";
   const side = e.index !== "." ? e.index : e.worktree;
-  return side === "?" ? "U" : side;
+  return side;
 }
 
 function letterColor(e: StatusEntry, p: Palette) {
   const l = letter(e);
   if (l === "!" || l === "D") return p.removed;
-  if (l === "A" || l === "U") return p.added;
+  if (l === "A" || l === "?") return p.added;
   if (l === "R") return p.info;
   return p.changed;
 }

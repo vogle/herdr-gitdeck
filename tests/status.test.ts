@@ -1,11 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseStatus, summarize, STATUS_ARGS } from "../src/core/git/status.ts";
+import { parseStatus, summarize, STATUS_ARGS, NEW_FOLDERS_ARGS, parseNewFolders } from "../src/core/git/status.ts";
 
 const z = (...records: string[]) => records.join("\0") + "\0";
 
 test("STATUS_ARGS asks for porcelain v2 with branch, stash and NUL separators", () => {
   for (const flag of ["--porcelain=v2", "--branch", "--show-stash", "-z"]) assert.ok(STATUS_ARGS.includes(flag), flag);
+});
+
+test("STATUS_ARGS lists each untracked file, not just its new folder", () => {
+  assert.ok(STATUS_ARGS.includes("--untracked-files=all"));
 });
 
 test("STATUS_ARGS never recurses into submodules (their own config could run programs)", () => {
@@ -86,4 +90,13 @@ test("summarize of a clean repo", () => {
     conflicts: 0,
     clean: true,
   });
+});
+
+test("NEW_FOLDERS_ARGS asks for untracked folders as one entry each", () => {
+  for (const flag of ["ls-files", "--others", "--exclude-standard", "--directory", "-z"]) assert.ok(NEW_FOLDERS_ARGS.includes(flag), flag);
+});
+
+test("parseNewFolders keeps the folders, not the loose files", () => {
+  assert.deepEqual(parseNewFolders(".claude/\0b.txt\0c/d/\0"), [".claude/", "c/d/"]);
+  assert.deepEqual(parseNewFolders(""), []);
 });

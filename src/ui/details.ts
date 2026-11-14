@@ -2,7 +2,7 @@
 // and one file's diff.
 
 import { div, image, type Context, type Element } from "gpui-kit";
-import { h_flex, v_flex, v_virtual_list, Scrollbar } from "gpui-base";
+import { h_flex, v_flex, v_virtual_list, Scrollbar, type VirtualListScrollHandle } from "gpui-base";
 import type { Diff, DiffRow } from "../core/git/diff.ts";
 import type { ImagePair } from "../core/imageDiff.ts";
 import type { CommitFile } from "../core/git/show.ts";
@@ -23,9 +23,9 @@ export interface DetailActions {
   browseTree: (cx: Context) => void;
 }
 
-function statusColor(letter: string, p: Palette) {
+export function statusColor(letter: string, p: Palette) {
   if (letter === "D" || letter === "!") return p.removed;
-  if (letter === "A" || letter === "U") return p.added;
+  if (letter === "A" || letter === "?") return p.added;
   if (letter === "R" || letter === "C") return p.info;
   return p.changed;
 }
@@ -98,7 +98,7 @@ function commitBody(view: HistoryView, p: Palette, actions: DetailActions): Elem
 }
 
 function entryLetter(e: StatusEntry): string {
-  if (e.kind === "untracked") return "U";
+  if (e.kind === "untracked") return "?";
   if (e.kind === "conflict") return "!";
   if (e.kind === "renamed") return "R";
   return e.index !== "." ? e.index : e.worktree;
@@ -111,9 +111,16 @@ function worktreeBody(status: RepoStatus | null, p: Palette, actions: DetailActi
   );
 }
 
-function diffRow(r: DiffRow, p: Palette): Element {
+function diffRow(r: DiffRow, p: Palette, hit = false, picked = false): Element {
   const num = (n: number | null) => div().w(36).flex_shrink_0().text_right().text_color(p.dim).child(n === null ? "" : String(n));
-  const base = h_flex().h(DIFF_ROW).gap(6).pr(8).items_center().whitespace_nowrap();
+  const base = h_flex()
+    .h(DIFF_ROW)
+    .gap(6)
+    .pr(8)
+    .items_center()
+    .whitespace_nowrap()
+    .when(hit || picked, (el) => el.border_l_2().border_color(picked ? p.changed : p.accent));
+  if (hit) return withHit(base, r, p);
   if (r.kind === "hunk") return base.bg(p.raised).text_color(p.info).child(div().pl(8).truncate().child(r.text));
   if (r.kind === "note") return base.text_color(p.dim).child(div().pl(8).child(r.text));
   const mark = r.kind === "add" ? "+" : r.kind === "del" ? "−" : " ";
@@ -125,6 +132,25 @@ function diffRow(r: DiffRow, p: Palette): Element {
     .child(num(r.new))
     .child(div().w(10).flex_shrink_0().text_color(color).child(mark))
     .child(div().flex_1().min_w_0().truncate().text_color(color).child(r.text === "" ? " " : r.text));
+}
+
+/** The row the find box is on: the selection color over everything, so it stands out. */
+function withHit(base: Element, r: DiffRow, p: Palette): Element {
+  const num = (n: number | null) => div().w(36).flex_shrink_0().text_right().text_color(p.dim).child(n === null ? "" : String(n));
+  const mark = r.kind === "add" ? "+" : r.kind === "del" ? "−" : " ";
+  const lined = r.kind !== "hunk" && r.kind !== "note";
+  return lined
+    ? base.bg(p.selected).child(num(r.old)).child(num(r.new)).child(div().w(10).flex_shrink_0().child(mark)).child(div().flex_1().min_w_0().truncate().child(r.text === "" ? " " : r.text))
+    : base.bg(p.selected).child(div().pl(8).truncate().child(r.text));
+}
+
+/** Where find in the diff stands: the scroll it moves, and the row it is on; and the rows picked for a note. */
+export interface DiffFind {
+  scroll: VirtualListScrollHandle;
+  hit: number | null;
+  picked?: { from: number; to: number } | null;
+  /** A row clicked: picks lines for a note to the agent. */
+  pick?: (row: number, cx: Context) => void;
 }
 
 function side(label: string, path: string | null, p: Palette): Element {
@@ -144,7 +170,7 @@ function imagePair(pair: ImagePair, p: Palette): Element {
 }
 
 /** A diff's rows (and a changed image's two sides), filling the space it is given. */
-export function diffBody(diff: Diff | null, p: Palette): Element {
+export function diffBody(diff: Diff | null, p: Palette, find?: DiffFind): Element {
   const rows = diff ? [...diff.rows, ...(diff.truncated ? [{ kind: "note", old: null, new: null, text: "Diff cut short: too many lines" } as DiffRow] : [])] : [];
   return v_flex()
     .flex_1()
@@ -158,7 +184,18 @@ export function diffBody(diff: Diff | null, p: Palette): Element {
             .min_h_0()
             .font_family(monoFont())
             .text_xs()
-            .child(v_virtual_list(DIFF_LIST, rows.length, DIFF_ROW, (i) => String(i), (range) => rows.slice(range.start, range.end).map((r) => diffRow(r, p))).size_full())
+            .child(
+              v_virtual_list(DIFF_LIST, rows.length, DIFF_ROW, (i) => String(i), (range) =>
+                rows.slice(range.start, range.end).map((r, k) => {
+                  const i = range.start + k;
+                  const picked = find?.picked != null && i >= find.picked.from && i <= find.picked.to;
+                  return diffRow(r, p, find?.hit === i, picked);
+                }),
+              )
+                .when(find !== undefined, (el) => (find ? el.track_scroll(find.scroll) : el))
+                .when(find?.pick !== undefined, (el) => el.cursor_pointer().on_item_click((key, cx) => find?.pick?.(Number(key), cx)))
+                .size_full(),
+            )
             .child(Scrollbar.vertical(DIFF_LIST).absolute().inset_0())
         : div().p(12).text_color(p.dim).child("Reading diff…"),
     );

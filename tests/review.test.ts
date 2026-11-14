@@ -54,6 +54,7 @@ test("loadReview diffs HEAD against where it split from the base", async () => {
     if (args[0] === "merge-base") return `${M}\n`;
     if (args.includes("--name-status")) return "M\0src/a.ts\0A\0b.md\0";
     if (args.includes("--numstat")) return "3\t1\tsrc/a.ts\0" + "10\t0\tb.md\0";
+    if (args.includes("--raw")) return `:100644 100644 ${M} ${H} M\0src/a.ts\0`;
     return "";
   };
   const r = await loadReview(git, T, "main", H);
@@ -62,6 +63,8 @@ test("loadReview diffs HEAD against where it split from the base", async () => {
   assert.equal(r.mergeBase, M);
   assert.deepEqual(r.files.map((f) => [f.status, f.path, f.added, f.deleted]), [["M", "src/a.ts", 3, 1], ["A", "b.md", 10, 0]]);
   assert.ok(calls.some((c) => c[0] === "diff-tree" && c.at(-2) === M && c.at(-1) === H), "files between the split and HEAD");
+  assert.equal(r.blobs.get("src/a.ts"), H, "each file's blob, to tell when it changed after being viewed");
+  assert.ok(calls.some((c) => c.includes("--raw") && c.includes("--no-abbrev")));
 });
 
 test("loadReview reports git's error instead of a file list", async () => {
@@ -71,5 +74,6 @@ test("loadReview reports git's error instead of a file list", async () => {
   };
   const r = await loadReview(bad, T, "main", "h".repeat(40));
   assert.deepEqual(r.files, []);
+  assert.equal(r.blobs.size, 0);
   assert.match(r.error ?? "", /no merge base/);
 });

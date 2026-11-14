@@ -1,4 +1,4 @@
-// The shown repo as a side panel: a row of tabs (changes, history, branches,
+// The shown repo as a side panel: a row of tabs (changes, review, history, branches,
 // more), one list per tab that drills down to a commit, and the sync bar at the
 // bottom. Diffs, blame and statistics open in the viewer tab instead; from
 // WIDE_PX up the history tab shows the list and the commit side by side.
@@ -6,14 +6,15 @@
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex, Input, type InputState, type VirtualListScrollHandle } from "gpui-base";
 import type { RepoStatus } from "../core/git/status.ts";
+import { changesTabLabel } from "../core/headerText.ts";
 import { UNCOMMITTED, type HistoryView } from "../core/historyView.ts";
 import type { InspectView } from "../core/inspect.ts";
-import type { PanelTab } from "../core/panel.ts";
+import { PANEL_TABS, type PanelTab } from "../core/panel.ts";
 import { changesPane, type ChangesActions, type ChangesParts } from "./changes.ts";
 import { details, type DetailActions } from "./details.ts";
 import { graphList, type GraphActions } from "./graph.ts";
 import { inspectPane } from "./inspect.ts";
-import { commitBar, syncBar, type OpsActions, type OpsParts } from "./ops.ts";
+import { commitBar, opsNotices, type OpsActions, type OpsParts } from "./ops.ts";
 import { reviewPane, type ReviewActions, type ReviewParts } from "./review.ts";
 import { sidebar } from "./sidebar.ts";
 import { textButton, type Palette } from "./style.ts";
@@ -55,8 +56,7 @@ export interface HistoryParts {
 const TAB_LABELS: Record<PanelTab, string> = { changes: "Changes", review: "Review", history: "History", branches: "Branches", more: "More" };
 
 function tabRow(parts: HistoryParts, p: Palette, actions: HistoryActions): Element {
-  const changed = parts.status?.entries.filter((e) => e.kind !== "ignored").length ?? 0;
-  const label = (tab: PanelTab) => (tab === "changes" && changed > 0 ? `${TAB_LABELS[tab]} ${changed}` : TAB_LABELS[tab]);
+  const label = (tab: PanelTab) => (tab === "changes" ? changesTabLabel(parts.status) : TAB_LABELS[tab]);
   return h_flex()
     .h(32)
     .px(6)
@@ -65,7 +65,7 @@ function tabRow(parts: HistoryParts, p: Palette, actions: HistoryActions): Eleme
     .flex_shrink_0()
     .border_b_1()
     .border_color(p.border)
-    .children((Object.keys(TAB_LABELS) as PanelTab[]).map((tab) =>
+    .children(PANEL_TABS.map((tab) =>
       textButton(`tab-${tab}`, label(tab), p, (cx) => actions.selectTab(tab, cx), parts.tab === tab),
     ));
 }
@@ -128,7 +128,7 @@ function historyTab(parts: HistoryParts, p: Palette, actions: HistoryActions): E
   return h_flex().flex_1().min_h_0().items_start().child(list.h_full().border_r_1().border_color(p.border)).child(detail.h_full());
 }
 
-function moreTab(p: Palette, actions: HistoryActions): Element {
+function moreTab(p: Palette, actions: HistoryActions, ops: HistoryParts["ops"]): Element {
   const row = (id: string, label: string, hint: string, onClick: (cx: Context) => void) =>
     v_flex()
       .id(id)
@@ -147,7 +147,12 @@ function moreTab(p: Palette, actions: HistoryActions): Element {
     .min_h_0()
     .child(row("more-reflog", "Reflog", "Where HEAD has been", actions.reflog))
     .child(row("more-prs", "Pull / merge requests", "GitHub via gh, GitLab via glab (read-only)", actions.prs))
-    .child(row("more-stats", "Statistics", "Authors and commits per month, in a tab", actions.stats));
+    .child(row("more-stats", "Statistics", "Authors and commits per month, in a tab", actions.stats))
+    .when(ops !== null, (el) =>
+      el
+        .child(row("more-stash", "Stash changes", "Put the uncommitted changes aside; Branches lists them", (cx) => ops?.actions.stash(cx)))
+        .children((ops?.parts.flow ?? []).map((k) => row(`more-flow-${k}`, `Start a ${k} branch`, "git-flow: name it, then switch to it", (cx) => ops?.actions.startFlow(k, cx)))),
+    );
 }
 
 function tabBody(parts: HistoryParts, p: Palette, actions: HistoryActions): Element {
@@ -165,7 +170,7 @@ function tabBody(parts: HistoryParts, p: Palette, actions: HistoryActions): Elem
   }
   if (parts.tab === "review") return reviewPane(parts.review.parts, p, parts.review.actions);
   if (parts.tab === "branches") return h_flex().flex_1().min_h_0().child(sidebar(parts.view.history, p, actions.jump, true));
-  if (parts.tab === "more") return moreTab(p, actions);
+  if (parts.tab === "more") return moreTab(p, actions, parts.ops);
   return historyTab(parts, p, actions);
 }
 
@@ -201,6 +206,6 @@ export function historyPane(parts: HistoryParts, p: Palette, actions: HistoryAct
     .children([newsLine(parts, p, actions)].filter((e): e is Element => e !== null))
     .child(v_flex().flex_1().min_h_0().child(tabBody(parts, p, actions)))
     .when(parts.ops !== null, (el) =>
-      el.child(v_flex().flex_shrink_0().border_t_1().border_color(p.border).children(parts.ops ? syncBar(parts.ops.parts, p, parts.ops.actions) : [])),
+      el.child(v_flex().flex_shrink_0().children(parts.ops ? opsNotices(parts.ops.parts, p, parts.ops.actions) : [])),
     );
 }

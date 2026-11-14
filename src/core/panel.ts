@@ -11,6 +11,7 @@ export const VIEWER_KEY = "gitdeck.viewer";
 export const WIDE_PX = 640;
 
 export type PanelTab = "changes" | "review" | "history" | "branches" | "more";
+/** The tab bar's order, for agent work: what the agent changed, then the branch review; the panel opens on the first. */
 export const PANEL_TABS: readonly PanelTab[] = ["changes", "review", "history", "branches", "more"];
 
 export const isWide = (width: number): boolean => width >= WIDE_PX;
@@ -33,7 +34,9 @@ interface Where {
 export type ViewerRequest =
   | (Where & { view: "diff"; source: DiffSource })
   | (Where & { view: "blame" | "file-log"; rev: string; path: string })
-  | (Where & { view: "stats" });
+  | (Where & { view: "stats" })
+  /** One side of an uncommitted file, to stage (or, staged, unstage) by hunk or line. */
+  | (Where & { view: "stage"; path: string; staged: boolean });
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -55,6 +58,7 @@ export function parseViewer(v: unknown): ViewerRequest | null {
   if (v.on !== null && !isText(v.on)) return null;
   const where: Where = { repo: v.repo, on: v.on };
   if (v.view === "stats") return { ...where, view: "stats" };
+  if (v.view === "stage") return isText(v.path) && typeof v.staged === "boolean" ? { ...where, view: "stage", path: v.path, staged: v.staged } : null;
   if (v.view === "blame" || v.view === "file-log") {
     return isText(v.rev) && isText(v.path) ? { ...where, view: v.view, rev: v.rev, path: v.path } : null;
   }
@@ -64,7 +68,8 @@ export function parseViewer(v: unknown): ViewerRequest | null {
 }
 
 /** An uncommitted diff: the work tree or the index can change it while it is shown. */
-export const liveDiff = (r: ViewerRequest | null): boolean => r !== null && r.view === "diff" && r.source.kind !== "commit";
+export const liveDiff = (r: ViewerRequest | null): boolean =>
+  r !== null && (r.view === "stage" || (r.view === "diff" && r.source.kind !== "commit"));
 
 /** Equal requests give equal keys (fields in a fixed order). */
 export function viewerKey(r: ViewerRequest | null): string {
@@ -79,6 +84,7 @@ export function viewerTitle(r: ViewerRequest): string {
   if (r.view === "diff") return base(r.source.path);
   if (r.view === "blame") return `Blame ${base(r.path)}`;
   if (r.view === "file-log") return `History ${base(r.path)}`;
+  if (r.view === "stage") return `${r.staged ? "Unstage" : "Stage"} ${base(r.path)}`;
   return `Stats ${base(r.repo)}`;
 }
 

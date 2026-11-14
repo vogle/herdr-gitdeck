@@ -3,6 +3,7 @@
 import { div, svg, type Color, type Context, type Element } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { settings, theme } from "herdr";
+import type { FileKind } from "../core/fileKind.ts";
 import type { AgentStatus } from "../core/repoAgents.ts";
 
 export interface Palette {
@@ -78,7 +79,23 @@ export const ICONS = {
   ignore: "mods/gitdeck/icons/eye-off.svg",
   unignore: "mods/gitdeck/icons/eye.svg",
   lines: "mods/gitdeck/icons/scissors.svg",
+  pr: "mods/gitdeck/icons/pull-request.svg",
+  external: "mods/gitdeck/icons/external.svg",
+  folder: "mods/gitdeck/icons/folder.svg",
+  folderOpen: "mods/gitdeck/icons/folder-open.svg",
 } as const;
+
+/** A changed file's icon by its kind (Lucide, see icons/LICENSE-lucide.txt); its color says its status. */
+export const FILE_ICONS: Readonly<Record<FileKind, string>> = {
+  code: "mods/gitdeck/icons/file-code.svg",
+  text: "mods/gitdeck/icons/file-text.svg",
+  json: "mods/gitdeck/icons/file-braces.svg",
+  config: "mods/gitdeck/icons/file-sliders.svg",
+  lock: "mods/gitdeck/icons/file-lock.svg",
+  image: "mods/gitdeck/icons/file-image.svg",
+  terminal: "mods/gitdeck/icons/file-terminal.svg",
+  file: "mods/gitdeck/icons/file.svg",
+};
 
 export function icon(path: string, color: Color, size = 14): Element {
   return svg(path).w(size).h(size).flex_shrink_0().text_color(color);
@@ -113,8 +130,12 @@ export function iconButton(id: string, path: string, tip: string, p: Palette, on
     .child(icon(path, p.muted, 14));
 }
 
-/** A small clickable text button. Its click stays with it: a button in a clickable row doesn't also click the row. */
-export function textButton(id: string, label: string, p: Palette, onClick: (cx: Context) => void, active = false): Element {
+/**
+ * A small clickable text button. Its click stays with it: a button in a clickable row doesn't also click the row.
+ * A disabled one is dimmed and ignores clicks: there is nothing for it to do yet.
+ */
+export function textButton(id: string, label: string, p: Palette, onClick: (cx: Context) => void, active = false, enabled = true): Element {
+  if (!enabled) return div().id(id).px(8).py(2).rounded(4).flex_shrink_0().text_xs().text_color(p.dim).child(label);
   return div()
     .id(id)
     .px(8)
@@ -136,4 +157,15 @@ export function textButton(id: string, label: string, p: Palette, onClick: (cx: 
 /** An agent's state as a dot color: working, needs you, done, idle. */
 export function agentColor(status: AgentStatus, p: Palette): Palette["added"] {
   return status === "working" ? p.changed : status === "blocked" ? p.removed : status === "done" ? p.added : p.dim;
+}
+
+/**
+ * How loud an agent's state reads in the header: needing you is a filled badge, working
+ * and done a pale one in their color, idle stays plain (null) so the others stand out.
+ */
+export function agentBadge(status: AgentStatus, p: Palette): { bg: Color; fg: Color; dot: Color } | null {
+  if (status === "blocked") return { bg: p.removed, fg: p.surface, dot: p.surface };
+  if (status === "idle") return null;
+  const color = agentColor(status, p);
+  return { bg: tint(color.slice(0, 7) as Color), fg: color, dot: color };
 }

@@ -2,13 +2,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { draftMessage, followDraft } from "../src/core/draft.ts";
 
-const f = (path: string, letter: string) => ({ path, letter, untracked: letter === "U" });
+const f = (path: string, letter: string) => ({ path, letter, untracked: letter === "?" });
 
 test("draftMessage names the staged files with a verb that fits them", () => {
   assert.equal(draftMessage([]), "");
   assert.equal(draftMessage([f("src/ui/header.ts", "M")]), "Update header.ts");
   assert.equal(draftMessage([f("src/ui/header.ts", "M"), f("src/main.ts", "M")]), "Update header.ts and main.ts");
-  assert.equal(draftMessage([f("a/new.ts", "A"), f("b.ts", "U")]), "Add new.ts and b.ts");
+  assert.equal(draftMessage([f("a/new.ts", "A"), f("b.ts", "?")]), "Add new.ts and b.ts");
   assert.equal(draftMessage([f("old.ts", "D")]), "Remove old.ts");
   assert.equal(draftMessage([f("x.ts", "R")]), "Rename x.ts");
   assert.equal(draftMessage([f("x.ts", "A"), f("y.ts", "D")]), "Update x.ts and y.ts");
