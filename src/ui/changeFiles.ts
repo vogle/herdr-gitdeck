@@ -1,16 +1,18 @@
 // The changed files, for watching what an agent is changing: a filter and a
 // List/Tree switch on top, then foldable Staged / Changes / Ignored sections.
 // A row's buttons cover its right edge only while the pointer is on it, so the
-// list itself stays plain: a status mark, the name, and the lines it adds and removes.
+// list itself stays plain: an icon for the file's kind in its status color, the
+// name, the lines it adds and removes, and the status letter again at the end.
 
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex, Input } from "gpui-base";
 import { excludeLabel } from "../core/exclude.ts";
-import { allOpen, folderTree, foldKey, isOpen, matching, setAll, type FolderNode } from "../core/fileGroups.ts";
+import { fileKind, patternKind } from "../core/fileKind.ts";
+import { allOpen, folderTree, foldKey, isOpen, listEntries, matching, setAll, type FolderNode } from "../core/fileGroups.ts";
 import type { LineCounts } from "../core/git/show.ts";
 import { nameAndFolder } from "../core/paths.ts";
 import type { ChangeFile } from "../core/staging.ts";
-import { ICONS, iconButton, textButton, type Palette } from "./style.ts";
+import { FILE_ICONS, ICONS, icon, iconButton, textButton, type Palette } from "./style.ts";
 import type { ChangesActions, ChangesParts } from "./changes.ts";
 
 const MAX_FILES = 500;
@@ -25,8 +27,12 @@ function letterColor(letter: string, p: Palette) {
   return p.changed;
 }
 
-/** The row's buttons, over its right edge: shown on the row under the pointer, or while one asks to confirm. */
-/** The hover color is see-through, so the panel's own color goes under it: the row's counts don't show through. */
+/**
+ * The row's buttons, a box over its right edge (its counts and status letter): shown on the
+ * row under the pointer, or while one asks to confirm. The box is a step lighter than the
+ * row's hover color so it reads as a box; the panel's own color goes under it, as theme
+ * colors can be see-through, so nothing below shows through.
+ */
 function overlay(buttons: Element[], p: Palette): Element {
   return div()
     .absolute()
@@ -34,11 +40,14 @@ function overlay(buttons: Element[], p: Palette): Element {
     .top_0()
     .h_full()
     .bg(p.surface)
-    .child(h_flex().h_full().pl(10).pr(6).gap(2).items_center().bg(p.hover).children(buttons));
+    .child(h_flex().h_full().px(6).gap(2).items_center().bg(p.selected).children(buttons));
 }
 
-/** A plain row: indented, highlighted under the pointer, its buttons on top while it is. */
-function row(id: string, depth: number, show: boolean, buttons: Element[], p: Palette, parts: ChangesParts, a: ChangesActions): Element {
+/**
+ * A plain row: indented, highlighted under the pointer, its buttons on top while it is.
+ * The buttons come after the row's content: a later child is drawn over an earlier one.
+ */
+function row(id: string, depth: number, show: boolean, buttons: Element[], content: Element[], p: Palette, parts: ChangesParts, a: ChangesActions): Element {
   const shown = (show || parts.hovered === id) && buttons.length > 0;
   return h_flex()
     .id(id)
@@ -51,22 +60,23 @@ function row(id: string, depth: number, show: boolean, buttons: Element[], p: Pa
     .items_center()
     .cursor_pointer()
     .hover((el) => el.bg(p.hover))
+    .children(content)
     .when(shown, (el) => el.child(overlay(buttons, p)));
 }
 
-function statusMark(letter: string, p: Palette): Element {
+/** The file's kind as its icon, drawn in its status color. */
+function kindIcon(f: ChangeFile, p: Palette): Element {
+  return icon(FILE_ICONS[fileKind(f.path)], letterColor(f.letter, p), 16);
+}
+
+/** The status again as a letter at the row's end, so it reads without telling colors apart. */
+function statusLetter(letter: string, p: Palette): Element {
   return div()
-    .w(16)
-    .h(16)
+    .min_w(12)
     .flex_shrink_0()
-    .rounded(3)
-    .flex()
-    .items_center()
-    .justify_center()
-    .bg(letterColor(letter, p))
-    .text_color(p.surface)
     .text_xs()
     .font_semibold()
+    .text_color(letterColor(letter, p))
     .child(letter === "?" ? "U" : letter);
 }
 
@@ -82,20 +92,26 @@ function lineCounts(c: LineCounts | undefined, p: Palette): Element {
 function fileRow(id: string, f: ChangeFile, depth: number, staged: boolean, buttons: Element[], show: boolean, p: Palette, parts: ChangesParts, a: ChangesActions): Element {
   const { name, folder } = nameAndFolder(f.path);
   const counts = (staged ? parts.counts.staged : parts.counts.unstaged)[f.path];
-  return row(id, depth, show, buttons, p, parts, a)
-    .on_click((_e, cx) => a.open(f, staged, cx))
-    .child(statusMark(f.letter, p))
-    .child(
-      h_flex()
-        .flex_1()
-        .min_w_0()
-        .gap(6)
-        .items_center()
-        .when(parts.fresh.has(f.path), (el) => el.child(div().flex_shrink_0().text_xs().text_color(p.accent).child("●")))
-        .child(div().flex_shrink(1).min_w_0().truncate().child(name))
-        .when(depth === 0 && folder !== "", (el) => el.child(div().flex_1().min_w_0().truncate().text_xs().text_color(p.dim).child(folder.replace(/\/$/, "")))),
-    )
-    .child(lineCounts(counts, p));
+  return row(id, depth, show, buttons, [
+    kindIcon(f, p),
+    h_flex()
+      .flex_1()
+      .min_w_0()
+      .gap(6)
+      .items_center()
+      .when(parts.fresh.has(f.path), (el) => el.child(div().flex_shrink_0().text_xs().text_color(p.accent).child("●")))
+      .child(
+        div()
+          .flex_shrink(1)
+          .min_w_0()
+          .truncate()
+          .when(f.letter === "D", (el) => el.line_through().text_color(p.muted))
+          .child(name),
+      )
+      .when(depth === 0 && folder !== "", (el) => el.child(div().flex_1().min_w_0().truncate().text_xs().text_color(p.dim).child(folder.replace(/\/$/, "")))),
+    lineCounts(counts, p),
+    statusLetter(f.letter, p),
+  ], p, parts, a).on_click((_e, cx) => a.open(f, staged, cx));
 }
 
 /** The buttons a section puts on a file or a folder, and whether they all show (asking to confirm). */
@@ -120,22 +136,21 @@ function folderRows(s: Section, g: FolderNode<ChangeFile>, label: string, depth:
   const open = s.allShown || isOpen(g.folder, parts.flipped, s.key, parts.newFolders);
   const { buttons, show } = s.kit.folder(g);
   const fresh = !open && g.all.some((f) => parts.fresh.has(f.path));
-  const head = row(`fd:${key}`, depth, show, buttons, p, parts, a)
-    .on_click((_e, cx) => a.toggleFolder(key, cx))
-    .child(div().w(16).flex_shrink_0().text_xs().text_color(p.dim).child(open ? "▾" : "▸"))
-    .child(
-      h_flex()
-        .flex_1()
-        .min_w_0()
-        .gap(6)
-        .items_center()
-        .when(fresh, (el) => el.child(div().flex_shrink_0().text_xs().text_color(p.accent).child("●")))
-        .child(div().flex_shrink(1).min_w_0().truncate().text_color(p.muted).child(label))
-        .when(parts.newFolders.includes(g.folder), (el) =>
-          el.child(div().flex_shrink_0().px(4).rounded(3).border_1().border_color(p.added).text_xs().text_color(p.added).child("new")),
-        ),
-    )
-    .child(div().flex_shrink_0().text_xs().text_color(p.dim).child(String(g.all.length)));
+  const head = row(`fd:${key}`, depth, show, buttons, [
+    // The folder's icon shows open or folded; a wholly new folder is in the new color.
+    icon(open ? ICONS.folderOpen : ICONS.folder, parts.newFolders.includes(g.folder) ? p.added : p.dim, 16),
+    h_flex()
+      .flex_1()
+      .min_w_0()
+      .gap(6)
+      .items_center()
+      .when(fresh, (el) => el.child(div().flex_shrink_0().text_xs().text_color(p.accent).child("●")))
+      .child(div().flex_shrink(1).min_w_0().truncate().text_color(p.muted).child(label))
+      .when(parts.newFolders.includes(g.folder), (el) =>
+        el.child(div().flex_shrink_0().px(4).rounded(3).border_1().border_color(p.added).text_xs().text_color(p.added).child("new")),
+      ),
+    div().flex_shrink_0().text_xs().text_color(p.dim).child(String(g.all.length)),
+  ], p, parts, a).on_click((_e, cx) => a.toggleFolder(key, cx));
   return open ? [head, ...treeBody(s, g, depth + 1, p, parts, a)] : [head];
 }
 
@@ -155,7 +170,9 @@ function fileRowIn(s: Section, f: ChangeFile, depth: number, p: Palette, parts: 
 
 function sectionBody(s: Section, p: Palette, parts: ChangesParts, a: ChangesActions): Element[] {
   if (!parts.list) return treeBody(s, folderTree(s.files, parts.newFolders), 0, p, parts, a);
-  return s.files.map((f) => fileRowIn(s, f, 0, p, parts, a));
+  return listEntries(s.files, parts.newFolders).flatMap((e) =>
+    "folder" in e ? folderRows(s, e.folder, e.folder.label, 0, p, parts, a) : [fileRowIn(s, e.file, 0, p, parts, a)],
+  );
 }
 
 /** A foldable section heading; its buttons show on hover, like a row's. */
@@ -259,8 +276,9 @@ function conflictRows(parts: ChangesParts, p: Palette, a: ChangesActions): Eleme
       .cursor_pointer()
       .hover((el) => el.bg(p.hover))
       .on_click((_e, cx: Context) => a.open(f, false, cx))
-      .child(statusMark(f.letter, p))
+      .child(kindIcon(f, p))
       .child(div().flex_1().min_w_0().truncate().child(f.path))
+      .child(statusLetter(f.letter, p))
       .children([
         ...(parts.local ? [textButton(`cr:${i}`, "Resolve…", p, (cx) => a.resolve(f, cx))] : []),
         textButton(`co:${i}`, "Take ours", p, (cx) => a.takeSide(f, "ours", cx)),
@@ -270,13 +288,19 @@ function conflictRows(parts: ChangesParts, p: Palette, a: ChangesActions): Eleme
   );
 }
 
+/** A folder or file icon in the dim color: ignored entries sit below the changed ones. */
+function ignoredIcon(line: string, p: Palette): Element {
+  const kind = patternKind(line);
+  return icon(kind === "folder" ? ICONS.folder : FILE_ICONS[kind], p.dim, 16);
+}
+
 function ignoredRows(parts: ChangesParts, p: Palette, a: ChangesActions): Element[] {
   return parts.ignored.map((line, i) =>
-    row(`ig-row:${i}`, 0, false, [iconButton(`ui:${i}`, ICONS.unignore, "Unignore", p, (cx) => a.unignore(line, cx))], p, parts, a)
-      .cursor_default()
-      .child(div().w(16).flex_shrink_0().text_color(p.dim).child("–"))
-      .child(div().flex_shrink(1).min_w_0().truncate().text_color(p.dim).child(excludeLabel(line)))
-      .child(div().flex_1().min_w_0().truncate().text_xs().text_color(p.dim).child(".git/info/exclude")),
+    row(`ig-row:${i}`, 0, false, [iconButton(`ui:${i}`, ICONS.unignore, "Unignore", p, (cx) => a.unignore(line, cx))], [
+      ignoredIcon(line, p),
+      div().flex_shrink(1).min_w_0().truncate().text_color(p.dim).child(excludeLabel(line)),
+      div().flex_1().min_w_0().truncate().text_xs().text_color(p.dim).child(".git/info/exclude"),
+    ], p, parts, a).cursor_default(),
   );
 }
 

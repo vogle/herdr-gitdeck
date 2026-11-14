@@ -60,6 +60,40 @@ export function folderTree<T extends { path: string }>(files: readonly T[], newF
   return finish(root, "", newFolders);
 }
 
+export type ListEntry<T> = { file: T } | { folder: FolderNode<T> };
+
+function find<T>(node: FolderNode<T>, folder: string): FolderNode<T> | undefined {
+  if (node.folder === folder) return node;
+  for (const c of node.folders) {
+    const hit = find(c, folder);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+/**
+ * The flat list: each file on its own row, but a wholly new folder stays one
+ * folder row (labelled with its whole path) where its first file would be.
+ */
+export function listEntries<T extends { path: string }>(files: readonly T[], newFolders: readonly string[]): ListEntry<T>[] {
+  const outermost = (path: string): string | undefined =>
+    newFolders.filter((n) => path.startsWith(n)).sort((x, y) => x.length - y.length)[0];
+  const groups = new Map<string, T[]>();
+  for (const f of files) {
+    const n = outermost(f.path);
+    if (n !== undefined) groups.set(n, [...(groups.get(n) ?? []), f]);
+  }
+  const placed = new Set<string>();
+  return files.flatMap((f): ListEntry<T>[] => {
+    const n = outermost(f.path);
+    if (n === undefined) return [{ file: f }];
+    if (placed.has(n)) return [];
+    placed.add(n);
+    const node = find(folderTree(groups.get(n) ?? [], newFolders), n);
+    return node ? [{ folder: { ...node, label: n } }] : [];
+  });
+}
+
 /** The key a folder's fold toggle is kept under: one section's folder, not the other's. */
 export function foldKey(section: string, folder: string): string {
   return `${section}:${folder}`;

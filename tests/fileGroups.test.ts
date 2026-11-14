@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { allOpen, folderKeys, folderTree, isOpen, matching, setAll, type FolderNode } from "../src/core/fileGroups.ts";
+import { allOpen, folderKeys, folderTree, isOpen, listEntries, matching, setAll, type FolderNode } from "../src/core/fileGroups.ts";
 
 const f = (path: string) => ({ path });
 
@@ -95,4 +95,24 @@ test("matching keeps files whose path holds the text, ignoring case; no text kee
   const files = [f("src/UI/Changes.ts"), f("README.md")];
   assert.deepEqual(matching(files, " changes ").map((x) => x.path), ["src/UI/Changes.ts"]);
   assert.deepEqual(matching(files, "").length, 2);
+});
+
+test("listEntries keeps the list flat, but a wholly new folder is one folder row in its first file's place", () => {
+  const files = [{ path: "src/a.ts" }, { path: "docs/new/x.md" }, { path: "README.md" }, { path: "docs/new/sub/y.md" }];
+  const entries = listEntries(files, ["docs/new/"]);
+  assert.deepEqual(
+    entries.map((e) => ("folder" in e ? `dir:${e.folder.label}:${e.folder.all.length}` : e.file.path)),
+    ["src/a.ts", "dir:docs/new/:2", "README.md"],
+  );
+  const dir = entries[1];
+  assert.ok(dir && "folder" in dir);
+  assert.equal(dir.folder.isNew, true);
+  assert.deepEqual(dir.folder.files.map((f) => f.path), ["docs/new/x.md"]);
+  assert.deepEqual(dir.folder.folders.map((f) => f.label), ["sub/"]);
+});
+
+test("listEntries puts a file in its outermost new folder; with none, every file stands alone", () => {
+  const files = [{ path: "a/b/c.ts" }];
+  assert.deepEqual(listEntries(files, ["a/", "a/b/"]).map((e) => ("folder" in e ? e.folder.folder : e.file.path)), ["a/"]);
+  assert.deepEqual(listEntries(files, []).map((e) => ("folder" in e ? e.folder.folder : e.file.path)), ["a/b/c.ts"]);
 });
