@@ -64,13 +64,13 @@ function row(id: string, depth: number, show: boolean, buttons: Element[], conte
     .when(shown, (el) => el.child(overlay(buttons, p)));
 }
 
-/** The file's kind as its icon, drawn in its status color. */
-function kindIcon(f: ChangeFile, p: Palette): Element {
+/** The file's kind as its icon, drawn in its status color (the Review tab draws its rows the same way). */
+export function kindIcon(f: { path: string; letter: string }, p: Palette): Element {
   return icon(FILE_ICONS[fileKind(f.path)], letterColor(f.letter, p), 16);
 }
 
 /** The status again as a letter at the row's end, so it reads without telling colors apart. */
-function statusLetter(letter: string, p: Palette): Element {
+export function statusLetter(letter: string, p: Palette): Element {
   return div()
     .min_w(12)
     .flex_shrink_0()
@@ -80,7 +80,7 @@ function statusLetter(letter: string, p: Palette): Element {
     .child(letter === "?" ? "U" : letter);
 }
 
-function lineCounts(c: LineCounts | undefined, p: Palette): Element {
+export function lineCounts(c: LineCounts | undefined, p: Palette): Element {
   const box = h_flex().flex_shrink_0().gap(4).text_xs();
   if (!c || c.binary) return box;
   return box

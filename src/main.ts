@@ -13,7 +13,9 @@ import { loadBranchPr, loadPrs, type BranchPr } from "./core/forge/index.ts";
 
 type BranchPrState = Awaited<ReturnType<typeof loadBranchPr>>;
 import { backStep, isWide, viewerFocused, type PanelTab } from "./core/panel.ts";
-import { openViewer, Viewer } from "./viewer.ts";
+import { markViewed, openReviewFile, openViewer, Viewer } from "./viewer.ts";
+import { REVIEWED_KEY, seenFor, type ReviewQueue } from "./core/reviewed.ts";
+import { reviewOrder, type ReviewGroup } from "./core/reviewOrder.ts";
 import { NET_ENV } from "./core/ops.ts";
 import { OpsPanel } from "./ops.ts";
 import { contextOf, sameContext } from "./core/context.ts";
@@ -42,6 +44,8 @@ import { repoList } from "./ui/repoList.ts";
 import { palette } from "./ui/style.ts";
 import { summary } from "./ui/summary.ts";
 import { checkForUpdate, installUpdate } from "./updater.ts";
+import { FeedbackPanel } from "./feedbackPanel.ts";
+import { sendQueued } from "./feedbackSend.ts";
 
 /** How often to see whether the daily update check is due. */
 const UPDATE_POLL_MS = 60 * 60 * 1000;
@@ -149,12 +153,16 @@ export default class GitDeck extends View {
   compare: { repo: string; data: Compare | null; base: string | null } | null = null;
   /** The Review tab's files, for one repo. */
   review: { repo: string; data: Review | null } | null = null;
+  /** Review groups folded shut: the rest (docs, icons, locks) starts folded. */
+  reviewFolded: ReadonlySet<ReviewGroup> = new Set(["other"]);
   /** The shown branch's PR or MR (over the network), for the PR bar and the Review tab. */
   pr: { repo: string; branch: string; state: BranchPrState } | null = null;
   /** Wide enough for the list and the commit side by side. */
   wide = false;
   /** Takes the keyboard so Esc goes back one level. */
   focus!: FocusHandle;
+  /** The Review tab's feedback batch: open or folded, the chosen agent, the last send. */
+  readonly feedback = new FeedbackPanel();
   /** Set in a viewer tab (props {viewer: true}): that copy only shows the viewer. */
   viewer: Viewer | null = null;
 
@@ -220,6 +228,8 @@ export default class GitDeck extends View {
     });
     cx.timer.every(CONTEXT_EVERY_MS, (cx) => {
       this.notice();
+      // Notes the person queued for a working agent go once it stops.
+      sendQueued((task) => cx.spawn(task));
       // Herdr's agent list is live; redraw only when the agents here changed,
       // or when the first one's "· 2m" would read differently.
       const first = shownAgents(this.herd.selected)[0];
@@ -499,14 +509,26 @@ export default class GitDeck extends View {
     });
   }
 
-  /** A file of the Review tab: its diff since the branch split from main. */
-  openReviewFile(path: string): void {
+  /** The shown repo's review as a queue in reading order, or null while it isn't read. */
+  reviewQueue(): ReviewQueue | null {
     const target = this.repoTarget();
     const r = target && this.review?.repo === target.cwd ? this.review.data : null;
-    const file = r?.files.find((f) => f.path === path);
-    if (!target || !r?.mergeBase || !file) return;
-    const source: DiffSource = { kind: "commit", hash: r.head, parents: [r.mergeBase], path, oldPath: file.oldPath };
-    openViewer({ view: "diff", repo: target.cwd, on: target.on, source });
+    if (!target || !r?.mergeBase) return null;
+    const files = reviewOrder(r.files).map((f) => ({ path: f.path, oldPath: f.oldPath, blob: r.blobs.get(f.path) ?? "" }));
+    return { repo: target.cwd, on: target.on, head: r.head, mergeBase: r.mergeBase, files };
+  }
+
+  /** A file of the Review tab: its diff since the branch split from main, marked viewed. */
+  openReviewFile(path: string): void {
+    const queue = this.reviewQueue();
+    const file = queue?.files.find((f) => f.path === path);
+    if (queue && file) openReviewFile(queue, file);
+  }
+
+  toggleReviewed(path: string, seenNow: boolean): void {
+    const queue = this.reviewQueue();
+    const file = queue?.files.find((f) => f.path === path);
+    if (queue && file) markViewed(queue.repo, path, file.blob, !seenNow, queue.files.map((f) => f.path));
   }
 
   selectTab(tab: PanelTab, cx: Context): void {
@@ -708,9 +730,29 @@ export default class GitDeck extends View {
                   base: this.compare?.repo === repo.path ? this.compare.base : null,
                   review: this.review?.repo === repo.path ? this.review.data : null,
                   pr: this.shownPr(repo.path),
+                  seen: seenFor(shared(REVIEWED_KEY), repo.path),
+                  folded: this.reviewFolded,
+                  feedback: this.feedback.render(
+                    repo.path,
+                    this.repoTarget()?.on != null,
+                    (this.review?.repo === repo.path ? this.review.data?.blobs : null) ?? new Map(),
+                    p,
+                  ),
                 },
                 actions: {
                   openFile: (path) => this.openReviewFile(path),
+                  toggleViewed: (path, cx) => {
+                    const r = this.review?.repo === repo.path ? this.review.data : null;
+                    const seen = seenFor(shared(REVIEWED_KEY), repo.path);
+                    this.toggleReviewed(path, r !== null && seen[path] !== undefined && seen[path] === r.blobs.get(path));
+                    cx.notify();
+                  },
+                  toggleGroup: (group, cx) => {
+                    const next = new Set(this.reviewFolded);
+                    if (!next.delete(group)) next.add(group);
+                    this.reviewFolded = next;
+                    cx.notify();
+                  },
                   refresh: (cx) => {
                     cx.spawn((cx) => this.readReview(cx, true));
                   },

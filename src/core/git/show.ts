@@ -45,8 +45,10 @@ function base(hash: string, parents: readonly string[]): string[] {
   return first === undefined ? ["--root", hash] : [first, hash];
 }
 
-export function filesArgs(hash: string, parents: readonly string[], mode: "--name-status" | "--numstat"): string[] {
-  return ["diff-tree", "-r", "-z", "-M", "--no-commit-id", ...SAFE_DIFF, mode, ...base(hash, parents)];
+export function filesArgs(hash: string, parents: readonly string[], mode: "--name-status" | "--numstat" | "--raw"): string[] {
+  // Raw output abbreviates blob ids unless told not to.
+  const modes = mode === "--raw" ? ["--raw", "--no-abbrev"] : [mode];
+  return ["diff-tree", "-r", "-z", "-M", "--no-commit-id", ...SAFE_DIFF, ...modes, ...base(hash, parents)];
 }
 
 export interface FileChange {
