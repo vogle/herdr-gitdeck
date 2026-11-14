@@ -1,27 +1,22 @@
 // The uncommitted changes, for watching what an agent is changing: the file
-// lists (changeFiles.ts), a commit box folded away because agents commit, and
-// one side of a file's diff whose hunks and lines can be staged.
+// lists (changeFiles.ts) and a commit box folded away because agents commit.
+// Diffs, and staging a file by hunk or line, open in the viewer tab.
 
 import { div, type Context, type Element } from "gpui-kit";
-import { h_flex, v_flex, v_virtual_list, Scrollbar, Textarea, type InputState, type TextareaState } from "gpui-base";
+import { h_flex, v_flex, Textarea, type InputState, type TextareaState } from "gpui-base";
 import type { ChangesView, Resolving } from "../core/changesView.ts";
 import { allChosen, type Choice } from "../core/conflict.ts";
-import type { DiffRow } from "../core/git/diff.ts";
 import type { AgentNote } from "../core/repoAgents.ts";
 import type { ChangeCounts } from "../core/lineCounts.ts";
 import type { ChangeFile, Changes } from "../core/staging.ts";
 import { monoFont, textButton, type Palette } from "./style.ts";
 import { fileLists, filesBar } from "./changeFiles.ts";
 
-const LIST = "gitdeck-stage-diff";
-const ROW = 18;
-
 export interface ChangesActions {
   /** Shows one side of a file's diff in the viewer tab. */
   open: (file: ChangeFile, staged: boolean, cx: Context) => void;
-  /** Opens one side of a file's diff here in the panel, to stage or unstage single hunks and lines. */
+  /** Opens one side of a file in the viewer tab, to stage or unstage single hunks and lines. */
   lines: (file: ChangeFile, staged: boolean, cx: Context) => void;
-  closeDiff: (cx: Context) => void;
   stage: (paths: string[], cx: Context) => void;
   unstage: (paths: string[], cx: Context) => void;
   discard: (file: ChangeFile, cx: Context) => void;
@@ -32,9 +27,6 @@ export interface ChangesActions {
   chooseBlock: (index: number, choice: Choice, cx: Context) => void;
   saveResolved: (cx: Context) => void;
   closeResolve: (cx: Context) => void;
-  /** A diff row was clicked: a hunk header stages the hunk, a line toggles its pick. */
-  diffClick: (row: number, cx: Context) => void;
-  applyPicked: (cx: Context) => void;
   toggleAmend: (cx: Context) => void;
   /** Claude Code writes a message from the staged diff into the box. */
   suggest: (cx: Context) => void;
@@ -160,67 +152,6 @@ function commitBox(parts: ChangesParts, p: Palette, a: ChangesActions): Element 
   );
 }
 
-function diffRow(r: DiffRow, picked: boolean, p: Palette): Element {
-  const base = h_flex().h(ROW).gap(6).pr(8).items_center().whitespace_nowrap().cursor_pointer().hover((el) => el.bg(p.hover));
-  if (r.kind === "hunk") return base.bg(p.raised).text_color(p.info).child(div().pl(8).truncate().child(`${r.text}`));
-  if (r.kind === "note") return base.text_color(p.dim).child(div().pl(8).child(r.text));
-  const color = r.kind === "add" ? p.added : r.kind === "del" ? p.removed : p.foreground;
-  const mark = r.kind === "add" ? "+" : r.kind === "del" ? "−" : " ";
-  return base
-    .when(picked, (el) => el.bg(p.selected))
-    .when(!picked && r.kind === "add", (el) => el.bg(p.addedBg))
-    .when(!picked && r.kind === "del", (el) => el.bg(p.removedBg))
-    .child(div().w(12).flex_shrink_0().text_color(p.accent).child(picked ? "●" : ""))
-    .child(div().w(36).flex_shrink_0().text_right().text_color(p.dim).child(String(r.old ?? r.new ?? "")))
-    .child(div().w(10).flex_shrink_0().text_color(color).child(mark))
-    .child(div().flex_1().min_w_0().truncate().text_color(color).child(r.text === "" ? " " : r.text));
-}
-
-function diffPane(parts: ChangesParts, p: Palette, a: ChangesActions): Element {
-  const { view } = parts;
-  const open = view.open;
-  const rows = view.diff?.rows ?? [];
-  const verb = open?.staged ? "Unstage" : "Stage";
-  const hint = !parts.local
-    ? "Partial staging works only for repos on this machine"
-    : `Click a hunk header to ${verb.toLowerCase()} it, or pick lines`;
-  return v_flex()
-    .flex_1()
-    .min_h_0()
-    .child(
-      h_flex()
-        .h(28)
-        .px(8)
-        .gap(6)
-        .items_center()
-        .flex_shrink_0()
-        .border_b_1()
-        .border_color(p.border)
-        .child(textButton("stage-back", "← Files", p, a.closeDiff))
-        .child(div().flex_1().min_w_0().truncate().text_xs().text_color(p.muted).child(`${open?.staged ? "Staged" : "Unstaged"}: ${open?.path ?? ""}`))
-        .when(view.picked.size > 0, (el) => el.child(textButton("apply-picked", `${verb} ${view.picked.size} line${view.picked.size === 1 ? "" : "s"}`, p, a.applyPicked, true))),
-    )
-    .child(div().px(10).py(2).flex_shrink_0().text_xs().text_color(p.dim).child(hint))
-    .child(
-      view.diff
-        ? div()
-            .relative()
-            .flex_1()
-            .min_h_0()
-            .font_family(monoFont())
-            .text_xs()
-            .child(
-              v_virtual_list(LIST, rows.length, ROW, (i) => String(i), (range) =>
-                rows.slice(range.start, range.end).map((r, k) => diffRow(r, view.picked.has(range.start + k), p)),
-              )
-                .on_item_click((key, cx) => a.diffClick(Number(key), cx))
-                .size_full(),
-            )
-            .child(Scrollbar.vertical(LIST).absolute().inset_0())
-        : div().p(12).text_color(p.dim).child("Reading diff…"),
-    );
-}
-
 function side(label: string, lines: readonly string[], color: Palette["added"], p: Palette): Element {
   return v_flex()
     .flex_1()
@@ -287,8 +218,6 @@ export function changesPane(parts: ChangesParts, p: Palette, a: ChangesActions):
     .child(
       view.resolving
         ? resolvePane(view.resolving, p, a)
-        : view.open
-        ? diffPane(parts, p, a)
         : v_flex()
             .flex_1()
             .min_h_0()

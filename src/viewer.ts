@@ -1,5 +1,6 @@
 // The viewer tab: a gitdeck pane in the main area showing what needs the whole
-// width — a diff, a file's blame or history, the repo's statistics. The panel
+// width — a diff, a file to stage by line, a file's blame or history, the repo's
+// statistics. The panel
 // asks for it through the shared VIEWER_KEY value, so a restart shows it again.
 
 import { div, type AsyncContext, type Context, type Element } from "gpui-kit";
@@ -8,6 +9,10 @@ import { appHome, exec, focused, panes, run, setShared, shared, spaces } from "h
 import { sameDiff, type Diff } from "./core/git/diff.ts";
 import type { Git, Target } from "./core/git/runner.ts";
 import { loadDiff } from "./core/history.ts";
+import { hunkPick, picks, startPicks, togglePick, withFreshDiff, type LinePicks } from "./core/linePicks.ts";
+import type { Pick } from "./core/stage.ts";
+import { applyPicks, loadStageDiff } from "./core/staging.ts";
+import { files } from "./changes.ts";
 import { loadImagePair } from "./core/imageDiff.ts";
 import { loadBlame, loadFileLog, type InspectView } from "./core/inspect.ts";
 import {
@@ -19,6 +24,7 @@ import { Signal } from "./core/signal.ts";
 import { loadStats } from "./core/stats.ts";
 import { diffBody } from "./ui/details.ts";
 import { inspectPane } from "./ui/inspect.ts";
+import { stagePane } from "./ui/stagePane.ts";
 import { textButton, type Palette } from "./ui/style.ts";
 
 /** Image diffs are written here (hidden, so writing doesn't reload the mod), under the app folder `image()` reads from. */
@@ -43,7 +49,8 @@ function goBack(from: ReturnPoint | null): void {
   if (from.terminal) run("pane.focus", { terminal: from.terminal });
 }
 
-type Shown = { kind: "diff"; diff: Diff } | { kind: "inspect"; view: InspectView } | { kind: "note"; text: string };
+type Staging = { kind: "stage"; picks: LinePicks; busy: boolean; error: string | null };
+type Shown = { kind: "diff"; diff: Diff } | Staging | { kind: "inspect"; view: InspectView } | { kind: "note"; text: string };
 
 export class Viewer {
   nav: ViewerNav = { current: null, back: [] };
@@ -124,19 +131,20 @@ export class Viewer {
   private async read(r: ViewerRequest): Promise<Shown> {
     const target: Target = { cwd: r.repo, on: r.on };
     if (r.view === "stats") return { kind: "inspect", view: { kind: "stats", data: await loadStats(this.git, target) } };
-    if (r.view !== "diff") {
+    if (r.view !== "diff" && r.view !== "stage") {
       const view: InspectView =
         r.view === "blame"
           ? { kind: "blame", path: r.path, rev: r.rev, data: await loadBlame(this.git, target, r.rev, r.path) }
           : { kind: "file-log", path: r.path, rev: r.rev, data: await loadFileLog(this.git, target, r.rev, r.path) };
       return { kind: "inspect", view };
     }
-    const source = r.source;
-    if (source.kind !== "commit") {
+    if (r.view === "stage" || r.source.kind !== "commit") {
       // A work-tree diff runs the repo's clean filters: ask for its trust again here.
       const status = await loadStatus(this.git, target);
       if (!status.status || status.untrusted) return { kind: "note", text: "Work-tree diffs are not read for this repo: its own config names filter programs." };
     }
+    if (r.view === "stage") return { kind: "stage", picks: startPicks(await loadStageDiff(this.git, target, r.path, r.staged)), busy: false, error: null };
+    const source = r.source;
     const [diff, images] = await Promise.all([
       loadDiff(this.git, target, source),
       source.kind === "commit"
@@ -150,12 +158,44 @@ export class Viewer {
   async refresh(cx: AsyncContext): Promise<void> {
     const request = this.nav.current;
     const before = this.shown;
-    if (!request || !liveDiff(request) || before?.kind !== "diff") return;
+    if (!request || !liveDiff(request) || (before?.kind !== "diff" && before?.kind !== "stage")) return;
     const after = await this.read(request);
     if (this.nav.current !== request || this.shown !== before) return;
-    if (after.kind === "diff" && sameDiff(after.diff, before.diff)) return;
-    this.shown = after;
+    if (after.kind === "diff" && before.kind === "diff" && sameDiff(after.diff, before.diff)) return;
+    if (after.kind === "stage" && before.kind === "stage") {
+      // The same lines keep their picks; a changed diff starts the picking over.
+      const kept = withFreshDiff(before.picks, after.picks.diff);
+      if (kept === before.picks) return;
+      this.shown = { ...before, picks: kept };
+    } else this.shown = after;
     cx.notify();
+  }
+
+  /** A row clicked in a file being staged by line: a hunk header does the hunk, a line is picked. */
+  private stageClick(row: number, cx: Context): void {
+    const s = this.shown;
+    if (s?.kind !== "stage") return;
+    const hunk = hunkPick(s.picks, row);
+    if (hunk) return this.stage([hunk], cx);
+    this.shown = { ...s, picks: togglePick(s.picks, row) };
+    cx.notify();
+  }
+
+  /** Stages (or, on the staged side, unstages) the chosen lines, then reads the file again. */
+  private stage(chosen: Pick[], cx: Context): void {
+    const r = this.nav.current;
+    const s = this.shown;
+    if (r?.view !== "stage" || s?.kind !== "stage" || s.busy) return;
+    this.shown = { ...s, busy: true, error: null };
+    cx.notify();
+    cx.spawn(async (cx) => {
+      const error = await applyPicks(this.git, files, { cwd: r.repo, on: r.on }, s.picks.diff.raw, chosen, r.staged);
+      if (this.nav.current !== r) return;
+      const after = await this.read(r);
+      if (this.nav.current !== r) return;
+      this.shown = after.kind === "stage" ? { ...after, error } : after;
+      cx.notify();
+    });
   }
 
   private bar(r: ViewerRequest, p: Palette): Element {
@@ -164,13 +204,20 @@ export class Viewer {
       commit && this.go({ view, repo: r.repo, on: r.on, rev: commit.hash, path: commit.path }, cx);
     const fileButtons = commit
       ? [textButton("viewer-blame", "Blame", p, inspect("blame")), textButton("viewer-history", "History", p, inspect("file-log"))]
-      : r.view === "diff"
+      : liveDiff(r)
         ? // Read again every few seconds anyway; this is for right now.
           [textButton("viewer-reload", "Reload", p, () => this.tick.fire())]
         : [];
     const from = parseReturn(shared(RETURN_KEY), spaces());
     const side = r.view === "diff" && r.source.kind === "index" ? (r.source.staged ? "Staged: " : "Unstaged: ") : "";
-    const where = r.view === "diff" ? `${side}${r.source.path}` : r.view === "stats" ? r.repo : `${r.path} at ${r.rev.slice(0, 10)}`;
+    const where =
+      r.view === "diff"
+        ? `${side}${r.source.path}`
+        : r.view === "stats"
+          ? r.repo
+          : r.view === "stage"
+            ? `${r.staged ? "Staged" : "Unstaged"}: ${r.path}`
+            : `${r.path} at ${r.rev.slice(0, 10)}`;
     return h_flex()
       .h(32)
       .px(8)
@@ -199,6 +246,11 @@ export class Viewer {
           ? div().p(12).text_color(p.changed).child(s.text)
           : s.kind === "diff"
             ? diffBody(s.diff, p)
+            : s.kind === "stage"
+            ? stagePane({ picks: s.picks, staged: r.view === "stage" && r.staged, local: r.on === null, busy: s.busy, error: s.error }, p, {
+                click: (row, cx) => this.stageClick(row, cx),
+                apply: (cx) => this.stage(picks(s.picks), cx),
+              })
             : inspectPane(s.view, p, { jump: () => {}, close: () => run("tab.close"), openTreeFile: () => {}, closeTreeFile: () => {} });
     return v_flex().flex_1().min_h_0().child(this.bar(r, p)).child(body);
   }

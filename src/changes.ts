@@ -5,15 +5,13 @@ import type { AsyncContext, Context } from "gpui-kit";
 import { InputState, TextareaState } from "gpui-base";
 import { exec, readTextFile, writeTextFile } from "herdr";
 import {
-  askConfirm, changeSource, chooseBlock, closeSide, startResolving, emptyChanges, forRepoChanges, hunkPick, openSide, picks, setAmend, setBusy, togglePick,
-  withResult, withStageDiff, type ChangesView,
+  askConfirm, changeSource, chooseBlock, startResolving, emptyChanges, forRepoChanges, setAmend, setBusy, withResult, type ChangesView,
 } from "./core/changesView.ts";
 import type { Git, Target } from "./core/git/runner.ts";
 import type { RepoStatus } from "./core/git/status.ts";
-import type { Pick } from "./core/stage.ts";
 import { remember } from "./core/stage.ts";
 import {
-  applyPicks, commitChanges, takeSide, discardFiles, discardFolder, loadStageDiff, readLastMessage, splitChanges, stageFiles, unstageFiles,
+  commitChanges, takeSide, discardFiles, discardFolder, readLastMessage, splitChanges, stageFiles, unstageFiles,
   type ChangeFile, type Changes, type Files,
 } from "./core/staging.ts";
 import { allChosen, parseConflicts, resolveFile } from "./core/conflict.ts";
@@ -185,7 +183,7 @@ export class ChangesPanel {
     };
   }
 
-  /** Runs one git action, then re-reads the status and the open diff. */
+  /** Runs one git action, then re-reads the status. */
   act(cx: Context, action: (git: Git, target: Target) => Promise<string | null>, after?: () => void): void {
     const target = this.host.target();
     if (!target || this.view.busy) return;
@@ -196,26 +194,8 @@ export class ChangesPanel {
       this.view = withResult(this.view, error);
       if (error === null) after?.();
       await this.host.changed(cx);
-      await this.readDiff(cx);
       cx.notify();
     });
-  }
-
-  async readDiff(cx: AsyncContext): Promise<void> {
-    const open = this.view.open;
-    const target = this.host.target();
-    if (!open || !target) return;
-    const diff = open.untracked
-      ? { raw: "", rows: [{ kind: "note" as const, old: null, new: null, text: "New file: stage it to commit it" }] }
-      : await loadStageDiff(this.host.git, target, open.path, open.staged);
-    this.view = withStageDiff(this.view, open.path, open.staged, diff);
-    cx.notify();
-  }
-
-  applyPicks(cx: Context, chosen: Pick[]): void {
-    const raw = this.view.diff?.raw ?? "";
-    const reverse = this.view.open?.staged ?? false;
-    this.act(cx, (git, target) => applyPicks(git, files, target, raw, chosen, reverse));
   }
 
   actions(): ChangesActions {
@@ -225,14 +205,9 @@ export class ChangesPanel {
         const target = this.host.target();
         if (target) this.host.openViewer({ view: "diff", repo: target.cwd, on: target.on, source: changeSource(file, staged) });
       },
-      lines: (file: ChangeFile, staged: boolean, cx: Context) => {
-        this.view = openSide(this.view, file.path, staged, file.untracked && !staged);
-        cx.spawn((cx) => this.readDiff(cx));
-        cx.notify();
-      },
-      closeDiff: (cx) => {
-        this.view = closeSide(this.view);
-        cx.notify();
+      lines: (file: ChangeFile, staged: boolean) => {
+        const target = this.host.target();
+        if (target) this.host.openViewer({ view: "stage", repo: target.cwd, on: target.on, path: file.path, staged });
       },
       stage: (paths, cx) => this.act(cx, (git, target) => stageFiles(git, target, paths)),
       unstage: (paths, cx) => this.act(cx, (git, target) => unstageFiles(git, target, paths, hasHead())),
@@ -271,13 +246,6 @@ export class ChangesPanel {
         });
       },
       takeSide: (file, side, cx) => this.act(cx, (git, target) => takeSide(git, target, [file.path], side)),
-      diffClick: (row, cx) => {
-        const hunk = hunkPick(this.view, row);
-        if (hunk) return this.applyPicks(cx, [hunk]);
-        this.view = togglePick(this.view, row);
-        cx.notify();
-      },
-      applyPicked: (cx) => this.applyPicks(cx, picks(this.view)),
       toggleAmend: (cx) => {
         const amend = !this.view.amend;
         this.view = setAmend(this.view, amend);
