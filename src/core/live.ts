@@ -35,7 +35,7 @@ export function liveGap(lastMs: number): number {
 }
 
 /** Equal for the same agents in the same states, in any order. */
-export function agentsKey(agents: readonly RepoAgent[]): string {
+export function agentsKey(agents: readonly Pick<RepoAgent, "key" | "name" | "status">[]): string {
   return agents
     .map((a) => `${a.key}:${a.name}:${a.status}`)
     .sort()

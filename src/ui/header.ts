@@ -1,8 +1,9 @@
-// The two-line bar. First line, where you are: the shown repo (a dropdown when
-// there's a herd), its branch, refresh. Second line, how it stands: the counts,
-// how far it is from main, the remote work there is to do (pull, push or
-// publish, shown only when there is some), and the coding agents working in it,
-// which keep their words rather than shrink to a few letters.
+// The bar on top. First line, where you are: the shown repo (a dropdown when
+// there's a herd), its branch and how far it is from main, refresh. Second line,
+// who is at work: the coding agents in the repo first (the busiest as a badge with
+// how long it has been so), then what needs doing: conflicts, and the remote work
+// (pull, push or publish). The second line goes away when it has nothing to say.
+// File counts live on the Changes tab, not here.
 // The panel is hidden from the tab bar's GitDeck button, so it has no close of its own.
 
 import { div, type Context, type Element } from "gpui-kit";
@@ -11,8 +12,8 @@ import { selectedRepo, type HerdState } from "../core/herd.ts";
 import type { AgentChip } from "../core/repoAgents.ts";
 import type { Compare } from "../core/review.ts";
 import type { SyncChip } from "../core/syncChips.ts";
-import { statusBadges } from "./repoList.ts";
-import { agentColor, ICONS, icon, textButton, type Palette } from "./style.ts";
+import { ago } from "../core/time.ts";
+import { agentBadge, agentColor, ICONS, icon, textButton, type Palette } from "./style.ts";
 
 export interface HeaderFacts {
   /** The agents whose terminal is in the shown repo. */
@@ -21,6 +22,10 @@ export interface HeaderFacts {
   compare: Compare | null;
   /** Pull and push for the shown repo; null where its status is not trusted. */
   sync: HeaderSync | null;
+  /** "! 2 conflicts", or null. */
+  conflicts: string | null;
+  /** Now, ms since the epoch, for how long an agent has been in its state. */
+  now: number;
 }
 
 export interface HeaderSync {
@@ -77,22 +82,28 @@ function compareLabel(c: Compare, p: Palette): Element {
     .text_xs()
     .text_color(p.dim)
     .tooltip(`Against ${c.base}: ${c.ahead} commits not on it, ${c.behind} on it not here`)
-    .child(`${c.base.replace(/^origin\//, "")} ${counts}`);
+    .child(`→ ${c.base.replace(/^origin\//, "")} ${counts}`);
 }
 
-
-/** A dot per agent; the first one also says its state, and gives way first when narrow. */
-function agentChip(a: AgentChip, i: number, p: Palette): Element {
+/**
+ * A dot per agent; the first one also says its state and how long it has been so.
+ * That first one is a badge in its state's color unless the agent is idle.
+ */
+function agentChip(a: AgentChip, i: number, p: Palette, now: number): Element {
+  const badge = i === 0 ? agentBadge(a.status, p) : null;
+  const age = a.since === null ? "" : ago(Math.floor(now / 1000), Math.floor(a.since / 1000));
   return h_flex()
     .id(`agent-${i}`)
     .gap(4)
     .items_center()
     .min_w_0()
     .text_xs()
-    .text_color(p.muted)
+    .text_color(badge?.fg ?? p.muted)
     .tooltip(a.text)
-    .child(div().flex_shrink_0().w(7).h(7).rounded(4).bg(agentColor(a.status, p)))
-    .when(i === 0, (el) => el.child(div().truncate().child(a.text)));
+    .when(badge !== null, (el) => el.px(6).py(1).rounded(8).bg(badge?.bg ?? p.surface).font_semibold())
+    .child(div().flex_shrink_0().w(7).h(7).rounded(4).bg(badge?.dot ?? agentColor(a.status, p)))
+    .when(i === 0, (el) => el.child(div().truncate().child(a.text)))
+    .when(i === 0 && age !== "", (el) => el.child(div().flex_shrink_0().font_normal().opacity(0.75).child(`· ${age}`)));
 }
 
 function syncChip(c: SyncChip, sync: HeaderSync, p: Palette): Element {
@@ -115,8 +126,8 @@ function refreshButton(p: Palette, onRefresh: (cx: Context) => void): Element {
     .child(icon(ICONS.refresh, p.muted, 14));
 }
 
-/** Where you are: the repo and its whole branch name, with refresh at the end. */
-function whereRow(state: HerdState, branch: string | null, busy: boolean, p: Palette, actions: HeaderActions): Element {
+/** Where you are: the repo, its branch (it gives way first) and how far from main, with refresh at the end. */
+function whereRow(state: HerdState, branch: string | null, busy: boolean, p: Palette, actions: HeaderActions, compare: Compare | null): Element {
   return h_flex()
     .h(28)
     .gap(8)
@@ -124,28 +135,33 @@ function whereRow(state: HerdState, branch: string | null, busy: boolean, p: Pal
     .child(icon(ICONS.herd, p.accent, 15))
     .child(repoChip(state, p, actions.togglePicker))
     .when(branch !== null, (el) => el.child(branchLabel(branch ?? "", p)))
+    .when(compare !== null, (el) => el.child(compareLabel(compare as Compare, p)))
     .child(div().flex_1())
     .when(busy, (el) => el.child(div().text_color(p.dim).frames(SPINNER, 90)))
     .child(refreshButton(p, actions.refresh));
 }
 
-/** How it stands: the counts and main on the left, the agents working in it on the right. */
-function stateRow(result: HerdState["statuses"][string] | undefined, p: Palette, facts: HeaderFacts): Element {
+/** Who is at work: the agents on the left; conflicts and remote work on the right. Null when there's none of it. */
+function stateRow(p: Palette, facts: HeaderFacts): Element | null {
+  const chips = facts.sync?.chips ?? [];
+  if (facts.agents.length === 0 && facts.conflicts === null && chips.length === 0) return null;
   return h_flex()
-    .h(20)
+    .h(22)
     .gap(8)
     .items_center()
-    .child(h_flex().gap(8).items_center().flex_shrink_0().text_xs().text_color(p.muted).children(statusBadges(result, p)))
-    .when(facts.compare !== null, (el) => el.child(compareLabel(facts.compare as Compare, p)))
-    .children(facts.sync ? facts.sync.chips.map((c) => syncChip(c, facts.sync as HeaderSync, p)) : [])
+    .child(h_flex().gap(6).items_center().min_w_0().children(facts.agents.slice(0, 3).map((a, i) => agentChip(a, i, p, facts.now))))
     .child(div().flex_1())
-    .child(h_flex().gap(6).items_center().min_w_0().children(facts.agents.slice(0, 3).map((a, i) => agentChip(a, i, p))));
+    .when(facts.conflicts !== null, (el) =>
+      el.child(div().flex_shrink_0().text_xs().font_semibold().text_color(p.removed).child(facts.conflicts ?? "")),
+    )
+    .children(facts.sync ? chips.map((c) => syncChip(c, facts.sync as HeaderSync, p)) : []);
 }
 
 export function header(state: HerdState, busy: boolean, p: Palette, actions: HeaderActions, facts: HeaderFacts): Element {
   const repo = selectedRepo(state);
   const result = repo ? state.statuses[repo.path] : undefined;
   const branch = result?.status ? (result.status.branch ?? "detached") : null;
+  const second = stateRow(p, facts);
   return v_flex()
     .id("header")
     .px(10)
@@ -155,6 +171,6 @@ export function header(state: HerdState, busy: boolean, p: Palette, actions: Hea
     .border_b_1()
     .border_color(p.border)
     .bg(p.chrome)
-    .child(whereRow(state, branch, busy, p, actions))
-    .child(stateRow(result, p, facts));
+    .child(whereRow(state, branch, busy, p, actions, facts.compare))
+    .when(second !== null, (el) => el.child(second as Element));
 }

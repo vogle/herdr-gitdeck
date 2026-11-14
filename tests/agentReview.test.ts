@@ -180,9 +180,9 @@ test("agentChips lists who works here with a short state, busiest first", async 
   assert.deepEqual(
     agentChips([{ name: "Codex", status: "idle" }, { name: "Claude", status: "working" }, { name: "Pi", status: "blocked" }]),
     [
-      { name: "Claude", status: "working", text: "Claude working" },
-      { name: "Pi", status: "blocked", text: "Pi needs you" },
-      { name: "Codex", status: "idle", text: "Codex idle" },
+      { name: "Claude", status: "working", text: "Claude working", since: null },
+      { name: "Pi", status: "blocked", text: "Pi needs you", since: null },
+      { name: "Codex", status: "idle", text: "Codex idle", since: null },
     ],
   );
 });

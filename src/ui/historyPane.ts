@@ -6,6 +6,7 @@
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex, Input, type InputState, type VirtualListScrollHandle } from "gpui-base";
 import type { RepoStatus } from "../core/git/status.ts";
+import { changesTabLabel } from "../core/headerText.ts";
 import { UNCOMMITTED, type HistoryView } from "../core/historyView.ts";
 import type { InspectView } from "../core/inspect.ts";
 import { PANEL_TABS, type PanelTab } from "../core/panel.ts";
@@ -55,8 +56,7 @@ export interface HistoryParts {
 const TAB_LABELS: Record<PanelTab, string> = { changes: "Changes", review: "Review", history: "History", branches: "Branches", more: "More" };
 
 function tabRow(parts: HistoryParts, p: Palette, actions: HistoryActions): Element {
-  const changed = parts.status?.entries.filter((e) => e.kind !== "ignored").length ?? 0;
-  const label = (tab: PanelTab) => (tab === "changes" && changed > 0 ? `${TAB_LABELS[tab]} ${changed}` : TAB_LABELS[tab]);
+  const label = (tab: PanelTab) => (tab === "changes" ? changesTabLabel(parts.status) : TAB_LABELS[tab]);
   return h_flex()
     .h(32)
     .px(6)

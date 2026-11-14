@@ -30,7 +30,9 @@ import { mapLimit } from "./core/pool.ts";
 import { loadStatus, scanHerd } from "./core/scan.ts";
 import { Signal } from "./core/signal.ts";
 import { MAX_REPOS } from "./core/repos/discover.ts";
-import { agentChips, herdAgents, repoAgents } from "./core/repoAgents.ts";
+import { agentChips, herdAgents, repoAgents, type AgentChip } from "./core/repoAgents.ts";
+import { conflictWarning } from "./core/headerText.ts";
+import { ago } from "./core/time.ts";
 import { freshPaths, markSeen, newCommits, touch, type Seen } from "./core/seen.ts";
 import { baseBranch, loadCompare, loadReview, type Compare, type Review } from "./core/review.ts";
 import { header, type HeaderSync } from "./ui/header.ts";
@@ -63,6 +65,16 @@ function depthSetting(): number {
 async function treeLoaded(git: Git, target: Target, rev: string) {
   const t = await loadTree(git, target, rev);
   return { items: t.files, error: t.error };
+}
+
+/** When each tab last changed state, by tab id: how long an agent has been as it is. */
+function tabChanges(): Map<string, number | null> {
+  return new Map(spaces().flatMap((s) => s.tabs.map((t) => [t.id, t.changed_at] as const)));
+}
+
+/** The shown repo's agents, for the header. */
+function shownAgents(repo: string | null): AgentChip[] {
+  return agentChips(repoAgents(repo, agents(), panes(), tabChanges()));
 }
 
 function errorText(error: unknown): string {
@@ -208,10 +220,13 @@ export default class GitDeck extends View {
     });
     cx.timer.every(CONTEXT_EVERY_MS, (cx) => {
       this.notice();
-      // Herdr's agent list is live; redraw only when the agents here changed.
+      // Herdr's agent list is live; redraw only when the agents here changed,
+      // or when the first one's "· 2m" would read differently.
+      const first = shownAgents(this.herd.selected)[0];
+      const age = first?.since == null ? "" : ago(Math.floor(Date.now() / 1000), Math.floor(first.since / 1000));
       const seen = this.herd.picking
         ? JSON.stringify(herdAgents(this.herd.repos.map((r) => r.path), agents(), panes()))
-        : agentsKey(repoAgents(this.herd.selected, agents(), panes()));
+        : `${agentsKey(repoAgents(this.herd.selected, agents(), panes()))}|${age}`;
       if (seen !== this.agentsSeen) {
         this.agentsSeen = seen;
         cx.notify();
@@ -728,9 +743,11 @@ export default class GitDeck extends View {
           p,
           { togglePicker: (cx) => this.togglePicker(cx), refresh: (cx) => this.refreshAndFetch(cx) },
           {
-            agents: agentChips(repoAgents(this.herd.selected, agents(), panes())),
+            agents: shownAgents(this.herd.selected),
             compare: this.compare?.repo === this.herd.selected ? this.compare.data : null,
             sync: this.headerSync(),
+            conflicts: conflictWarning((this.herd.selected ? this.herd.statuses[this.herd.selected]?.status : null) ?? null),
+            now: Date.now(),
           },
         ),
       )

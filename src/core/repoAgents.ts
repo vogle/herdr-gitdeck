@@ -8,6 +8,8 @@ export interface RepoAgent {
   /** Herdr's program key, e.g. "claude" or "codex". */
   key: string;
   status: AgentStatus;
+  /** When its tab last changed state, ms since the epoch; null when unknown. */
+  since: number | null;
 }
 
 export interface AgentNote {
@@ -17,6 +19,7 @@ export interface AgentNote {
 
 interface AgentLike {
   pane: string;
+  tab?: string;
   status: AgentStatus;
   program: { name: string; key: string };
 }
@@ -29,14 +32,24 @@ interface PaneLike {
 // A mod pane (the viewer tab) can come back with no cwd at all, despite the type.
 const inside = (repo: string, cwd: string | null): boolean => typeof cwd === "string" && (cwd === repo || cwd.startsWith(`${repo}/`));
 
-/** The agents whose terminal is in the repo or a folder below it. */
-export function repoAgents(repo: string | null, agents: readonly AgentLike[], panes: readonly PaneLike[]): RepoAgent[] {
+/**
+ * The agents whose terminal is in the repo or a folder below it. `changedAt` holds
+ * when each tab last changed state (Herdr's tab `changed_at`), for how long ago.
+ */
+export function repoAgents(
+  repo: string | null,
+  agents: readonly AgentLike[],
+  panes: readonly PaneLike[],
+  changedAt: ReadonlyMap<string, number | null> = new Map(),
+): RepoAgent[] {
   if (repo === null) return [];
   const here = new Set(panes.filter((p) => inside(repo, p.cwd)).map((p) => p.pane));
-  return agents.filter((a) => here.has(a.pane)).map((a) => ({ name: a.program.name, key: a.program.key, status: a.status }));
+  return agents
+    .filter((a) => here.has(a.pane))
+    .map((a) => ({ name: a.program.name, key: a.program.key, status: a.status, since: a.tab === undefined ? null : (changedAt.get(a.tab) ?? null) }));
 }
 
-type Named = Pick<RepoAgent, "name" | "status">;
+type Named = Pick<RepoAgent, "name" | "status"> & { since?: number | null };
 
 function say(kind: AgentNote["kind"], who: readonly Named[]): AgentNote {
   const one = who.length === 1;
@@ -64,6 +77,8 @@ export interface AgentChip {
   name: string;
   status: AgentStatus;
   text: string;
+  /** When it last changed state, ms since the epoch; null when unknown. */
+  since: number | null;
 }
 
 const CHIP_ORDER: readonly AgentStatus[] = ["working", "blocked", "done", "idle"];
@@ -73,7 +88,7 @@ const CHIP_WORD: Record<AgentStatus, string> = { working: "working", blocked: "n
 export function agentChips(agents: readonly Named[]): AgentChip[] {
   return [...agents]
     .sort((x, y) => CHIP_ORDER.indexOf(x.status) - CHIP_ORDER.indexOf(y.status))
-    .map((a) => ({ name: a.name, status: a.status, text: `${a.name} ${CHIP_WORD[a.status]}` }));
+    .map((a) => ({ name: a.name, status: a.status, text: `${a.name} ${CHIP_WORD[a.status]}`, since: a.since ?? null }));
 }
 
 /** The most urgent thing to say (working, then waiting, then finished), or null when all are idle. */
