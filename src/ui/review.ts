@@ -57,6 +57,7 @@ function prLine(state: ReviewParts["pr"], p: Palette, a: ReviewActions): Element
   if (pr === null) return row.text_color(p.dim).child(`No ${state.label} for this branch`);
   return row
     .child(div().flex_shrink_0().text_color(p.accent).child(`${state.label === "MR" ? "!" : "#"}${pr.number}`))
+    .when(pr.target !== "", (el) => el.child(div().flex_shrink_0().text_color(p.dim).child(`→ ${pr.target}`)))
     .child(div().flex_1().min_w_0().truncate().text_color(p.foreground).child(pr.title))
     .child(div().flex_shrink_0().text_color(p.dim).child(prState(pr)))
     .child(div().flex_shrink_0().text_color(toneColor(checksTone(pr.checks), p)).child(checksText(pr.checks)));

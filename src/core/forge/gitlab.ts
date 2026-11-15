@@ -50,5 +50,6 @@ export function parseBranchMr(json: string): BranchPr | null {
     url: str(o.web_url),
     review: o.approved === true ? "APPROVED" : "",
     checks: pipelineChecks(o.head_pipeline),
+    target: str(o.target_branch),
   };
 }

@@ -49,6 +49,8 @@ export interface BranchPr {
   /** APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED or "". */
   review: string;
   checks: Checks;
+  /** The branch it merges into ("" when the forge didn't say). */
+  target: string;
 }
 
 export const str = (v: unknown): string => (typeof v === "string" ? v : "");

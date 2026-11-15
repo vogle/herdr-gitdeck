@@ -11,6 +11,7 @@ const pr = (over: Partial<BranchPr> = {}): BranchPr => ({
   url: "https://github.com/o/r/pull/12",
   review: "",
   checks: { passed: 0, failed: 0, pending: 0 },
+  target: "main",
   ...over,
 });
 

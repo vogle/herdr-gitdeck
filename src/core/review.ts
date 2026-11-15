@@ -18,6 +18,17 @@ export function baseBranch(refs: readonly Ref[], current: string | null): string
   return current === base || current === short ? null : base;
 }
 
+/**
+ * What the branch is reviewed against: the PR's target when it has one and it is
+ * here (a local branch beats its remote copy), else the main line.
+ */
+export function reviewBase(refs: readonly Ref[], current: string | null, target: string | null): string | null {
+  if (!target) return baseBranch(refs, current);
+  if (current === target) return null;
+  const names = new Set(refs.filter((r) => r.kind === "branch" || r.kind === "remote").map((r) => r.name));
+  return [target, `origin/${target}`].find((b) => names.has(b)) ?? baseBranch(refs, current);
+}
+
 export function compareArgs(base: string): string[] {
   return ["rev-list", "--left-right", "--count", `${base}...HEAD`, "--"];
 }

@@ -38,7 +38,7 @@ test("forgeOf knows github.com and gitlab.com; any other host only by the overri
 test("GitHub: the list and view name the repo, so gh never reads the work tree", () => {
   assert.deepEqual(prListArgs("a/b").slice(0, 4), ["pr", "list", "--repo", "a/b"]);
   assert.deepEqual(prViewArgs("o/r", "feat/x"), [
-    "pr", "view", "feat/x", "--repo", "o/r", "--json", "number,title,state,isDraft,url,reviewDecision,statusCheckRollup",
+    "pr", "view", "feat/x", "--repo", "o/r", "--json", "number,title,state,isDraft,url,reviewDecision,statusCheckRollup,baseRefName",
   ]);
 });
 
@@ -54,7 +54,7 @@ test("parsePrs keeps well-formed entries and rejects anything else", () => {
 
 test("parseBranchPr counts passed, failed and running checks", () => {
   const pr = parseBranchPr(JSON.stringify({
-    number: 7, title: "Add X", state: "OPEN", isDraft: false, url: "u", reviewDecision: "APPROVED",
+    number: 7, title: "Add X", state: "OPEN", isDraft: false, url: "u", reviewDecision: "APPROVED", baseRefName: "develop",
     statusCheckRollup: [
       { __typename: "CheckRun", status: "COMPLETED", conclusion: "SUCCESS" },
       { __typename: "CheckRun", status: "COMPLETED", conclusion: "SKIPPED" },
@@ -65,7 +65,7 @@ test("parseBranchPr counts passed, failed and running checks", () => {
       { __typename: "StatusContext", state: "ERROR" },
     ],
   }));
-  assert.deepEqual(pr, { number: 7, title: "Add X", state: "OPEN", draft: false, url: "u", review: "APPROVED", checks: { passed: 3, failed: 2, pending: 2 } });
+  assert.deepEqual(pr, { number: 7, title: "Add X", state: "OPEN", draft: false, url: "u", review: "APPROVED", checks: { passed: 3, failed: 2, pending: 2 }, target: "develop" });
   assert.equal(parseBranchPr("[]"), null);
 });
 
@@ -88,8 +88,8 @@ test("parseMrs reads glab's merge requests in the shared shape", () => {
 });
 
 test("parseBranchMr turns the head pipeline into check counts", () => {
-  const mr = (status: string | null, extra = {}) => JSON.stringify({ iid: 9, title: "t", state: "closed", draft: false, web_url: "w", head_pipeline: status ? { status } : null, ...extra });
-  assert.deepEqual(parseBranchMr(mr("success", { approved: true })), { number: 9, title: "t", state: "CLOSED", draft: false, url: "w", review: "APPROVED", checks: { passed: 1, failed: 0, pending: 0 } });
+  const mr = (status: string | null, extra = {}) => JSON.stringify({ iid: 9, title: "t", state: "closed", draft: false, web_url: "w", target_branch: "release/1", head_pipeline: status ? { status } : null, ...extra });
+  assert.deepEqual(parseBranchMr(mr("success", { approved: true })), { number: 9, title: "t", state: "CLOSED", draft: false, url: "w", review: "APPROVED", checks: { passed: 1, failed: 0, pending: 0 }, target: "release/1" });
   assert.deepEqual(parseBranchMr(mr("failed"))?.checks, { passed: 0, failed: 1, pending: 0 });
   assert.deepEqual(parseBranchMr(mr("running"))?.checks, { passed: 0, failed: 0, pending: 1 });
   assert.deepEqual(parseBranchMr(mr(null))?.checks, { passed: 0, failed: 0, pending: 0 });

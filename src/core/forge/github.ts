@@ -8,7 +8,7 @@ export const prListArgs = (repo: string): string[] => [
 ];
 
 export const prViewArgs = (repo: string, branch: string): string[] => [
-  "pr", "view", branch, "--repo", repo, "--json", "number,title,state,isDraft,url,reviewDecision,statusCheckRollup",
+  "pr", "view", branch, "--repo", repo, "--json", "number,title,state,isDraft,url,reviewDecision,statusCheckRollup,baseRefName",
 ];
 
 export function parsePrs(json: string): PullRequest[] {
@@ -49,5 +49,5 @@ export function parseBranchPr(json: string): BranchPr | null {
     const r = record(c);
     if (r) checks[verdict(r)] += 1;
   }
-  return { number: o.number, title: str(o.title), state: str(o.state), draft: o.isDraft === true, url: str(o.url), review: str(o.reviewDecision), checks };
+  return { number: o.number, title: str(o.title), state: str(o.state), draft: o.isDraft === true, url: str(o.url), review: str(o.reviewDecision), checks, target: str(o.baseRefName) };
 }

@@ -35,7 +35,7 @@ import { agentChips, herdAgents, repoAgents, type AgentChip } from "./core/repoA
 import { conflictWarning } from "./core/headerText.ts";
 import { ago } from "./core/time.ts";
 import { freshPaths, markSeen, newCommits, touch, type Seen } from "./core/seen.ts";
-import { baseBranch, loadCompare, loadReview, type Compare, type Review } from "./core/review.ts";
+import { loadCompare, loadReview, reviewBase, type Compare, type Review } from "./core/review.ts";
 import { header, type HeaderSync } from "./ui/header.ts";
 import { syncChips } from "./core/syncChips.ts";
 import { historyPane, type HistoryActions } from "./ui/historyPane.ts";
@@ -406,7 +406,7 @@ export default class GitDeck extends View {
     this.historyFor = target.cwd;
     if (read.history) {
       this.view = withHistory(this.view, target.cwd, read.history);
-      const base = baseBranch(read.history.refs, status?.branch ?? null);
+      const base = reviewBase(read.history.refs, status?.branch ?? null, this.shownPr(target.cwd)?.pr?.target ?? null);
       const data = base === null || !status?.oid ? null : await loadCompare(this.git, target, base);
       if (this.herd.selected === target.cwd) this.compare = { repo: target.cwd, data, base };
       if (this.tab === "review") await this.readReview(cx, this.review === null);
@@ -475,7 +475,8 @@ export default class GitDeck extends View {
     const base = target && this.compare?.repo === target.cwd ? this.compare.base : null;
     if (!target || !status?.oid || base === null) return;
     const [data] = await Promise.all([loadReview(this.git, target, base, status.oid), pr ? this.readPr(cx, true) : Promise.resolve()]);
-    if (this.herd.selected !== target.cwd) return;
+    // The PR may have named another base meanwhile; its own read has the files then.
+    if (this.herd.selected !== target.cwd || this.compare?.base !== base) return;
     this.review = { repo: target.cwd, data };
     cx.notify();
   }
@@ -489,7 +490,21 @@ export default class GitDeck extends View {
     const state = await loadBranchPr(this.git, exec, target, await this.homeFor(target), branch);
     if (this.herd.selected !== target.cwd) return;
     this.pr = { repo: target.cwd, branch, state };
+    await this.followTarget(cx, target);
     cx.notify();
+  }
+
+  /** The PR merges into another branch than the one compared with: compare and review against it. */
+  async followTarget(cx: AsyncContext, target: Target): Promise<void> {
+    const history = this.historyFor === target.cwd ? this.view.history : null;
+    const status = this.herd.statuses[target.cwd]?.status;
+    if (!history || !status?.oid || this.compare?.repo !== target.cwd) return;
+    const base = reviewBase(history.refs, status.branch ?? null, this.shownPr(target.cwd)?.pr?.target ?? null);
+    if (base === this.compare.base) return;
+    const data = base === null ? null : await loadCompare(this.git, target, base);
+    if (this.herd.selected !== target.cwd) return;
+    this.compare = { repo: target.cwd, data, base };
+    if (this.tab === "review") await this.readReview(cx, false);
   }
 
   /** The PR state for the shown repo's current branch; null while unread or on another branch. */

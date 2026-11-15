@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { GitError, type Git } from "../src/core/git/runner.ts";
 import type { Ref } from "../src/core/git/refs.ts";
-import { baseBranch, compareArgs, loadCompare, parseCompare } from "../src/core/review.ts";
+import { baseBranch, compareArgs, loadCompare, parseCompare, reviewBase } from "../src/core/review.ts";
 
 const ref = (name: string, kind: Ref["kind"] = "branch"): Ref => ({
   kind, full: kind === "remote" ? `refs/remotes/${name}` : `refs/heads/${name}`, name, hash: "a".repeat(40),
@@ -24,6 +24,17 @@ test("on the main line itself there is nothing to compare", () => {
 
 test("a detached HEAD still compares against main", () => {
   assert.equal(baseBranch([ref("main")], null), "main");
+});
+
+test("reviewBase compares with the PR's target when it is there, else the main line", () => {
+  const refs = [ref("feat"), ref("main"), ref("origin/develop", "remote"), ref("release/1"), ref("origin/release/1", "remote")];
+  assert.equal(reviewBase(refs, "feat", "develop"), "origin/develop", "only the remote copy exists");
+  assert.equal(reviewBase(refs, "feat", "release/1"), "release/1", "a local branch beats its remote copy");
+  assert.equal(reviewBase(refs, "feat", "main"), "main");
+  assert.equal(reviewBase(refs, "feat", "gone"), "main", "a target not fetched falls back to main");
+  assert.equal(reviewBase(refs, "feat", null), "main", "no PR");
+  assert.equal(reviewBase(refs, "feat", ""), "main");
+  assert.equal(reviewBase(refs, "develop", "develop"), null, "on the target itself");
 });
 
 test("compareArgs counts both sides of base...HEAD", () => {
