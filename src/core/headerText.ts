@@ -15,6 +15,12 @@ export function changesTabLabel(status: StatusLike | null): string {
   return parts.length === 0 ? "Changes" : `Changes ${parts.join(" · ")}`;
 }
 
+/** Review lists commits only: say so when the work tree holds more (an agent's edits not yet committed). */
+export function uncommittedNote(status: StatusLike | null): string | null {
+  const n = count(status, (k) => k !== "ignored");
+  return n === 0 ? null : `${n} file${n === 1 ? "" : "s"} not committed yet: not in this review`;
+}
+
 /** "! 2 conflicts", or null when there are none. */
 export function conflictWarning(status: StatusLike | null): string | null {
   const n = count(status, (k) => k === "conflict");

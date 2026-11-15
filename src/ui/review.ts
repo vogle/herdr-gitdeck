@@ -23,6 +23,8 @@ export interface ReviewParts {
   /** The files marked viewed in this repo, with the blob each had then. */
   seen: Seen;
   folded: ReadonlySet<ReviewGroup>;
+  /** Files changed in the work tree but not committed, worded; null when there are none. */
+  uncommitted: string | null;
   /** The feedback batch at the foot, or null with no notes. */
   feedback: Element | null;
 }
@@ -34,6 +36,7 @@ export interface ReviewActions {
   toggleGroup: (group: ReviewGroup, cx: Context) => void;
   /** Names origin's forge for a host gitdeck doesn't know (a self-hosted GitLab or GitHub). */
   setForge: (kind: ForgeKind, cx: Context) => void;
+  showChanges: (cx: Context) => void;
 }
 
 const GROUP_TITLE: Readonly<Record<ReviewGroup, string>> = { code: "Code", tests: "Tests", other: "Other" };
@@ -61,6 +64,24 @@ function prLine(state: ReviewParts["pr"], p: Palette, a: ReviewActions): Element
     .child(div().flex_1().min_w_0().truncate().text_color(p.foreground).child(pr.title))
     .child(div().flex_shrink_0().text_color(p.dim).child(prState(pr)))
     .child(div().flex_shrink_0().text_color(toneColor(checksTone(pr.checks), p)).child(checksText(pr.checks)));
+}
+
+/** Commits are what's reviewed; uncommitted work waits in the Changes tab. */
+function uncommittedLine(note: string | null, p: Palette, a: ReviewActions): Element[] {
+  if (note === null) return [];
+  return [
+    h_flex()
+      .px(10)
+      .py(4)
+      .gap(8)
+      .items_center()
+      .flex_shrink_0()
+      .text_xs()
+      .border_b_1()
+      .border_color(p.border)
+      .child(div().flex_1().min_w_0().truncate().text_color(p.changed).child(note))
+      .child(textButton("rv-to-changes", "Changes", p, a.showChanges)),
+  ];
 }
 
 function groupHead(group: ReviewGroup, files: readonly CommitFile[], viewed: number, parts: ReviewParts, p: Palette, a: ReviewActions): Element {
@@ -143,7 +164,7 @@ export function reviewPane(parts: ReviewParts, p: Palette, a: ReviewActions): El
   const pane = v_flex().flex_1().min_h_0();
   const foot = parts.feedback ? [parts.feedback] : [];
   if (parts.base === null) {
-    return pane.child(div().flex_1().p(14).text_color(p.dim).child("On the main line: nothing to review against it.")).children(foot);
+    return pane.children(uncommittedLine(parts.uncommitted, p, a)).child(div().flex_1().p(14).text_color(p.dim).child("On the main line: nothing to review against it.")).children(foot);
   }
   const r = parts.review;
   const files = r?.files ?? [];
@@ -173,6 +194,7 @@ export function reviewPane(parts: ReviewParts, p: Palette, a: ReviewActions): El
         .child(div().flex_1().min_w_0().truncate().text_xs().text_color(r?.error ? p.removed : p.muted).child(title))
         .child(textButton("review-refresh", "Refresh", p, a.refresh)),
     )
+    .children(uncommittedLine(parts.uncommitted, p, a))
     .child(prLine(parts.pr, p, a))
     .child(v_flex().id("gitdeck-review").flex_1().min_h_0().overflow_y_scroll().pb(8).children(body))
     .children(foot);

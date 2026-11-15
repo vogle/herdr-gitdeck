@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { changesTabLabel, conflictWarning } from "../src/core/headerText.ts";
+import { changesTabLabel, conflictWarning, uncommittedNote } from "../src/core/headerText.ts";
 import { agentChips, repoAgents } from "../src/core/repoAgents.ts";
 
 const status = (kinds: string[]) => ({
@@ -20,6 +20,13 @@ test("conflicts become a worded warning, only when there are some", () => {
   assert.equal(conflictWarning(null), null);
   assert.equal(conflictWarning(status(["conflict"])), "! 1 conflict");
   assert.equal(conflictWarning(status(["conflict", "conflict", "ordinary"])), "! 2 conflicts");
+});
+
+test("the Review tab says when work isn't committed yet, since it shows commits only", () => {
+  assert.equal(uncommittedNote(null), null);
+  assert.equal(uncommittedNote(status(["ignored"])), null);
+  assert.equal(uncommittedNote(status(["ordinary"])), "1 file not committed yet: not in this review");
+  assert.equal(uncommittedNote(status(["ordinary", "untracked", "conflict", "ignored"])), "3 files not committed yet: not in this review");
 });
 
 test("an agent carries since when its tab last changed state", () => {

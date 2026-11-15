@@ -32,7 +32,7 @@ import { loadStatus, scanHerd } from "./core/scan.ts";
 import { Signal } from "./core/signal.ts";
 import { MAX_REPOS } from "./core/repos/discover.ts";
 import { agentChips, herdAgents, repoAgents, type AgentChip } from "./core/repoAgents.ts";
-import { conflictWarning } from "./core/headerText.ts";
+import { conflictWarning, uncommittedNote } from "./core/headerText.ts";
 import { ago } from "./core/time.ts";
 import { freshPaths, markSeen, newCommits, touch, type Seen } from "./core/seen.ts";
 import { loadCompare, loadReview, reviewBase, type Compare, type Review } from "./core/review.ts";
@@ -746,6 +746,7 @@ export default class GitDeck extends View {
                   pr: this.shownPr(repo.path),
                   seen: seenFor(shared(REVIEWED_KEY), repo.path),
                   folded: this.reviewFolded,
+                  uncommitted: uncommittedNote(result?.status ?? null),
                   feedback: this.feedback.render(
                     repo.path,
                     this.repoTarget()?.on != null,
@@ -755,6 +756,7 @@ export default class GitDeck extends View {
                 },
                 actions: {
                   openFile: (path) => this.openReviewFile(path),
+                  showChanges: (cx) => this.selectTab("changes", cx),
                   toggleViewed: (path, cx) => {
                     const r = this.review?.repo === repo.path ? this.review.data : null;
                     const seen = seenFor(shared(REVIEWED_KEY), repo.path);
