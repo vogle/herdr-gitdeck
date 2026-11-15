@@ -103,12 +103,30 @@ test("loadStatus lists the wholly new folders, only when something is untracked"
   assert.deepEqual(clean.status?.newFolders ?? [], []);
 });
 
+test("loadStatus finds the branch on origin when it has no upstream, and only then", async () => {
+  const asked: string[][] = [];
+  const git = (status: string, onOrigin: boolean): Git => async (_target, args) => {
+    asked.push([...args]);
+    if (args[0] === "status") return status;
+    if (args[0] === "rev-parse" && onOrigin) return "abc\n";
+    throw new GitError("", args, 1, "");
+  };
+  const r = await loadStatus(git("# branch.head feat/x\0", true), { cwd: "/r", on: null });
+  assert.equal(r.status?.remoteBranch, "origin/feat/x");
+  assert.ok(asked.some((a) => a.join(" ") === "rev-parse --verify --quiet refs/remotes/origin/feat/x"));
+  assert.equal((await loadStatus(git("# branch.head feat/x\0", false), { cwd: "/r", on: null })).status?.remoteBranch, null);
+  asked.length = 0;
+  const linked = await loadStatus(git("# branch.head feat/x\0# branch.upstream origin/feat/x\0", true), { cwd: "/r", on: null });
+  assert.equal(linked.status?.remoteBranch ?? null, null);
+  assert.ok(!asked.some((a) => a[0] === "rev-parse"), "a linked branch isn't looked up");
+});
+
 const recording = (config: () => Promise<string>) => {
   const calls: string[] = [];
   const git: Git = async (_target, args) => {
     calls.push(args[0] ?? "");
     if (args[0] === "config") return config();
-    if (args[0] === "status") return "# branch.head main\0";
+    if (args[0] === "status") return "# branch.head main\0# branch.upstream origin/main\0";
     throw new Error(`unexpected git ${args.join(" ")}`);
   };
   return { git, calls };

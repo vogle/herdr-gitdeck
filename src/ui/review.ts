@@ -5,7 +5,7 @@
 
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import type { BranchPr } from "../core/forge/index.ts";
+import type { BranchPrState, ForgeKind } from "../core/forge/index.ts";
 import { checksText, checksTone, prState } from "../core/forge/summary.ts";
 import type { CommitFile } from "../core/git/show.ts";
 import type { Review } from "../core/review.ts";
@@ -19,7 +19,7 @@ export interface ReviewParts {
   review: Review | null;
   /** The base to compare with; null on main (or no main line). */
   base: string | null;
-  pr: { pr: BranchPr | null; error: string | null; label: "PR" | "MR" } | null;
+  pr: BranchPrState | null;
   /** The files marked viewed in this repo, with the blob each had then. */
   seen: Seen;
   folded: ReadonlySet<ReviewGroup>;
@@ -32,6 +32,8 @@ export interface ReviewActions {
   refresh: (cx: Context) => void;
   toggleViewed: (path: string, cx: Context) => void;
   toggleGroup: (group: ReviewGroup, cx: Context) => void;
+  /** Names origin's forge for a host gitdeck doesn't know (a self-hosted GitLab or GitHub). */
+  setForge: (kind: ForgeKind, cx: Context) => void;
 }
 
 const GROUP_TITLE: Readonly<Record<ReviewGroup, string>> = { code: "Code", tests: "Tests", other: "Other" };
@@ -41,10 +43,16 @@ export function toneColor(tone: ReturnType<typeof checksTone>, p: Palette): Pale
   return tone === "failed" ? p.removed : tone === "pending" ? p.changed : tone === "passed" ? p.added : p.dim;
 }
 
-function prLine(state: ReviewParts["pr"], p: Palette): Element {
+function prLine(state: ReviewParts["pr"], p: Palette, a: ReviewActions): Element {
   const row = h_flex().px(10).py(5).gap(8).items_center().flex_shrink_0().text_xs().border_b_1().border_color(p.border);
   if (state === null) return row.text_color(p.dim).child("Reading the review request…");
   if (state.error !== null) return row.text_color(p.removed).child(state.error);
+  if (state.host !== null) {
+    return row
+      .child(div().flex_1().min_w_0().truncate().text_color(p.dim).child(`origin is on ${state.host}: which is it?`))
+      .child(textButton("rv-forge-gitlab", "GitLab", p, (cx) => a.setForge("gitlab", cx)))
+      .child(textButton("rv-forge-github", "GitHub", p, (cx) => a.setForge("github", cx)));
+  }
   const pr = state.pr;
   if (pr === null) return row.text_color(p.dim).child(`No ${state.label} for this branch`);
   return row
@@ -164,7 +172,7 @@ export function reviewPane(parts: ReviewParts, p: Palette, a: ReviewActions): El
         .child(div().flex_1().min_w_0().truncate().text_xs().text_color(r?.error ? p.removed : p.muted).child(title))
         .child(textButton("review-refresh", "Refresh", p, a.refresh)),
     )
-    .child(prLine(parts.pr, p))
+    .child(prLine(parts.pr, p, a))
     .child(v_flex().id("gitdeck-review").flex_1().min_h_0().overflow_y_scroll().pb(8).children(body))
     .children(foot);
 }

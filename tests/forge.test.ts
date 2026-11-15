@@ -4,7 +4,7 @@ import type { Exec, Git } from "../src/core/git/runner.ts";
 import { forgeOf, parseRemote } from "../src/core/forge/remote.ts";
 import { parseBranchPr, parsePrs, prListArgs, prViewArgs } from "../src/core/forge/github.ts";
 import { mrListArgs, mrViewArgs, parseBranchMr, parseMrs } from "../src/core/forge/gitlab.ts";
-import { loadBranchPr, loadPrs } from "../src/core/forge/index.ts";
+import { loadBranchPr, loadPrs, setForge } from "../src/core/forge/index.ts";
 
 const T = { cwd: "/r", on: null };
 
@@ -133,16 +133,32 @@ test("loadPrs reports a missing forge, a failing or missing CLI", async () => {
 
 test("loadBranchPr: none without a forge or a PR/MR, an error when the CLI fails", async () => {
   const none: Exec = async () => ({ code: 1, stdout: "", stderr: 'no pull requests found for branch "x"\n' });
-  assert.deepEqual(await loadBranchPr(gitFor("git@github.com:o/r.git"), none, T, "/home", "x"), { pr: null, error: null, label: "PR" });
+  assert.deepEqual(await loadBranchPr(gitFor("git@github.com:o/r.git"), none, T, "/home", "x"), { pr: null, error: null, label: "PR", host: null });
   const noMr: Exec = async () => ({ code: 1, stdout: "", stderr: "no open merge request available for \"x\"\n" });
-  assert.deepEqual(await loadBranchPr(gitFor("git@gitlab.com:o/r.git"), noMr, T, "/home", "x"), { pr: null, error: null, label: "MR" });
+  assert.deepEqual(await loadBranchPr(gitFor("git@gitlab.com:o/r.git"), noMr, T, "/home", "x"), { pr: null, error: null, label: "MR", host: null });
   const broken: Exec = async () => ({ code: 4, stdout: "", stderr: "gh: To get started, run gh auth login\n" });
   assert.equal((await loadBranchPr(gitFor("git@github.com:o/r.git"), broken, T, "/home", "x")).error, "gh: To get started, run gh auth login");
   const ok: Exec = async () => ({ code: 0, stdout: JSON.stringify({ iid: 3, title: "t", state: "opened", web_url: "w" }), stderr: "" });
   assert.equal((await loadBranchPr(gitFor("git@gitlab.com:o/r.git"), ok, T, "/home", "x")).pr?.number, 3);
-  assert.deepEqual(await loadBranchPr(gitFor("https://git.acme.dev/o/r"), ok, T, "/home", "x"), { pr: null, error: null, label: "PR" });
+  assert.deepEqual(await loadBranchPr(gitFor("https://git.acme.dev/o/r"), ok, T, "/home", "x"), { pr: null, error: null, label: "PR", host: "git.acme.dev" }, "an unknown host is named, to be told which forge it is");
+  assert.equal((await loadBranchPr(gitFor("not a url"), ok, T, "/home", "x")).host, null, "no host without a remote to read");
+  assert.equal((await loadBranchPr(gitFor("https://git.acme.dev/o/r", "gitlab"), ok, T, "/home", "x")).host, null, "a named forge isn't asked about");
   const gone: Exec = async () => {
     throw new Error("spawn gh ENOENT");
   };
   assert.match((await loadBranchPr(gitFor("git@github.com:o/r.git"), gone, T, "/home", "x")).error ?? "", /Can't run gh/);
+});
+
+test("setForge names the forge in the repo's own config, and nothing else", async () => {
+  const calls: string[][] = [];
+  const git: Git = async (_t, args) => {
+    calls.push(args);
+    return "";
+  };
+  await setForge(git, T, "gitlab");
+  await setForge(git, T, "github");
+  assert.deepEqual(calls, [
+    ["config", "--local", "gitdeck.forge", "gitlab"],
+    ["config", "--local", "gitdeck.forge", "github"],
+  ]);
 });

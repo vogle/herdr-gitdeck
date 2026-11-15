@@ -91,6 +91,47 @@ function filterRow(state: HerdState, agents: HerdAgents, p: Palette): Element {
     .child(textButton("herd-filter", agents.only ? "Show all" : "With agents", p, agents.toggle, agents.only));
 }
 
+/** One repo in the strip: its agents, its name, what's going on; the branch in the tooltip. */
+function repoChip(repo: HerdRepo, state: HerdState, p: Palette, onPick: (path: string, cx: Context) => void, chips: readonly AgentChip[]): Element {
+  const result = state.statuses[repo.path];
+  const here = repo.path === state.selected;
+  const branch = result?.status ? (result.status.branch ?? "detached") : result?.untrusted ? "needs trust" : result?.error ? "error" : "…";
+  return h_flex()
+    .id(`chip:${repo.path}`)
+    .h(22)
+    .px(8)
+    .gap(6)
+    .items_center()
+    .flex_shrink_0()
+    .rounded(4)
+    .border_1()
+    .border_color(here ? p.accent : p.border)
+    .cursor_pointer()
+    .when(here, (el) => el.bg(p.selected))
+    .hover((el) => el.bg(here ? p.selected : p.hover))
+    .tooltip(`${repo.group === "" ? "" : `${repo.group}/`}${repo.name} · ${branch}`)
+    .on_click((_e, cx) => onPick(repo.path, cx))
+    .when(chips.length > 0, (el) => el.child(h_flex().gap(3).items_center().children(agentDots(chips, p))))
+    .child(div().max_w(180).truncate().text_color(here ? p.foreground : p.muted).child(repo.name))
+    .child(h_flex().gap(6).items_center().text_xs().text_color(p.muted).children(statusBadges(result, p)));
+}
+
+/** Every repo at once under the header, so switching takes one click; wraps rather than hides. */
+export function repoStrip(state: HerdState, p: Palette, onPick: (path: string, cx: Context) => void, byRepo: HerdAgents["byRepo"]): Element | null {
+  if (state.repos.length < 2) return null;
+  return h_flex()
+    .id("repo-strip")
+    .flex_wrap()
+    .gap(4)
+    .px(8)
+    .py(5)
+    .flex_shrink_0()
+    .text_xs()
+    .border_b_1()
+    .border_color(p.border)
+    .children(groupRepos(state.repos).flatMap((g) => g.repos.map((r) => repoChip(r, state, p, onPick, byRepo[r.path] ?? []))));
+}
+
 export function repoList(state: HerdState, p: Palette, onPick: (path: string, cx: Context) => void, agents: HerdAgents): Element {
   const groups = groupRepos(reposShown(state.repos, agents.byRepo, agents.only, state.selected));
   const list = v_flex()

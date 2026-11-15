@@ -24,6 +24,11 @@ test("a branch never pushed offers to publish it", () => {
   assert.equal(chip?.label, "↑ Publish");
 });
 
+test("a branch already on origin but not linked offers to link it, not to publish again", () => {
+  const chips = syncChips({ ...on, upstream: null, remoteBranch: "origin/feat/x" });
+  assert.deepEqual(chips.map((c) => [c.kind, c.label]), [["link", "↔ Link origin/feat/x"]]);
+});
+
 test("a detached head has nothing to sync", () => {
   assert.deepEqual(syncChips({ branch: null, upstream: null, ahead: 0, behind: 0 }), []);
 });

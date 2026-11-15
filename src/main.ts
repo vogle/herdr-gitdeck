@@ -9,9 +9,8 @@ import { prBar } from "./ui/prBar.ts";
 import { ChangesPanel } from "./changes.ts";
 import { loadReflog, type InspectView } from "./core/inspect.ts";
 import { loadBlob, loadTree } from "./core/tree.ts";
-import { loadBranchPr, loadPrs, type BranchPr } from "./core/forge/index.ts";
+import { loadBranchPr, loadPrs, setForge, type BranchPr, type BranchPrState } from "./core/forge/index.ts";
 
-type BranchPrState = Awaited<ReturnType<typeof loadBranchPr>>;
 import { backStep, isWide, viewerFocused, type PanelTab } from "./core/panel.ts";
 import { markViewed, openReviewFile, openViewer, Viewer } from "./viewer.ts";
 import { REVIEWED_KEY, seenFor, type ReviewQueue } from "./core/reviewed.ts";
@@ -40,7 +39,7 @@ import { baseBranch, loadCompare, loadReview, type Compare, type Review } from "
 import { header, type HeaderSync } from "./ui/header.ts";
 import { syncChips } from "./core/syncChips.ts";
 import { historyPane, type HistoryActions } from "./ui/historyPane.ts";
-import { repoList } from "./ui/repoList.ts";
+import { repoList, repoStrip } from "./ui/repoList.ts";
 import { palette } from "./ui/style.ts";
 import { summary } from "./ui/summary.ts";
 import { checkForUpdate, installUpdate } from "./updater.ts";
@@ -680,7 +679,7 @@ export default class GitDeck extends View {
     return {
       chips: syncChips(status),
       busy: this.opsPanel.view.busy !== null,
-      run: (kind, cx) => (kind === "pull" ? ops.pull(cx) : ops.push(cx)),
+      run: (kind, cx) => (kind === "pull" ? ops.pull(cx) : kind === "link" ? ops.link(cx) : ops.push(cx)),
     };
   }
 
@@ -756,6 +755,15 @@ export default class GitDeck extends View {
                   refresh: (cx) => {
                     cx.spawn((cx) => this.readReview(cx, true));
                   },
+                  setForge: (kind, cx) => {
+                    const target = this.repoTarget();
+                    if (!target) return;
+                    cx.spawn(async (cx) => {
+                      // A failed write leaves the question up: reading again shows it still unnamed.
+                      await setForge(this.git, target, kind).catch(() => undefined);
+                      await this.readPr(cx, true);
+                    });
+                  },
                 },
               },
             },
@@ -791,6 +799,13 @@ export default class GitDeck extends View {
             conflicts: conflictWarning((this.herd.selected ? this.herd.statuses[this.herd.selected]?.status : null) ?? null),
             now: Date.now(),
           },
+        ),
+      )
+      .when(!this.herd.picking, (el) =>
+        el.children(
+          [repoStrip(this.herd, p, (path, cx) => this.pick(path, cx), herdAgents(this.herd.repos.map((r) => r.path), agents(), panes()))].filter(
+            (x): x is Element => x !== null,
+          ),
         ),
       )
       .when(shown?.pr != null, (el) =>

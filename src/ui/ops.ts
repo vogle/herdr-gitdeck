@@ -13,6 +13,8 @@ import { textButton, type Palette } from "./style.ts";
 export interface OpsActions {
   fetch: (cx: Context) => void;
   pull: (cx: Context) => void;
+  /** Links the branch to origin's branch of the same name (pushed without -u). */
+  link: (cx: Context) => void;
   push: (cx: Context) => void;
   stash: (cx: Context) => void;
   sequence: (step: "continue" | "abort" | "skip", cx: Context) => void;

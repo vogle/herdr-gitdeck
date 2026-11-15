@@ -8,7 +8,7 @@ import type { Git, Target } from "./core/git/runner.ts";
 import type { RepoStatus } from "./core/git/status.ts";
 import type { History } from "./core/history.ts";
 import {
-  checkoutArgs, cherryPickArgs, createBranchArgs, deleteBranchArgs, fetchArgs, mergeArgs, pullArgs, pushArgs, readOperation,
+  checkoutArgs, cherryPickArgs, createBranchArgs, deleteBranchArgs, fetchArgs, mergeArgs, pullArgs, pushArgs, linkArgs, readOperation,
   readRemotes, rebaseArgs, refNameProblem, resetArgs, revertArgs, runOp, sequenceArgs, stashArgs, stashPushArgs, tagArgs,
   type ResetMode,
 } from "./core/ops.ts";
@@ -196,6 +196,10 @@ export class OpsPanel {
     return {
       fetch: (cx) => this.git(cx, "Fetching", "Fetched every remote", fetchArgs(), true, true),
       pull: (cx) => this.git(cx, "Pulling", "Pulled", pullArgs(), true),
+      link: (cx) => {
+        const remote = this.host.status()?.remoteBranch;
+        if (remote) this.git(cx, "Linking", `Linked to ${remote}`, linkArgs(remote));
+      },
       push: (cx) =>
         this.run(cx, "Pushing", "Pushed", async (target) => {
           const status = this.host.status();

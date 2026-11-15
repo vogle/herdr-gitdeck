@@ -6,17 +6,27 @@ import type { Exec, Git, Target } from "../git/runner.ts";
 import { parseBranchPr, parsePrs, prListArgs, prViewArgs } from "./github.ts";
 import { mrListArgs, mrViewArgs, parseBranchMr, parseMrs } from "./gitlab.ts";
 import { forgeOf, parseRemote } from "./remote.ts";
-import type { BranchPr, Forge, PrList } from "./types.ts";
+import type { BranchPr, Forge, ForgeKind, PrList } from "./types.ts";
 
-export type { BranchPr, Checks, Forge, PrList, PullRequest } from "./types.ts";
+export type { BranchPr, Checks, Forge, ForgeKind, PrList, PullRequest } from "./types.ts";
 
-/** The forge of origin; `git config gitdeck.forge github|gitlab` names it for any host. */
-export async function readForge(git: Git, target: Target): Promise<Forge | null> {
+/** origin's host, and its forge; `git config gitdeck.forge github|gitlab` names it for any host. */
+async function readOrigin(git: Git, target: Target): Promise<{ forge: Forge | null; host: string | null }> {
   const [url, override] = await Promise.all([
     git(target, ["remote", "get-url", "origin"]).catch(() => ""),
     git(target, ["config", "--get", "gitdeck.forge"]).then((v) => v.trim(), () => null),
   ]);
-  return forgeOf(parseRemote(url), override);
+  const remote = parseRemote(url);
+  return { forge: forgeOf(remote, override), host: remote?.host ?? null };
+}
+
+export async function readForge(git: Git, target: Target): Promise<Forge | null> {
+  return (await readOrigin(git, target)).forge;
+}
+
+/** Names origin's forge for this repo (its own .git/config), for a host that isn't github.com or gitlab.com. */
+export async function setForge(git: Git, target: Target, kind: ForgeKind): Promise<void> {
+  await git(target, ["config", "--local", "gitdeck.forge", kind]);
 }
 
 const failure = (cli: string, error: unknown): string => `Can't run ${cli}: ${error instanceof Error ? error.message : String(error)}`;
@@ -39,18 +49,27 @@ export async function loadPrs(git: Git, exec: Exec, target: Target, away: string
 /** The CLIs' words for "this branch has none". */
 const NONE = /no pull requests found|no (?:open )?merge requests? (?:available|found)/i;
 
+export interface BranchPrState {
+  pr: BranchPr | null;
+  error: string | null;
+  label: "PR" | "MR";
+  /** origin's host when it isn't a known forge yet: the person names which it is. */
+  host: string | null;
+}
+
 /** The branch's PR or MR; none (and no error) without a forge or one to show. */
-export async function loadBranchPr(git: Git, exec: Exec, target: Target, away: string, branch: string): Promise<{ pr: BranchPr | null; error: string | null; label: "PR" | "MR" }> {
-  const forge = await readForge(git, target);
-  if (forge === null) return { pr: null, error: null, label: "PR" };
+export async function loadBranchPr(git: Git, exec: Exec, target: Target, away: string, branch: string): Promise<BranchPrState> {
+  const { forge, host: origin } = await readOrigin(git, target);
+  if (forge === null) return { pr: null, error: null, label: "PR", host: origin };
   const label = forge.label;
+  const host = null;
   const args = forge.kind === "github" ? prViewArgs(forge.repo, branch) : mrViewArgs(forge.repo, branch);
   try {
     const r = await exec(forge.cli, args, { cwd: away, on: target.on });
-    if (r.code === 0) return { pr: forge.kind === "github" ? parseBranchPr(r.stdout) : parseBranchMr(r.stdout), error: null, label };
-    if (NONE.test(r.stderr)) return { pr: null, error: null, label };
-    return { pr: null, error: r.stderr.split("\n")[0] || `${forge.cli} failed (${r.code})`, label };
+    if (r.code === 0) return { pr: forge.kind === "github" ? parseBranchPr(r.stdout) : parseBranchMr(r.stdout), error: null, label, host };
+    if (NONE.test(r.stderr)) return { pr: null, error: null, label, host };
+    return { pr: null, error: r.stderr.split("\n")[0] || `${forge.cli} failed (${r.code})`, label, host };
   } catch (error) {
-    return { pr: null, error: failure(forge.cli, error), label };
+    return { pr: null, error: failure(forge.cli, error), label, host };
   }
 }

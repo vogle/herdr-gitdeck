@@ -46,6 +46,8 @@ export interface RepoStatus {
   behind: number;
   stash: number;
   entries: readonly StatusEntry[];
+  /** `origin/<branch>` when the branch has no upstream but origin has it (pushed without -u); else null or absent. */
+  remoteBranch?: string | null;
   /** Wholly new folders (see NEW_FOLDERS_ARGS); absent when nothing is untracked. */
   newFolders?: readonly string[];
 }
