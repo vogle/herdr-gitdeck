@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { syncChips } from "../src/core/syncChips.ts";
+import { syncChips, syncedNote } from "../src/core/syncChips.ts";
 
 const on = { branch: "feat/x", upstream: "origin/feat/x", ahead: 0, behind: 0 };
 
@@ -35,4 +35,15 @@ test("a detached head has nothing to sync", () => {
 
 test("no status yet shows nothing", () => {
   assert.deepEqual(syncChips(null), []);
+});
+
+test("an even, pushed branch says it is in sync, so the row is never empty", () => {
+  assert.equal(syncedNote(on), "In sync with origin/feat/x");
+});
+
+test("no note where a chip already says what to do, or nothing can sync", () => {
+  assert.equal(syncedNote({ ...on, ahead: 1 }), null);
+  assert.equal(syncedNote({ ...on, upstream: null }), null);
+  assert.equal(syncedNote({ ...on, branch: null }), null);
+  assert.equal(syncedNote(null), null);
 });

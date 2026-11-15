@@ -33,17 +33,20 @@ interface PaneLike {
 const inside = (repo: string, cwd: string | null): boolean => typeof cwd === "string" && (cwd === repo || cwd.startsWith(`${repo}/`));
 
 /**
- * The agents whose terminal is in the repo or a folder below it. `changedAt` holds
- * when each tab last changed state (Herdr's tab `changed_at`), for how long ago.
+ * The agents whose terminal is in the repo or a folder below it, plus (given the
+ * herd's repos) those in a repo around it: a root's agent edits its sub-repos too.
+ * `changedAt` holds when each tab last changed state (Herdr's tab `changed_at`).
  */
 export function repoAgents(
   repo: string | null,
   agents: readonly AgentLike[],
   panes: readonly PaneLike[],
   changedAt: ReadonlyMap<string, number | null> = new Map(),
+  herd: readonly string[] = [],
 ): RepoAgent[] {
   if (repo === null) return [];
-  const here = new Set(panes.filter((p) => inside(repo, p.cwd)).map((p) => p.pane));
+  const around = herd.filter((r) => r !== repo && inside(r, repo));
+  const here = new Set(panes.filter((p) => inside(repo, p.cwd) || around.includes(p.cwd ?? "")).map((p) => p.pane));
   return agents
     .filter((a) => here.has(a.pane))
     .map((a) => ({ name: a.program.name, key: a.program.key, status: a.status, since: a.tab === undefined ? null : (changedAt.get(a.tab) ?? null) }));

@@ -40,3 +40,15 @@ test("an agent carries since when its tab last changed state", () => {
   assert.deepEqual(repoAgents("/w/app", agents, panes).map((a) => a.since), [null, null]);
   assert.deepEqual(agentChips(repoAgents("/w/app", agents, panes, changed)).map((c) => c.since), [1_000, null]);
 });
+
+test("a sub-repo also shows the agent working in the repo around it, not one in a sibling or outside the herd", () => {
+  const agents = [
+    { pane: "root", status: "idle" as const, program: { name: "Claude Code", key: "claude" } },
+    { pane: "sib", status: "working" as const, program: { name: "Codex", key: "codex" } },
+    { pane: "home", status: "working" as const, program: { name: "Pi", key: "pi" } },
+  ];
+  const panes = [{ pane: "root", cwd: "/w/bsp" }, { pane: "sib", cwd: "/w/bsp/other" }, { pane: "home", cwd: "/w" }];
+  const herd = ["/w/bsp", "/w/bsp/display", "/w/bsp/other"];
+  assert.deepEqual(repoAgents("/w/bsp/display", agents, panes, new Map(), herd).map((a) => a.name), ["Claude Code"]);
+  assert.deepEqual(repoAgents("/w/bsp/display", agents, panes).map((a) => a.name), [], "without the herd, only agents inside it");
+});

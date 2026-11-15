@@ -8,6 +8,7 @@ import { h_flex, v_flex, Input, type InputState, type VirtualListScrollHandle } 
 import type { RepoStatus } from "../core/git/status.ts";
 import { changesTabLabel } from "../core/headerText.ts";
 import { UNCOMMITTED, type HistoryView } from "../core/historyView.ts";
+import type { ForgeKind } from "../core/forge/index.ts";
 import type { InspectView } from "../core/inspect.ts";
 import { PANEL_TABS, type PanelTab } from "../core/panel.ts";
 import { changesPane, type ChangesActions, type ChangesParts } from "./changes.ts";
@@ -29,6 +30,7 @@ export interface HistoryActions extends GraphActions, DetailActions {
   /** Takes the repo as it is now as seen: the new-file dots and counts clear. */
   markSeen: (cx: Context) => void;
   treeFile: (index: number | null, cx: Context) => void;
+  setForge: (kind: ForgeKind, cx: Context) => void;
 }
 
 export interface HistoryParts {
@@ -162,6 +164,7 @@ function tabBody(parts: HistoryParts, p: Palette, actions: HistoryActions): Elem
       close: actions.closeInspect,
       openTreeFile: (i, cx) => actions.treeFile(i, cx),
       closeTreeFile: (cx) => actions.treeFile(null, cx),
+      setForge: actions.setForge,
     });
   }
   if (parts.tab === "changes") {

@@ -132,3 +132,14 @@ export function summarize(status: RepoStatus): StatusSummary {
   }
   return { staged, unstaged, untracked, conflicts, clean: staged + unstaged + untracked + conflicts === 0 };
 }
+
+/**
+ * A branch made with `git checkout -b fix/x origin/main` tracks origin/main: it was
+ * never pushed under its own name. Treat it as having no upstream, so the header
+ * offers to publish it instead of saying it's in sync, and push never targets main.
+ */
+export function ownUpstream(s: RepoStatus): RepoStatus {
+  if (s.upstream === null || s.branch === null) return s;
+  const name = s.upstream.slice(s.upstream.indexOf("/") + 1);
+  return name === s.branch ? s : { ...s, upstream: null, ahead: 0, behind: 0 };
+}

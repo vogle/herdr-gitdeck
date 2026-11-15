@@ -5,10 +5,10 @@
 
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import type { BranchPr } from "../core/forge/index.ts";
+import type { BranchPr, ForgeKind } from "../core/forge/index.ts";
 import { checksText, checksTone, prNumber, prState } from "../core/forge/summary.ts";
 import { toneColor } from "./review.ts";
-import { ICONS, icon, type Palette } from "./style.ts";
+import { ICONS, icon, textButton, type Palette } from "./style.ts";
 
 export interface PrBarActions {
   review: (cx: Context) => void;
@@ -53,4 +53,50 @@ export function prBar(pr: BranchPr, label: "PR" | "MR", p: Palette, a: PrBarActi
     .child(div().flex_shrink_0().text_color(p.dim).child(prState(pr)))
     .child(div().flex_shrink_0().text_color(toneColor(checksTone(pr.checks), p)).child(checksText(pr.checks)))
     .child(openButton(pr.url, label, p, a));
+}
+
+/**
+ * In the PR bar's place when origin is on a host gitdeck can't tell (no CLI, or
+ * both, signed in to it): the question, where it's seen without opening a tab.
+ */
+export function forgeQuestion(host: string, p: Palette, choose: (kind: ForgeKind, cx: Context) => void): Element {
+  return h_flex()
+    .id("forge-question")
+    .px(12)
+    .h(28)
+    .gap(8)
+    .items_center()
+    .flex_shrink_0()
+    .text_xs()
+    .border_b_1()
+    .border_color(p.border)
+    .bg(p.chrome)
+    .child(icon(ICONS.pr, p.dim, 13))
+    .child(div().flex_1().min_w_0().truncate().text_color(p.muted).child(`origin is on ${host}: GitLab or GitHub? PRs and checks show once it's named`))
+    .child(textButton("forge-q-gitlab", "GitLab", p, (cx) => choose("gitlab", cx)))
+    .child(textButton("forge-q-github", "GitHub", p, (cx) => choose("github", cx)));
+}
+
+/** The row when there's no PR to show: being read, none, or why it can't be read. A click reads it again. */
+export function prNote(text: string, error: boolean, p: Palette, again: ((cx: Context) => void) | null): Element {
+  return h_flex()
+    .id("pr-note")
+    .px(12)
+    .h(28)
+    .gap(8)
+    .items_center()
+    .flex_shrink_0()
+    .text_xs()
+    .border_b_1()
+    .border_color(p.border)
+    .bg(p.chrome)
+    .when(again !== null, (el) =>
+      el
+        .cursor_pointer()
+        .hover((x) => x.bg(p.hover))
+        .tooltip("Read it again")
+        .on_click((_e, cx) => again?.(cx)),
+    )
+    .child(icon(ICONS.pr, error ? p.removed : p.dim, 13))
+    .child(div().flex_1().min_w_0().truncate().text_color(error ? p.removed : p.dim).child(text));
 }

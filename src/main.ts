@@ -5,11 +5,12 @@ import { View, div, type AsyncContext, type Context, type Element, type FocusHan
 import { v_flex, InputState, VirtualListScrollHandle } from "gpui-base";
 import { agents, exec, focused, home, knownAgents, nextCommand, panes, props, run, shared, spaces, watchFolder, window } from "herdr";
 import { openInBrowser } from "./core/openUrl.ts";
-import { prBar } from "./ui/prBar.ts";
+import { forgeQuestion, prBar, prNote } from "./ui/prBar.ts";
 import { ChangesPanel } from "./changes.ts";
 import { loadReflog, type InspectView } from "./core/inspect.ts";
 import { loadBlob, loadTree } from "./core/tree.ts";
-import { loadBranchPr, loadPrs, setForge, type BranchPr, type BranchPrState } from "./core/forge/index.ts";
+import { loadBranchPr, loadPrs, setForge, type BranchPrState, type ForgeKind } from "./core/forge/index.ts";
+import { prRow } from "./core/forge/summary.ts";
 
 import { backStep, isWide, viewerFocused, type PanelTab } from "./core/panel.ts";
 import { markViewed, openReviewFile, openViewer, Viewer } from "./viewer.ts";
@@ -37,10 +38,10 @@ import { ago } from "./core/time.ts";
 import { freshPaths, markSeen, newCommits, touch, type Seen } from "./core/seen.ts";
 import { loadCompare, loadReview, reviewBase, type Compare, type Review } from "./core/review.ts";
 import { header, type HeaderSync } from "./ui/header.ts";
-import { syncChips } from "./core/syncChips.ts";
+import { syncChips, syncedNote } from "./core/syncChips.ts";
 import { historyPane, type HistoryActions } from "./ui/historyPane.ts";
 import { repoList, repoStrip } from "./ui/repoList.ts";
-import { palette } from "./ui/style.ts";
+import { palette, type Palette } from "./ui/style.ts";
 import { summary } from "./ui/summary.ts";
 import { checkForUpdate, installUpdate } from "./updater.ts";
 import { FeedbackPanel } from "./feedbackPanel.ts";
@@ -76,8 +77,8 @@ function tabChanges(): Map<string, number | null> {
 }
 
 /** The shown repo's agents, for the header. */
-function shownAgents(repo: string | null): AgentChip[] {
-  return agentChips(repoAgents(repo, agents(), panes(), tabChanges()));
+function shownAgents(repo: string | null, herd: readonly string[]): AgentChip[] {
+  return agentChips(repoAgents(repo, agents(), panes(), tabChanges(), herd));
 }
 
 function errorText(error: unknown): string {
@@ -121,7 +122,7 @@ export default class GitDeck extends View {
     target: () => (this.trustedStatus() ? this.repoTarget() : null),
     status: () => this.trustedStatus(),
     changed: (cx) => this.reloadShown(cx),
-    agents: () => repoAgents(this.herd.selected, agents(), panes()),
+    agents: () => repoAgents(this.herd.selected, agents(), panes(), new Map(), this.herd.repos.map((r) => r.path)),
     installedAgents: async () => {
       try {
         return (await knownAgents()).filter((a) => a.installed).map((a) => a.key);
@@ -139,7 +140,7 @@ export default class GitDeck extends View {
     status: () => this.trustedStatus(),
     history: () => (this.view.repo === this.herd.selected ? this.view.history : null),
     selected: () => this.selectedCommit(),
-    agents: () => repoAgents(this.herd.selected, agents(), panes()),
+    agents: () => repoAgents(this.herd.selected, agents(), panes(), new Map(), this.herd.repos.map((r) => r.path)),
     changed: (cx) => this.reloadShown(cx),
   });
   /** Blame, a file's history or the reflog, for one repo. */
@@ -231,11 +232,11 @@ export default class GitDeck extends View {
       sendQueued((task) => cx.spawn(task));
       // Herdr's agent list is live; redraw only when the agents here changed,
       // or when the first one's "· 2m" would read differently.
-      const first = shownAgents(this.herd.selected)[0];
+      const first = shownAgents(this.herd.selected, this.herd.repos.map((r) => r.path))[0];
       const age = first?.since == null ? "" : ago(Math.floor(Date.now() / 1000), Math.floor(first.since / 1000));
       const seen = this.herd.picking
         ? JSON.stringify(herdAgents(this.herd.repos.map((r) => r.path), agents(), panes()))
-        : `${agentsKey(repoAgents(this.herd.selected, agents(), panes()))}|${age}`;
+        : `${agentsKey(repoAgents(this.herd.selected, agents(), panes(), new Map(), this.herd.repos.map((r) => r.path)))}|${age}`;
       if (seen !== this.agentsSeen) {
         this.agentsSeen = seen;
         cx.notify();
@@ -584,6 +585,35 @@ export default class GitDeck extends View {
     });
   }
 
+  /** The row under the header: the branch's PR, the forge question, or why there's none. */
+  prRowFor(path: string | null, state: BranchPrState | null, p: Palette): Element | null {
+    if (path === null) return null;
+    const branch = this.herd.statuses[path]?.status?.branch ?? null;
+    const row = prRow(state, branch, this.compare?.repo === path && this.compare.base === null);
+    if (row.kind === "pr") {
+      return prBar(row.pr, state?.label ?? "PR", p, { review: (cx) => this.selectTab("review", cx), open: (url, cx) => this.openLink(url, cx) });
+    }
+    if (row.kind === "ask") return forgeQuestion(row.host, p, (kind, cx) => this.nameForge(kind, cx));
+    const again = row.kind === "reading" ? null : (cx: Context) => cx.spawn((cx) => this.readPr(cx, true));
+    return prNote(row.text, row.kind === "error", p, again);
+  }
+
+  /** Names origin's forge for this repo, then reads its PR (and the PR list, when open) again. */
+  nameForge(kind: ForgeKind, cx: Context): void {
+    const target = this.repoTarget();
+    if (!target) return;
+    cx.spawn(async (cx) => {
+      // A failed write leaves the question up: reading again shows it still unnamed.
+      await setForge(this.git, target, kind).catch(() => undefined);
+      await this.readPr(cx, true);
+      const open = this.inspect;
+      if (open?.repo !== target.cwd || open.view.kind !== "prs") return;
+      const data = await loadPrs(this.git, exec, target, await this.homeFor(target));
+      if (this.inspect === open) this.inspect = { repo: target.cwd, view: { kind: "prs", data } };
+      cx.notify();
+    });
+  }
+
   /** The tree pane: open one file, or go back to the list. */
   treeFile(index: number | null, cx: Context): void {
     const current = this.inspect;
@@ -647,6 +677,7 @@ export default class GitDeck extends View {
         if (target) openViewer({ view: "stats", repo: target.cwd, on: target.on });
       },
       treeFile: (index, cx) => this.treeFile(index, cx),
+      setForge: (kind, cx) => this.nameForge(kind, cx),
       browseTree: (cx) => {
         const sel = this.selectedCommit();
         if (sel) this.openInspect({ kind: "tree", rev: sel.hash, data: null, file: null, blob: null }, cx);
@@ -693,6 +724,7 @@ export default class GitDeck extends View {
     const ops = this.opsPanel.actions();
     return {
       chips: syncChips(status),
+      synced: syncedNote(status),
       busy: this.opsPanel.view.busy !== null,
       run: (kind, cx) => (kind === "pull" ? ops.pull(cx) : kind === "link" ? ops.link(cx) : ops.push(cx)),
     };
@@ -772,15 +804,7 @@ export default class GitDeck extends View {
                   refresh: (cx) => {
                     cx.spawn((cx) => this.readReview(cx, true));
                   },
-                  setForge: (kind, cx) => {
-                    const target = this.repoTarget();
-                    if (!target) return;
-                    cx.spawn(async (cx) => {
-                      // A failed write leaves the question up: reading again shows it still unnamed.
-                      await setForge(this.git, target, kind).catch(() => undefined);
-                      await this.readPr(cx, true);
-                    });
-                  },
+                  setForge: (kind, cx) => this.nameForge(kind, cx),
                 },
               },
             },
@@ -810,7 +834,7 @@ export default class GitDeck extends View {
           p,
           { togglePicker: (cx) => this.togglePicker(cx), refresh: (cx) => this.refreshAndFetch(cx) },
           {
-            agents: shownAgents(this.herd.selected),
+            agents: shownAgents(this.herd.selected, this.herd.repos.map((r) => r.path)),
             compare: this.compare?.repo === this.herd.selected ? this.compare.data : null,
             sync: this.headerSync(),
             conflicts: conflictWarning((this.herd.selected ? this.herd.statuses[this.herd.selected]?.status : null) ?? null),
@@ -825,14 +849,7 @@ export default class GitDeck extends View {
           ),
         ),
       )
-      .when(shown?.pr != null, (el) =>
-        el.child(
-          prBar(shown?.pr as BranchPr, shown?.label ?? "PR", p, {
-            review: (cx) => this.selectTab("review", cx),
-            open: (url, cx) => this.openLink(url, cx),
-          }),
-        ),
-      )
+      .children([this.prRowFor(this.herd.picking ? null : (repo?.path ?? null), shown, p)].filter((x) => x !== null))
       .when(this.error !== null, (el) =>
         el.child(div().px(12).py(6).text_xs().text_color(p.removed).bg(p.raised).child(this.error ?? "")),
       )

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checksText, prNumber, prState, checksTone } from "../src/core/forge/summary.ts";
+import { checksText, prNumber, prRow, prState, checksTone } from "../src/core/forge/summary.ts";
+import type { BranchPrState } from "../src/core/forge/index.ts";
 import type { BranchPr } from "../src/core/forge/types.ts";
 
 const pr = (over: Partial<BranchPr> = {}): BranchPr => ({
@@ -39,4 +40,17 @@ test("a failure outweighs a running check, which outweighs passes", () => {
   assert.equal(checksTone({ passed: 3, failed: 0, pending: 2 }), "pending");
   assert.equal(checksTone({ passed: 3, failed: 0, pending: 0 }), "passed");
   assert.equal(checksTone({ passed: 0, failed: 0, pending: 0 }), "none");
+});
+
+test("the PR row under the header always holds its place and says where things stand", () => {
+  const st = (o: Partial<BranchPrState>): BranchPrState => ({ pr: null, error: null, label: "MR", host: null, forge: "gitlab", ...o });
+  assert.deepEqual(prRow(null, "feat"), { kind: "reading", text: "Checking for a PR or MR…" });
+  assert.deepEqual(prRow(null, null), { kind: "none", text: "Detached HEAD: no branch to have a PR" }, "never read without a branch");
+  assert.deepEqual(prRow(st({ host: "git.acme.dev", forge: null, label: "PR" }), "feat"), { kind: "ask", host: "git.acme.dev" });
+  assert.deepEqual(prRow(st({ forge: null, label: "PR" }), "feat"), { kind: "none", text: "No GitHub or GitLab remote: no PRs to show" });
+  const one = pr();
+  assert.deepEqual(prRow(st({ pr: one }), "main", true), { kind: "pr", pr: one });
+  assert.deepEqual(prRow(st({ error: "dial tcp: i/o timeout" }), "feat"), { kind: "error", text: "Can't read the MR: dial tcp: i/o timeout" });
+  assert.deepEqual(prRow(st({}), "feat"), { kind: "none", text: "No MR for this branch yet" });
+  assert.deepEqual(prRow(st({}), "main", true), { kind: "none", text: "On the main line: MRs come from other branches" });
 });

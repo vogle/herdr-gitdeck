@@ -30,6 +30,8 @@ export interface HeaderFacts {
 
 export interface HeaderSync {
   chips: readonly SyncChip[];
+  /** "In sync with origin/x" when there's nothing to do; null otherwise. */
+  synced: string | null;
   /** Another git action is running: the chips wait. */
   busy: boolean;
   run: (kind: SyncChip["kind"], cx: Context) => void;
@@ -141,16 +143,18 @@ function whereRow(state: HerdState, branch: string | null, busy: boolean, p: Pal
     .child(refreshButton(p, actions.refresh));
 }
 
-/** Who is at work: the agents on the left; conflicts and remote work on the right. Null when there's none of it. */
-function stateRow(p: Palette, facts: HeaderFacts): Element | null {
+/** Who is at work: the agents on the left; conflicts and remote work on the right. Always there, so every repo reads the same. */
+function stateRow(p: Palette, facts: HeaderFacts): Element {
   const chips = facts.sync?.chips ?? [];
-  if (facts.agents.length === 0 && facts.conflicts === null && chips.length === 0) return null;
+  const synced = facts.sync?.synced ?? null;
   return h_flex()
     .h(22)
     .gap(8)
     .items_center()
+    .when(facts.agents.length === 0, (el) => el.child(div().text_xs().text_color(p.dim).truncate().child("No agent working here")))
     .child(h_flex().gap(6).items_center().min_w_0().children(facts.agents.slice(0, 3).map((a, i) => agentChip(a, i, p, facts.now))))
     .child(div().flex_1())
+    .when(synced !== null, (el) => el.child(div().flex_shrink_0().text_xs().text_color(p.dim).child(synced ?? "")))
     .when(facts.conflicts !== null, (el) =>
       el.child(div().flex_shrink_0().text_xs().font_semibold().text_color(p.removed).child(facts.conflicts ?? "")),
     )
@@ -161,7 +165,6 @@ export function header(state: HerdState, busy: boolean, p: Palette, actions: Hea
   const repo = selectedRepo(state);
   const result = repo ? state.statuses[repo.path] : undefined;
   const branch = result?.status ? (result.status.branch ?? "detached") : null;
-  const second = stateRow(p, facts);
   return v_flex()
     .id("header")
     .px(10)
@@ -172,5 +175,5 @@ export function header(state: HerdState, busy: boolean, p: Palette, actions: Hea
     .border_color(p.border)
     .bg(p.chrome)
     .child(whereRow(state, branch, busy, p, actions, facts.compare))
-    .when(second !== null, (el) => el.child(second as Element));
+    .when(branch !== null, (el) => el.child(stateRow(p, facts)));
 }

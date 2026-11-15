@@ -3,6 +3,7 @@
 
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex, v_virtual_list, Scrollbar } from "gpui-base";
+import type { ForgeKind } from "../core/forge/index.ts";
 import type { InspectView } from "../core/inspect.ts";
 import { MAX_STATS, type Stats } from "../core/stats.ts";
 import { ago } from "../core/time.ts";
@@ -17,6 +18,8 @@ export interface InspectActions {
   /** The tree: open a file, or go back to the list. */
   openTreeFile: (index: number, cx: Context) => void;
   closeTreeFile: (cx: Context) => void;
+  /** Names origin's forge, for a host gitdeck doesn't know. */
+  setForge: (kind: ForgeKind, cx: Context) => void;
 }
 
 interface Row {
@@ -110,6 +113,7 @@ function title(v: InspectView): string {
   if (v.kind === "file-log") return `History: ${v.path}`;
   if (v.kind === "stats") return "Repository statistics";
   if (v.kind === "prs") {
+    if (v.data?.host != null) return "Pull / merge requests (read-only)";
     const mr = v.data?.label === "MR";
     return `${mr ? "Merge requests" : "Pull requests"}${v.data?.repo ? ` of ${v.data.repo}` : ""} (via ${mr ? "glab" : "gh"}, read-only): a click jumps to the head commit`;
   }
@@ -120,9 +124,18 @@ function title(v: InspectView): string {
 export function inspectPane(v: InspectView, p: Palette, a: InspectActions): Element {
   const rows = rowsOf(v, p, Math.floor(Date.now() / 1000));
   const error = v.data?.error ?? null;
+  const unnamed = v.kind === "prs" && v.data?.host != null;
   const body =
     v.data === null
       ? div().p(12).text_color(p.dim).child("Reading…")
+      : unnamed
+        ? h_flex()
+            .p(12)
+            .gap(8)
+            .items_center()
+            .child(div().flex_1().min_w_0().text_color(p.dim).child(error ?? ""))
+            .child(textButton("prs-forge-gitlab", "GitLab", p, (cx) => a.setForge("gitlab", cx)))
+            .child(textButton("prs-forge-github", "GitHub", p, (cx) => a.setForge("github", cx)))
       : error !== null
         ? div().p(12).text_color(p.removed).child(error)
         : rows.length === 0

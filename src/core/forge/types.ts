@@ -30,6 +30,8 @@ export interface PrList {
   error: string | null;
   repo: string | null;
   label: "PR" | "MR";
+  /** origin's host when it isn't a known forge yet: the person names which it is. */
+  host: string | null;
 }
 
 export interface Checks {

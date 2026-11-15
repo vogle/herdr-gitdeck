@@ -28,3 +28,9 @@ export function syncChips(s: SyncState | null): SyncChip[] {
   const push: SyncChip[] = s.ahead > 0 ? [{ kind: "push", label: `↑ Push ${s.ahead}`, tip: `${s.ahead} commits not on ${s.upstream} yet` }] : [];
   return [...pull, ...push];
 }
+
+/** "In sync with origin/x" when there's nothing to pull or push; null where a chip speaks instead. */
+export function syncedNote(s: SyncState | null): string | null {
+  if (s === null || s.branch === null || s.upstream === null || s.ahead > 0 || s.behind > 0) return null;
+  return `In sync with ${s.upstream}`;
+}

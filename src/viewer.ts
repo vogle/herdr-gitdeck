@@ -367,7 +367,7 @@ export class Viewer {
                 click: (row, cx) => this.stageClick(row, cx),
                 apply: (cx) => this.stage(picks(s.picks), cx),
               })
-            : inspectPane(s.view, p, { jump: () => {}, close: () => run("tab.close"), openTreeFile: () => {}, closeTreeFile: () => {} });
+            : inspectPane(s.view, p, { jump: () => {}, close: () => run("tab.close"), openTreeFile: () => {}, closeTreeFile: () => {}, setForge: () => {} });
     return v_flex().flex_1().min_h_0().child(this.bar(r, p)).child(body);
   }
 }
