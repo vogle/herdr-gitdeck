@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { blameArgs, parseBlame, fileLogArgs, reflogArgs, parseReflog, takeSideArgs } from "../src/core/inspect.ts";
+import { blameArgs, blameRev, parseBlame, fileLogArgs, reflogArgs, parseReflog, takeSideArgs } from "../src/core/inspect.ts";
 
 const A = "a".repeat(40);
 const B = "b".repeat(40);
@@ -44,4 +44,11 @@ test("reflog: where HEAD has been, newest first", () => {
 test("a conflicted file takes one side whole", () => {
   assert.deepEqual(takeSideArgs("ours", ["a", "b"]), ["checkout", "--ours", "--", "a", "b"]);
   assert.deepEqual(takeSideArgs("theirs", ["a"]), ["checkout", "--theirs", "--", "a"]);
+});
+
+test("blame of a deleted file reads the version before it, else the commit's own", () => {
+  const source = { kind: "commit" as const, hash: "head", parents: ["base"], path: "g.txt", oldPath: null };
+  assert.equal(blameRev(source, true), "base", "gone from head: blame where it last was");
+  assert.equal(blameRev(source, false), "head");
+  assert.equal(blameRev({ ...source, parents: [] }, true), "head", "no parent to fall back on");
 });

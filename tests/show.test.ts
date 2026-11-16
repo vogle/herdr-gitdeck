@@ -139,3 +139,10 @@ test("sameDiff compares the rows and the cut, so an unchanged re-read can be ski
   assert.equal(sameDiff(a, { ...a, truncated: true }), false);
   assert.equal(sameDiff(a, parseDiff("")), false);
 });
+
+test("parseDiff marks a deleted file, and only that", () => {
+  const gone = "diff --git a/g.txt b/g.txt\ndeleted file mode 100644\nindex 1234567..0000000\n--- a/g.txt\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-a\n-b\n";
+  assert.equal(parseDiff(gone).deleted, true);
+  assert.equal(parseDiff("diff --git a/x b/x\nindex 1..2 100644\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-deleted file mode\n+y\n").deleted, false, "a line reading so in the body is content");
+  assert.equal(parseDiff("diff --git a/n b/n\nnew file mode 100644\n--- /dev/null\n+++ b/n\n@@ -0,0 +1 @@\n+n\n").deleted, false);
+});

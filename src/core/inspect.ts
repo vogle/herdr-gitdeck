@@ -11,6 +11,11 @@ import type { PrList } from "./forge/index.ts";
 export const blameArgs = (rev: string, path: string): string[] =>
   ["blame", "--porcelain", "--no-textconv", "--no-progress", rev, "--", path];
 
+/** The revision to blame a commit diff's file at: before the commit when the commit deleted it (it isn't there after). */
+export function blameRev(source: { hash: string; parents: readonly string[] }, deleted: boolean): string {
+  return deleted ? (source.parents[0] ?? source.hash) : source.hash;
+}
+
 export interface BlameLine {
   hash: string;
   /** The line's number in this version. */

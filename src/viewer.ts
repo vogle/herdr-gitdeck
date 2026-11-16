@@ -15,7 +15,7 @@ import type { Pick } from "./core/stage.ts";
 import { applyPicks, loadStageDiff } from "./core/staging.ts";
 import { files } from "./changes.ts";
 import { loadImagePair } from "./core/imageDiff.ts";
-import { loadBlame, loadFileLog, type InspectView } from "./core/inspect.ts";
+import { blameRev, loadBlame, loadFileLog, type InspectView } from "./core/inspect.ts";
 import {
   findViewerTab, liveDiff, parseViewer, staleViewerTab, VIEWER_TAB_NAME, viewerBack, viewerKey, viewerShow, viewerFocused, viewerTitle, VIEWER_KEY,
   type ViewerNav, type ViewerRequest,
@@ -265,8 +265,9 @@ export class Viewer {
 
   private bar(r: ViewerRequest, p: Palette): Element {
     const commit = r.view === "diff" && r.source.kind === "commit" ? r.source : null;
+    const deleted = this.shown?.kind === "diff" && this.shown.diff.deleted === true;
     const inspect = (view: "blame" | "file-log") => (cx: Context) =>
-      commit && this.go({ view, repo: r.repo, on: r.on, rev: commit.hash, path: commit.path }, cx);
+      commit && this.go({ view, repo: r.repo, on: r.on, rev: view === "blame" ? blameRev(commit, deleted) : commit.hash, path: commit.path }, cx);
     const fileButtons = commit
       ? [textButton("viewer-blame", "Blame", p, inspect("blame")), textButton("viewer-history", "History", p, inspect("file-log"))]
       : liveDiff(r)
