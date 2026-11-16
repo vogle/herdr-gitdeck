@@ -4,8 +4,10 @@
 import type { Context, Element } from "gpui-kit";
 import { agents, panes } from "herdr";
 import { feedbackTargets, type FeedbackTarget } from "./core/feedback.ts";
-import { changedSince, queueFor, toDraft, withoutNote, withoutSent } from "./core/feedbackBatch.ts";
-import { batchMessage, readNotes, saveNotes, sendNotes } from "./feedbackSend.ts";
+import { changedSince, newNote, queueFor, toDraft, withoutNote, withoutSent } from "./core/feedbackBatch.ts";
+import { checkNotes } from "./core/forge/failedChecks.ts";
+import type { FailedCheck } from "./core/forge/types.ts";
+import { batchMessage, noteId, readNotes, saveNotes, sendNotes } from "./feedbackSend.ts";
 import { feedbackBar } from "./ui/feedbackBar.ts";
 import type { Palette } from "./ui/style.ts";
 
@@ -47,6 +49,21 @@ export class FeedbackPanel {
       if (error === null) this.say(true, `Sent ${ids.length} note${ids.length === 1 ? "" : "s"} to ${to.name}`, cx);
       else this.say(false, error, cx);
     });
+  }
+
+  /** How many of the failed checks aren't waiting in the batch yet. */
+  checksToAdd(repo: string, failed: readonly FailedCheck[]): number {
+    return failed.length === 0 ? 0 : checkNotes(failed, readNotes(repo)).length;
+  }
+
+  /** Puts the failed checks in the batch as drafts (no file: path "") and opens it, to send like any note. */
+  addChecks(repo: string, failed: readonly FailedCheck[], head: string | null, cx: Context): void {
+    const notes = readNotes(repo);
+    const added = checkNotes(failed, notes).map((n) => newNote(noteId(), n, { path: "", head, blob: null }));
+    if (added.length === 0) return;
+    saveNotes(repo, [...notes, ...added]);
+    this.open = true;
+    this.say(true, `Added ${added.length} failed check${added.length === 1 ? "" : "s"}: send them when ready`, cx);
   }
 
   render(repo: string, remote: boolean, blobs: ReadonlyMap<string, string>, p: Palette): Element | null {

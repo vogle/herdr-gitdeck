@@ -783,6 +783,7 @@ export default class GitDeck extends View {
                   folded: this.reviewFolded,
                   uncommitted: uncommittedNote(result?.status ?? null),
                   behind: behindNote(this.compare?.repo === repo.path ? this.compare.data : null),
+                  checksToAdd: this.feedback.checksToAdd(repo.path, this.shownPr(repo.path)?.pr?.failed ?? []),
                   feedback: this.feedback.render(
                     repo.path,
                     this.repoTarget()?.on != null,
@@ -809,6 +810,8 @@ export default class GitDeck extends View {
                     cx.spawn((cx) => this.readReview(cx, true));
                   },
                   setForge: (kind, cx) => this.nameForge(kind, cx),
+                  openCheck: (url, cx) => this.openLink(url, cx),
+                  addChecks: (cx) => this.feedback.addChecks(repo.path, this.shownPr(repo.path)?.pr?.failed ?? [], result?.status?.oid ?? null, cx),
                 },
               },
             },

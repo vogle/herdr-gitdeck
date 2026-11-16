@@ -12,7 +12,7 @@ import type { Review } from "../core/review.ts";
 import { viewedCount, viewState, type Seen } from "../core/reviewed.ts";
 import { groupReview, type ReviewGroup } from "../core/reviewOrder.ts";
 import { kindIcon, lineCounts, statusLetter } from "./changeFiles.ts";
-import { textButton, type Palette } from "./style.ts";
+import { ICONS, icon, textButton, type Palette } from "./style.ts";
 
 export interface ReviewParts {
   /** Null on the main line itself, or while it is read. */
@@ -27,6 +27,8 @@ export interface ReviewParts {
   uncommitted: string | null;
   /** The base moved on far ahead of the branch, worded; null while it's close. */
   behind: string | null;
+  /** Failed checks not yet waiting in the feedback batch. */
+  checksToAdd: number;
   /** The feedback batch at the foot, or null with no notes. */
   feedback: Element | null;
 }
@@ -38,6 +40,10 @@ export interface ReviewActions {
   toggleGroup: (group: ReviewGroup, cx: Context) => void;
   /** Names origin's forge for a host gitdeck doesn't know (a self-hosted GitLab or GitHub). */
   setForge: (kind: ForgeChoice, cx: Context) => void;
+  /** Opens a failed check's page in the browser. */
+  openCheck: (url: string, cx: Context) => void;
+  /** Puts the failed checks in the feedback batch, for the agent. */
+  addChecks: (cx: Context) => void;
   showChanges: (cx: Context) => void;
 }
 
@@ -86,6 +92,48 @@ function uncommittedLine(note: string | null, p: Palette, a: ReviewActions): Ele
       .child(div().flex_1().min_w_0().truncate().text_color(p.changed).child(note))
       .child(textButton("rv-to-changes", "Changes", p, a.showChanges)),
   ];
+}
+
+const SHOWN_CHECKS = 8;
+
+/** Under the PR line: each failed check, its page a click away, and one button to hand them all to the agent. */
+function failedLines(state: ReviewParts["pr"], toAdd: number, p: Palette, a: ReviewActions): Element[] {
+  const failed = state?.pr?.failed ?? [];
+  if (failed.length === 0) return [];
+  const head = h_flex()
+    .px(10)
+    .py(4)
+    .gap(8)
+    .items_center()
+    .text_xs()
+    .child(div().flex_1().min_w_0().text_color(p.removed).child(`${failed.length} failed check${failed.length === 1 ? "" : "s"}`))
+    .child(
+      toAdd > 0
+        ? textButton("rv-checks-add", "Add to feedback", p, a.addChecks)
+        : textButton("rv-checks-add", "In feedback", p, a.addChecks, false, false),
+    );
+  const rows = failed.slice(0, SHOWN_CHECKS).map((c, i) =>
+    h_flex()
+      .id(`rv-check-${i}`)
+      .px(10)
+      .py(2)
+      .gap(6)
+      .items_center()
+      .text_xs()
+      .child(div().flex_shrink_0().text_color(p.removed).child("✗"))
+      .child(div().flex_1().min_w_0().truncate().text_color(p.foreground).child(c.name || "(unnamed check)"))
+      .when(c.log !== null, (el) => el.child(div().flex_shrink_0().text_color(p.dim).child("log")))
+      .when(c.url !== "", (el) =>
+        el
+          .cursor_pointer()
+          .hover((x) => x.bg(p.hover))
+          .tooltip(c.log ? `${c.url}\nLog: ${c.log}` : c.url)
+          .on_click((_e, cx) => a.openCheck(c.url, cx))
+          .child(icon(ICONS.external, p.muted, 12)),
+      ),
+  );
+  const more = failed.length > SHOWN_CHECKS ? [div().px(10).py(2).text_xs().text_color(p.dim).child(`and ${failed.length - SHOWN_CHECKS} more`)] : [];
+  return [v_flex().id("rv-failed").pb(4).flex_shrink_0().border_b_1().border_color(p.border).child(head).children(rows).children(more)];
 }
 
 /** The base moved on: landing the branch may conflict. */
@@ -220,6 +268,7 @@ export function reviewPane(parts: ReviewParts, p: Palette, a: ReviewActions): El
     .children(uncommittedLine(parts.uncommitted, p, a))
     .children(behindLine(parts.behind, p))
     .child(prLine(parts.pr, p, a))
+    .children(failedLines(parts.pr, parts.checksToAdd, p, a))
     .child(v_flex().id("gitdeck-review").flex_1().min_h_0().overflow_y_scroll().pb(8).children(body))
     .children(foot);
 }

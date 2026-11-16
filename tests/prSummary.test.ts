@@ -13,6 +13,7 @@ const pr = (over: Partial<BranchPr> = {}): BranchPr => ({
   review: "",
   checks: { passed: 0, failed: 0, pending: 0 },
   target: "main",
+  failed: [],
   ...over,
 });
 

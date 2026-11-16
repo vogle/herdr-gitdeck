@@ -43,6 +43,13 @@ export interface Checks {
   pending: number;
 }
 
+/** A check that failed: what it's called, its page, and the command that prints its log (null when the CLI can't). */
+export interface FailedCheck {
+  name: string;
+  url: string;
+  log: string | null;
+}
+
 /** The shown branch's PR or MR, for the Review tab. */
 export interface BranchPr {
   number: number;
@@ -56,6 +63,8 @@ export interface BranchPr {
   checks: Checks;
   /** The branch it merges into ("" when the forge didn't say). */
   target: string;
+  /** Each failed check (GitLab: each failed job, or the pipeline when its jobs can't be read). */
+  failed: readonly FailedCheck[];
 }
 
 export const str = (v: unknown): string => (typeof v === "string" ? v : "");

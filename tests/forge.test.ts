@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { Exec, Git } from "../src/core/git/runner.ts";
 import { forgeOf, parseRemote } from "../src/core/forge/remote.ts";
 import { parseBranchPr, parsePrs, prListArgs, prViewArgs } from "../src/core/forge/github.ts";
-import { mrListArgs, mrViewArgs, parseBranchMr, parseMrs } from "../src/core/forge/gitlab.ts";
+import { failedJobsArgs, mrListArgs, mrViewArgs, parseBranchMr, parseFailedJobs, parseMrs, pipelineId } from "../src/core/forge/gitlab.ts";
 import { loadBranchPr, loadPrs, setForge } from "../src/core/forge/index.ts";
 
 const T = { cwd: "/r", on: null };
@@ -65,7 +65,7 @@ test("parseBranchPr counts passed, failed and running checks", () => {
       { __typename: "StatusContext", state: "ERROR" },
     ],
   }));
-  assert.deepEqual(pr, { number: 7, title: "Add X", state: "OPEN", draft: false, url: "u", review: "APPROVED", checks: { passed: 3, failed: 2, pending: 2 }, target: "develop" });
+  assert.deepEqual(pr, { number: 7, title: "Add X", state: "OPEN", draft: false, url: "u", review: "APPROVED", checks: { passed: 3, failed: 2, pending: 2 }, target: "develop", failed: [{ name: "", url: "", log: null }, { name: "", url: "", log: null }] });
   assert.equal(parseBranchPr("[]"), null);
 });
 
@@ -89,11 +89,51 @@ test("parseMrs reads glab's merge requests in the shared shape", () => {
 
 test("parseBranchMr turns the head pipeline into check counts", () => {
   const mr = (status: string | null, extra = {}) => JSON.stringify({ iid: 9, title: "t", state: "closed", draft: false, web_url: "w", target_branch: "release/1", head_pipeline: status ? { status } : null, ...extra });
-  assert.deepEqual(parseBranchMr(mr("success", { approved: true })), { number: 9, title: "t", state: "CLOSED", draft: false, url: "w", review: "APPROVED", checks: { passed: 1, failed: 0, pending: 0 }, target: "release/1" });
+  assert.deepEqual(parseBranchMr(mr("success", { approved: true })), { number: 9, title: "t", state: "CLOSED", draft: false, url: "w", review: "APPROVED", checks: { passed: 1, failed: 0, pending: 0 }, target: "release/1", failed: [] });
   assert.deepEqual(parseBranchMr(mr("failed"))?.checks, { passed: 0, failed: 1, pending: 0 });
   assert.deepEqual(parseBranchMr(mr("running"))?.checks, { passed: 0, failed: 0, pending: 1 });
   assert.deepEqual(parseBranchMr(mr(null))?.checks, { passed: 0, failed: 0, pending: 0 });
   assert.equal(parseBranchMr("[]"), null);
+});
+
+test("parseBranchPr lists each failed check: its name, page, and the gh command for its log", () => {
+  const job = "https://github.com/cli/cli/actions/runs/43458279745/job/131998132505";
+  const pr = parseBranchPr(JSON.stringify({
+    number: 7, title: "t", state: "OPEN", isDraft: false, url: "u", reviewDecision: "", baseRefName: "main",
+    statusCheckRollup: [
+      { __typename: "CheckRun", status: "COMPLETED", conclusion: "FAILURE", name: "integration-tests (macos-latest)", workflowName: "Unit and Integration Tests", detailsUrl: job },
+      { __typename: "CheckRun", status: "COMPLETED", conclusion: "TIMED_OUT", name: "CodeRabbit", workflowName: "", detailsUrl: "https://coderabbit.ai/r/1" },
+      { __typename: "StatusContext", state: "ERROR", context: "ci/circleci", targetUrl: "https://circleci.com/gh/o/r/1" },
+      { __typename: "CheckRun", status: "COMPLETED", conclusion: "SUCCESS", name: "lint", detailsUrl: "x" },
+      { __typename: "CheckRun", status: "IN_PROGRESS", conclusion: "", name: "build", detailsUrl: "y" },
+    ],
+  }), "cli/cli");
+  assert.deepEqual(pr?.failed, [
+    { name: "Unit and Integration Tests / integration-tests (macos-latest)", url: job, log: "gh run view --job 131998132505 --repo cli/cli --log-failed" },
+    { name: "CodeRabbit", url: "https://coderabbit.ai/r/1", log: null },
+    { name: "ci/circleci", url: "https://circleci.com/gh/o/r/1", log: null },
+  ]);
+  const forged = parseBranchPr(JSON.stringify({ number: 1, statusCheckRollup: [{ __typename: "CheckRun", status: "COMPLETED", conclusion: "FAILURE", name: "x", detailsUrl: "https://evil.io/actions/runs/1/job/2; echo pwned" }] }), "o/r");
+  assert.equal(forged?.failed[0]?.log, null, "a job id is only ever digits read from a GitHub Actions page");
+});
+
+test("GitLab: a failed pipeline names itself until its jobs are read", () => {
+  const json = JSON.stringify({ iid: 9, title: "t", state: "opened", head_pipeline: { id: 77, status: "failed", web_url: "https://git.acme.dev/g/app/-/pipelines/77" } });
+  assert.deepEqual(parseBranchMr(json)?.failed, [{ name: "Pipeline #77", url: "https://git.acme.dev/g/app/-/pipelines/77", log: null }]);
+  assert.equal(pipelineId(json), 77);
+  assert.equal(pipelineId(JSON.stringify({ iid: 9, head_pipeline: null })), null);
+  assert.equal(pipelineId("[]"), null);
+  assert.deepEqual(failedJobsArgs("g/s/app", 77), ["api", "--hostname", "gitlab.com", "projects/g%2Fs%2Fapp/pipelines/77/jobs?scope[]=failed&per_page=100"]);
+  assert.deepEqual(failedJobsArgs("https://git.acme.dev/g/app", 77), ["api", "--hostname", "git.acme.dev", "projects/g%2Fapp/pipelines/77/jobs?scope[]=failed&per_page=100"]);
+  const jobs = JSON.stringify([
+    { id: 501, name: "unit", stage: "test", status: "failed", allow_failure: false, web_url: "https://git.acme.dev/g/app/-/jobs/501" },
+    { id: 502, name: "flaky", stage: "test", status: "failed", allow_failure: true, web_url: "w2" },
+    { id: "x", name: "bad" },
+  ]);
+  assert.deepEqual(parseFailedJobs(jobs, "https://git.acme.dev/g/app"), [
+    { name: "test / unit", url: "https://git.acme.dev/g/app/-/jobs/501", log: "glab ci trace 501 --repo https://git.acme.dev/g/app" },
+  ], "a job allowed to fail didn't fail the pipeline");
+  assert.deepEqual(parseFailedJobs("{}", "g/app"), []);
 });
 
 /** A git that answers the remote URL and (optionally) the forge override. */
@@ -152,6 +192,25 @@ test("loadBranchPr: none without a forge or a PR/MR, an error when the CLI fails
     throw new Error("spawn gh ENOENT");
   };
   assert.match((await loadBranchPr(gitFor("git@github.com:o/r.git"), gone, T, "/home", "x")).error ?? "", /Can't run gh/);
+});
+
+test("loadBranchPr reads a failed MR pipeline's jobs, and keeps the pipeline when it can't", async () => {
+  const mr = JSON.stringify({ iid: 9, title: "t", state: "opened", head_pipeline: { id: 77, status: "failed", web_url: "pw" } });
+  const jobs = JSON.stringify([{ id: 501, name: "unit", stage: "test", status: "failed", web_url: "jw" }]);
+  const calls: [string, string[], unknown][] = [];
+  const glab = (api: { code: number; stdout: string }): Exec => async (c, a, o) => {
+    calls.push([c, a, o]);
+    return a[0] === "api" ? { ...api, stderr: "" } : { code: 0, stdout: mr, stderr: "" };
+  };
+  const read = await loadBranchPr(gitFor("git@gitlab.com:g/app.git"), glab({ code: 0, stdout: jobs }), T, "/home", "x");
+  assert.deepEqual(read.pr?.failed, [{ name: "test / unit", url: "jw", log: "glab ci trace 501 --repo g/app" }]);
+  assert.deepEqual(calls[1], ["glab", ["api", "--hostname", "gitlab.com", "projects/g%2Fapp/pipelines/77/jobs?scope[]=failed&per_page=100"], { cwd: "/home", on: null }]);
+  const kept = await loadBranchPr(gitFor("git@gitlab.com:g/app.git"), glab({ code: 1, stdout: "" }), T, "/home", "x");
+  assert.deepEqual(kept.pr?.failed, [{ name: "Pipeline #77", url: "pw", log: null }]);
+  const passing = JSON.stringify({ iid: 9, head_pipeline: { id: 78, status: "success" } });
+  let asked = 0;
+  await loadBranchPr(gitFor("git@gitlab.com:g/app.git"), async (_c, a) => (a[0] === "api" ? (asked++, { code: 0, stdout: "[]", stderr: "" }) : { code: 0, stdout: passing, stderr: "" }), T, "/home", "x");
+  assert.equal(asked, 0, "no jobs read for a pipeline that passed");
 });
 
 test("an unknown host is read as the forge whose CLI alone is signed in to it", async () => {

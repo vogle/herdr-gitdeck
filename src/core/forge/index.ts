@@ -4,7 +4,7 @@
 
 import type { Exec, Git, Target } from "../git/runner.ts";
 import { parseBranchPr, parsePrs, prListArgs, prViewArgs } from "./github.ts";
-import { mrListArgs, mrViewArgs, parseBranchMr, parseMrs } from "./gitlab.ts";
+import { failedJobsArgs, mrListArgs, mrViewArgs, parseBranchMr, parseFailedJobs, parseMrs, pipelineId } from "./gitlab.ts";
 import { forgeOf, parseRemote } from "./remote.ts";
 import type { BranchPr, Forge, ForgeChoice, ForgeKind, PrList } from "./types.ts";
 
@@ -81,6 +81,18 @@ export async function loadPrs(git: Git, exec: Exec, target: Target, away: string
   }
 }
 
+/** A failed MR pipeline with its failed jobs in place of itself; as it was when they can't be read. */
+async function withFailedJobs(exec: Exec, target: Target, away: string, repo: string, pr: BranchPr, pipeline: number | null): Promise<BranchPr> {
+  if (pr.checks.failed === 0 || pipeline === null) return pr;
+  try {
+    const r = await exec("glab", failedJobsArgs(repo, pipeline), { cwd: away, on: target.on });
+    const jobs = r.code === 0 ? parseFailedJobs(r.stdout, repo) : [];
+    return jobs.length > 0 ? { ...pr, failed: jobs } : pr;
+  } catch {
+    return pr;
+  }
+}
+
 /** The CLIs' words for "this branch has none". */
 const NONE = /no pull requests found|no (?:open )?merge requests? (?:available|found)/i;
 
@@ -105,7 +117,10 @@ export async function loadBranchPr(git: Git, exec: Exec, target: Target, away: s
   const args = forge.kind === "github" ? prViewArgs(forge.repo, branch) : mrViewArgs(forge.repo, branch);
   try {
     const r = await exec(forge.cli, args, { cwd: away, on: target.on });
-    if (r.code === 0) return { pr: forge.kind === "github" ? parseBranchPr(r.stdout) : parseBranchMr(r.stdout), error: null, ...known };
+    if (r.code === 0) {
+      const pr = forge.kind === "github" ? parseBranchPr(r.stdout, forge.repo) : parseBranchMr(r.stdout);
+      return { pr: pr && forge.kind === "gitlab" ? await withFailedJobs(exec, target, away, forge.repo, pr, pipelineId(r.stdout)) : pr, error: null, ...known };
+    }
     if (NONE.test(r.stderr)) return { pr: null, error: null, ...known };
     return { pr: null, error: r.stderr.split("\n")[0] || `${forge.cli} failed (${r.code})`, ...known };
   } catch (error) {
