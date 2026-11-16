@@ -64,6 +64,11 @@ export function noteFor(rows: readonly DiffRow[], range: RowRange, path: string,
   return { where, quote, text: text.trim() };
 }
 
+/** A note on the whole file: no lines picked, so nothing to quote. */
+export function fileNote(path: string, text: string): FeedbackNote {
+  return { where: `${path} (whole file)`, quote: [], text: text.trim() };
+}
+
 // Control characters but tab (newlines are what join the message's lines).
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\x00-\x08\x0a-\x1f\x7f-\x9f]/g;

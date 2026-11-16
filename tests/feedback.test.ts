@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { feedbackMessage, feedbackTarget, feedbackTargets, noteFor, pickRange } from "../src/core/feedback.ts";
+import { feedbackMessage, feedbackTarget, feedbackTargets, fileNote, noteFor, pickRange } from "../src/core/feedback.ts";
 import type { DiffRow } from "../src/core/git/diff.ts";
 
 const rows: DiffRow[] = [
@@ -88,4 +88,12 @@ test("feedbackTarget picks an agent in the repo, a free one before a working one
   });
   assert.equal(feedbackTarget("/r", [agent("t1", "p1", "working")], panes)?.address, "t1");
   assert.equal(feedbackTarget("/r", [agent("t3", "p3", "idle")], panes), null);
+});
+
+test("a note on the whole file names the file and quotes nothing", () => {
+  assert.deepEqual(fileNote("src/app.ts", "  Split this file in two.\n"), { where: "src/app.ts (whole file)", quote: [], text: "Split this file in two." });
+  assert.equal(
+    feedbackMessage({ branch: "feat/x", head: null }, [fileNote("src/app.ts", "Split it.")]),
+    "Review feedback on feat/x:\n\n1. src/app.ts (whole file)\n   Split it.",
+  );
 });

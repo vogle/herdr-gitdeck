@@ -7,7 +7,7 @@ import { div, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex, Textarea, TextareaState } from "gpui-base";
 import { agents, panes } from "herdr";
 import type { DiffRow } from "./core/git/diff.ts";
-import { feedbackTarget, noteFor, pickRange, type RowRange } from "./core/feedback.ts";
+import { feedbackTarget, fileNote, noteFor, pickRange, type RowRange } from "./core/feedback.ts";
 import { newNote, type BatchNote } from "./core/feedbackBatch.ts";
 import type { ViewerRequest } from "./core/panel.ts";
 import { batchMessage, noteId, readNotes, saveNotes, sendNotes } from "./feedbackSend.ts";
@@ -17,6 +17,8 @@ type Status = { ok: boolean; text: string };
 
 export class FeedbackBox {
   picked: RowRange | null = null;
+  /** The note is on the whole file (no lines picked). */
+  whole = false;
   note!: TextareaState;
   busy = false;
   status: Status | null = null;
@@ -29,26 +31,40 @@ export class FeedbackBox {
   /** A new file on screen: the old pick no longer points anywhere. */
   reset(): void {
     this.picked = null;
+    this.whole = false;
     this.status = null;
   }
 
   pick(rows: readonly DiffRow[], at: number, cx: Context): void {
     const was = this.picked;
     this.picked = pickRange(was, at, rows);
+    this.whole = false;
     this.status = null;
     if (was === null && this.picked !== null) this.note.focus();
     cx.notify();
   }
 
+  /** Opens the note on the whole file, or closes it. */
+  private wholeFile(on: boolean, cx: Context): void {
+    this.picked = null;
+    this.whole = on;
+    this.status = null;
+    if (on) this.note.focus();
+    cx.notify();
+  }
+
   /** The note as it would be kept, or null with nothing picked or written. */
   private draft(r: ViewerRequest, rows: readonly DiffRow[], blob: string | null): BatchNote | null {
-    if (r.view !== "diff" || this.picked === null || this.note.value().trim() === "") return null;
+    if (r.view !== "diff" || (this.picked === null && !this.whole) || this.note.value().trim() === "") return null;
     const head = r.source.kind === "commit" ? r.source.hash : null;
-    return newNote(noteId(), noteFor(rows, this.picked, r.source.path, this.note.value()), { path: r.source.path, head, blob });
+    const text = this.note.value();
+    const note = this.picked === null ? fileNote(r.source.path, text) : noteFor(rows, this.picked, r.source.path, text);
+    return newNote(noteId(), note, { path: r.source.path, head, blob });
   }
 
   private done(text: string, cx: Context): void {
     this.picked = null;
+    this.whole = false;
     this.note.set_value("");
     this.status = { ok: true, text };
     cx.notify();
@@ -80,12 +96,27 @@ export class FeedbackBox {
 
   render(r: ViewerRequest, rows: readonly DiffRow[], p: Palette, blob: string | null): Element | null {
     if (r.view !== "diff") return null;
-    if (this.picked === null) {
-      return this.status ? div().px(10).py(4).flex_shrink_0().text_xs().text_color(this.status.ok ? p.added : p.removed).child(this.status.text) : null;
+    if (this.picked === null && !this.whole) {
+      return h_flex()
+        .px(10)
+        .py(4)
+        .gap(8)
+        .items_center()
+        .flex_shrink_0()
+        .text_xs()
+        .child(
+          div()
+            .flex_1()
+            .min_w_0()
+            .truncate()
+            .text_color(this.status ? (this.status.ok ? p.added : p.removed) : p.dim)
+            .child(this.status?.text ?? "Pick lines for a note on them, or"),
+        )
+        .child(textButton("fb-whole", "Note on whole file", p, (cx) => this.wholeFile(true, cx)));
     }
     const note = this.draft(r, rows, blob);
     const text = note ? batchMessage(r.repo, [note]) : null;
-    const where = noteFor(rows, this.picked, r.source.path, "").where;
+    const where = this.picked === null ? fileNote(r.source.path, "").where : noteFor(rows, this.picked, r.source.path, "").where;
     // A repo on another machine: its agent's terminal is not ours to type into.
     const target = r.on === null ? feedbackTarget(r.repo, agents(), panes()) : null;
     const waiting = readNotes(r.repo).filter((n) => n.state === "draft").length;
@@ -123,7 +154,7 @@ export class FeedbackBox {
               .text_color(p.dim)
               .child(target ? `Send now goes to ${target.name}${target.status === "working" ? " (working: it reads it after its turn)" : ""}` : "No agent works in this repo here: add it, or copy it"),
           )
-          .child(textButton("fb-cancel", "Cancel", p, (cx) => this.pick(rows, this.picked?.from ?? 0, cx)))
+          .child(textButton("fb-cancel", "Cancel", p, (cx) => (this.picked === null ? this.wholeFile(false, cx) : this.pick(rows, this.picked.from, cx))))
           .child(
             textButton("fb-copy", "Copy", p, (cx) => {
               if (text === null) return;
