@@ -14,6 +14,12 @@ export type PanelTab = "changes" | "review" | "history" | "branches" | "more";
 /** The tab bar's order, for agent work: what the agent changed, then the branch review; the panel opens on the first. */
 export const PANEL_TABS: readonly PanelTab[] = ["changes", "review", "history", "branches", "more"];
 
+/** The tab a `tab:<name>` command (keys.json, or `herdr-app do gitdeck.tab:review`) names; null for any other command. */
+export function tabCommand(command: string): PanelTab | null {
+  const name = command.startsWith("tab:") ? command.slice(4) : "";
+  return PANEL_TABS.find((t) => t === name) ?? null;
+}
+
 export const isWide = (width: number): boolean => width >= WIDE_PX;
 
 export type BackStep = "inspect" | "file" | "commit";

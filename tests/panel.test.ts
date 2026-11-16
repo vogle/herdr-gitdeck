@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  backStep, findViewerTab, isWide, PANEL_TABS, liveDiff, parseReturn, returnPoint, staleViewerTab, viewerFocused, VIEWER_TAB_NAME, parseViewer, viewerBack, viewerKey, viewerShow, viewerTitle, WIDE_PX,
+  backStep, findViewerTab, tabCommand, isWide, PANEL_TABS, liveDiff, parseReturn, returnPoint, staleViewerTab, viewerFocused, VIEWER_TAB_NAME, parseViewer, viewerBack, viewerKey, viewerShow, viewerTitle, WIDE_PX,
   type ViewerRequest,
 } from "../src/core/panel.ts";
 
@@ -144,4 +144,12 @@ test("parseReturn keeps a well-formed point whose tab still exists", () => {
 
 test("the panel tabs follow agent work: Changes opens first, then Review", () => {
   assert.deepEqual(PANEL_TABS, ["changes", "review", "history", "branches", "more"]);
+});
+
+test("a tab:<name> command names a panel tab; anything else names none", () => {
+  for (const tab of PANEL_TABS) assert.equal(tabCommand(`tab:${tab}`), tab);
+  assert.equal(tabCommand("tab:nope"), null);
+  assert.equal(tabCommand("tab:"), null);
+  assert.equal(tabCommand("review"), null);
+  assert.equal(tabCommand("refresh"), null);
 });

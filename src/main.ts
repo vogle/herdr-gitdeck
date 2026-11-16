@@ -12,7 +12,7 @@ import { loadBlob, loadTree } from "./core/tree.ts";
 import { loadBranchPr, loadPrs, loadReviewThreads, setForge, type BranchPrState, type ForgeChoice } from "./core/forge/index.ts";
 import { prRow } from "./core/forge/summary.ts";
 
-import { backStep, isWide, viewerFocused, type PanelTab } from "./core/panel.ts";
+import { backStep, isWide, tabCommand, viewerFocused, type PanelTab } from "./core/panel.ts";
 import { markViewed, openReviewFile, openViewer, Viewer } from "./viewer.ts";
 import { REVIEWED_KEY, seenFor, type ReviewQueue } from "./core/reviewed.ts";
 import { reviewOrder, type ReviewGroup } from "./core/reviewOrder.ts";
@@ -205,6 +205,10 @@ export default class GitDeck extends View {
         else if (command === "refresh") this.refresh(cx);
         else if (command === "search") this.search.focus();
         else if (command === "update") void installUpdate();
+        else {
+          const tab = tabCommand(command);
+          if (tab !== null) this.selectTab(tab, cx);
+        }
       }
     });
     // A newer release posts one notification a day; its click sends "update" above.
