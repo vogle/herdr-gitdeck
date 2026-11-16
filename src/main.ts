@@ -475,13 +475,14 @@ export default class GitDeck extends View {
     if (source && target) openViewer({ view: "diff", repo: target.cwd, on: target.on, source });
   }
 
-  /** The Review tab's data: the files since main, and (with `pr`) the pull request read again. */
+  /** The Review tab's data: the files since main, and the pull request (with `pr`, read again). */
   async readReview(cx: AsyncContext, pr: boolean): Promise<void> {
     const target = this.repoTarget();
     const status = target ? this.herd.statuses[target.cwd]?.status : null;
     const base = target && this.compare?.repo === target.cwd ? this.compare.base : null;
     if (!target || !status?.oid || base === null) return;
-    const [data] = await Promise.all([loadReview(this.git, target, base, status.oid), pr ? this.readPr(cx, true) : Promise.resolve()]);
+    // Without `pr`, still read it for a repo or branch whose PR isn't read yet (another repo shown on this tab).
+    const [data] = await Promise.all([loadReview(this.git, target, base, status.oid), this.readPr(cx, pr)]);
     // The PR may have named another base meanwhile; its own read has the files then.
     if (this.herd.selected !== target.cwd || this.compare?.base !== base) return;
     this.review = { repo: target.cwd, data };
