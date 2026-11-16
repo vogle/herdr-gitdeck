@@ -33,7 +33,7 @@ import { loadStatus, scanHerd } from "./core/scan.ts";
 import { Signal } from "./core/signal.ts";
 import { MAX_REPOS } from "./core/repos/discover.ts";
 import { agentChips, herdAgents, repoAgents, type AgentChip } from "./core/repoAgents.ts";
-import { conflictWarning, uncommittedNote } from "./core/headerText.ts";
+import { behindNote, conflictWarning, uncommittedNote } from "./core/headerText.ts";
 import { ago } from "./core/time.ts";
 import { freshPaths, markSeen, newCommits, touch, type Seen } from "./core/seen.ts";
 import { loadCompare, loadReview, reviewBase, type Compare, type Review } from "./core/review.ts";
@@ -779,6 +779,7 @@ export default class GitDeck extends View {
                   seen: seenFor(shared(REVIEWED_KEY), repo.path),
                   folded: this.reviewFolded,
                   uncommitted: uncommittedNote(result?.status ?? null),
+                  behind: behindNote(this.compare?.repo === repo.path ? this.compare.data : null),
                   feedback: this.feedback.render(
                     repo.path,
                     this.repoTarget()?.on != null,

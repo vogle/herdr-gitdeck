@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { changesTabLabel, conflictWarning, uncommittedNote } from "../src/core/headerText.ts";
+import { behindNote, changesTabLabel, conflictWarning, uncommittedNote, FAR_BEHIND } from "../src/core/headerText.ts";
 import { agentChips, repoAgents } from "../src/core/repoAgents.ts";
 
 const status = (kinds: string[]) => ({
@@ -51,4 +51,15 @@ test("a sub-repo also shows the agent working in the repo around it, not one in 
   const herd = ["/w/bsp", "/w/bsp/display", "/w/bsp/other"];
   assert.deepEqual(repoAgents("/w/bsp/display", agents, panes, new Map(), herd).map((a) => a.name), ["Claude Code"]);
   assert.deepEqual(repoAgents("/w/bsp/display", agents, panes).map((a) => a.name), [], "without the herd, only agents inside it");
+});
+
+test("far behind its base (20+ commits), the branch is told to catch up before it lands", () => {
+  assert.equal(FAR_BEHIND, 20);
+  assert.equal(behindNote({ base: "origin/main", ahead: 3, behind: 19 }), null);
+  assert.equal(
+    behindNote({ base: "origin/main", ahead: 3, behind: 20 }),
+    "main has 20 commits this branch doesn't: merge or rebase before it lands, or it may conflict",
+  );
+  assert.equal(behindNote({ base: "stg", ahead: 0, behind: 41 })?.startsWith("stg has 41 commits"), true);
+  assert.equal(behindNote(null), null);
 });

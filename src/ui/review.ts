@@ -25,6 +25,8 @@ export interface ReviewParts {
   folded: ReadonlySet<ReviewGroup>;
   /** Files changed in the work tree but not committed, worded; null when there are none. */
   uncommitted: string | null;
+  /** The base moved on far ahead of the branch, worded; null while it's close. */
+  behind: string | null;
   /** The feedback batch at the foot, or null with no notes. */
   feedback: Element | null;
 }
@@ -81,6 +83,25 @@ function uncommittedLine(note: string | null, p: Palette, a: ReviewActions): Ele
       .border_color(p.border)
       .child(div().flex_1().min_w_0().truncate().text_color(p.changed).child(note))
       .child(textButton("rv-to-changes", "Changes", p, a.showChanges)),
+  ];
+}
+
+/** The base moved on: landing the branch may conflict. */
+function behindLine(note: string | null, p: Palette): Element[] {
+  if (note === null) return [];
+  return [
+    div()
+      .id("rv-behind")
+      .px(10)
+      .py(4)
+      .flex_shrink_0()
+      .text_xs()
+      .truncate()
+      .text_color(p.changed)
+      .border_b_1()
+      .border_color(p.border)
+      .tooltip(note)
+      .child(note),
   ];
 }
 
@@ -195,6 +216,7 @@ export function reviewPane(parts: ReviewParts, p: Palette, a: ReviewActions): El
         .child(textButton("review-refresh", "Refresh", p, a.refresh)),
     )
     .children(uncommittedLine(parts.uncommitted, p, a))
+    .children(behindLine(parts.behind, p))
     .child(prLine(parts.pr, p, a))
     .child(v_flex().id("gitdeck-review").flex_1().min_h_0().overflow_y_scroll().pb(8).children(body))
     .children(foot);

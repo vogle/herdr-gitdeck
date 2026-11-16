@@ -10,6 +10,7 @@ import { div, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { selectedRepo, type HerdState } from "../core/herd.ts";
 import type { AgentChip } from "../core/repoAgents.ts";
+import { behindNote } from "../core/headerText.ts";
 import type { Compare } from "../core/review.ts";
 import type { SyncChip } from "../core/syncChips.ts";
 import { ago } from "../core/time.ts";
@@ -77,13 +78,14 @@ function branchLabel(branch: string, p: Palette): Element {
 }
 
 function compareLabel(c: Compare, p: Palette): Element {
+  const far = behindNote(c);
   const counts = c.ahead === 0 && c.behind === 0 ? "even" : `${c.ahead > 0 ? `↑${c.ahead}` : ""}${c.behind > 0 ? ` ↓${c.behind}` : ""}`.trim();
   return div()
     .id("vs-base")
     .flex_shrink_0()
     .text_xs()
-    .text_color(p.dim)
-    .tooltip(`Against ${c.base}: ${c.ahead} commits not on it, ${c.behind} on it not here`)
+    .text_color(far === null ? p.dim : p.changed)
+    .tooltip(far ?? `Against ${c.base}: ${c.ahead} commits not on it, ${c.behind} on it not here`)
     .child(`→ ${c.base.replace(/^origin\//, "")} ${counts}`);
 }
 
