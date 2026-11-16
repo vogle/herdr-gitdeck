@@ -9,7 +9,7 @@ import { forgeQuestion, prBar, prNote } from "./ui/prBar.ts";
 import { ChangesPanel } from "./changes.ts";
 import { loadReflog, type InspectView } from "./core/inspect.ts";
 import { loadBlob, loadTree } from "./core/tree.ts";
-import { loadBranchPr, loadPrs, setForge, type BranchPrState, type ForgeChoice } from "./core/forge/index.ts";
+import { loadBranchPr, loadPrs, loadReviewThreads, setForge, type BranchPrState, type ForgeChoice } from "./core/forge/index.ts";
 import { prRow } from "./core/forge/summary.ts";
 
 import { backStep, isWide, viewerFocused, type PanelTab } from "./core/panel.ts";
@@ -512,6 +512,17 @@ export default class GitDeck extends View {
   }
 
   /** The PR state for the shown repo's current branch; null while unread or on another branch. */
+  /** The shown PR/MR's unresolved review comments, into the feedback batch (on the person's click). */
+  async addReviewComments(cx: AsyncContext, head: string | null): Promise<void> {
+    const target = this.repoTarget();
+    const shown = target ? this.shownPr(target.cwd) : null;
+    if (!target || !shown?.pr || this.feedback.reading) return;
+    this.feedback.reading = true;
+    cx.notify();
+    const read = await loadReviewThreads(this.git, exec, target, await this.homeFor(target), shown.pr.number);
+    this.feedback.addThreads(target.cwd, read, shown.label, head, cx);
+  }
+
   shownPr(path: string): BranchPrState | null {
     const branch = this.herd.statuses[path]?.status?.branch ?? null;
     return this.pr?.repo === path && this.pr.branch === branch ? this.pr.state : null;
@@ -787,6 +798,7 @@ export default class GitDeck extends View {
                   uncommitted: uncommittedNote(result?.status ?? null),
                   behind: behindNote(this.compare?.repo === repo.path ? this.compare.data : null),
                   checksToAdd: this.feedback.checksToAdd(repo.path, this.shownPr(repo.path)?.pr?.failed ?? []),
+                  readingComments: this.feedback.reading,
                   feedback: this.feedback.render(
                     repo.path,
                     this.repoTarget()?.on != null,
@@ -818,6 +830,10 @@ export default class GitDeck extends View {
                     cx.notify();
                   },
                   openCheck: (url, cx) => this.openLink(url, cx),
+                  addComments: (cx) => {
+                    const head = result?.status?.oid ?? null;
+                    cx.spawn((cx) => this.addReviewComments(cx, head));
+                  },
                   addChecks: (cx) => this.feedback.addChecks(repo.path, this.shownPr(repo.path)?.pr?.failed ?? [], result?.status?.oid ?? null, cx),
                 },
               },

@@ -15,8 +15,14 @@ function checkNote(c: FailedCheck): FeedbackNote {
   return { where: `Failed check: ${c.name}`, quote: [], text };
 }
 
+/** The notes not already waiting in the batch (a sent one may go again: it came back). */
+export function notWaiting(notes: readonly FeedbackNote[], batch: readonly (FeedbackNote & { state: NoteState })[]): FeedbackNote[] {
+  const key = (n: FeedbackNote): string => [n.where, ...n.quote, n.text].join("\n");
+  const waiting = new Set(batch.filter((n) => n.state !== "sent").map(key));
+  return notes.filter((n) => !waiting.has(key(n)));
+}
+
 /** Notes for the failed checks not already waiting in the batch (a sent one may go again: it failed again). */
 export function checkNotes(failed: readonly FailedCheck[], batch: readonly (FeedbackNote & { state: NoteState })[]): FeedbackNote[] {
-  const waiting = new Set(batch.filter((n) => n.state !== "sent").map((n) => `${n.where}\n${n.text}`));
-  return failed.map(checkNote).filter((n) => !waiting.has(`${n.where}\n${n.text}`));
+  return notWaiting(failed.map(checkNote), batch);
 }

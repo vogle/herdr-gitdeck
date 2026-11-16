@@ -6,9 +6,11 @@ import type { Exec, Git, Target } from "../git/runner.ts";
 import { parseBranchPr, parsePrs, prListArgs, prViewArgs } from "./github.ts";
 import { failedJobsArgs, mrListArgs, mrViewArgs, parseBranchMr, parseFailedJobs, parseMrs, pipelineId } from "./gitlab.ts";
 import { forgeOf, parseRemote } from "./remote.ts";
+import { discussionsArgs, parseDiscussions, parseThreads, threadsArgs, type ReviewThread } from "./reviewThreads.ts";
 import type { BranchPr, Forge, ForgeChoice, ForgeKind, PrList } from "./types.ts";
 
 export type { BranchPr, Checks, Forge, ForgeChoice, ForgeKind, PrList, PullRequest } from "./types.ts";
+export type { ReviewThread } from "./reviewThreads.ts";
 
 /** Where to ask the CLIs which hosts they are signed in to: outside the repo. */
 interface Probe {
@@ -125,5 +127,19 @@ export async function loadBranchPr(git: Git, exec: Exec, target: Target, away: s
     return { pr: null, error: r.stderr.split("\n")[0] || `${forge.cli} failed (${r.code})`, ...known };
   } catch (error) {
     return { pr: null, error: failure(forge.cli, error), ...known };
+  }
+}
+
+/** The open review threads on PR/MR `number`: read once, when the person asks for them. */
+export async function loadReviewThreads(git: Git, exec: Exec, target: Target, away: string, number: number): Promise<{ threads: ReviewThread[]; error: string | null }> {
+  const { forge } = await readOrigin(git, target);
+  if (forge === null) return { threads: [], error: "No GitHub or GitLab remote" };
+  const args = forge.kind === "github" ? threadsArgs(forge.repo, number) : discussionsArgs(forge.repo, number);
+  try {
+    const r = await exec(forge.cli, args, { cwd: away, on: target.on });
+    if (r.code !== 0) return { threads: [], error: r.stderr.split("\n")[0] || `${forge.cli} failed (${r.code})` };
+    return { threads: forge.kind === "github" ? parseThreads(r.stdout) : parseDiscussions(r.stdout), error: null };
+  } catch (error) {
+    return { threads: [], error: failure(forge.cli, error) };
   }
 }

@@ -70,7 +70,7 @@ export function pipelineId(json: string): number | null {
 }
 
 /** The project as glab's --repo takes it ("g/app" on gitlab.com, else a full URL) as a host and a path. */
-function hostAndPath(repo: string): { host: string; path: string } {
+export function hostAndPath(repo: string): { host: string; path: string } {
   const m = /^https:\/\/([^/]+)\/(.+)$/.exec(repo);
   return m?.[1] && m[2] ? { host: m[1], path: m[2] } : { host: "gitlab.com", path: repo };
 }

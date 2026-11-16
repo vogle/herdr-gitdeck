@@ -31,6 +31,8 @@ export interface ReviewParts {
   behind: string | null;
   /** Failed checks not yet waiting in the feedback batch. */
   checksToAdd: number;
+  /** The open PR/MR's review comments are being read. */
+  readingComments: boolean;
   /** The feedback batch at the foot, or null with no notes. */
   feedback: Element | null;
 }
@@ -47,6 +49,8 @@ export interface ReviewActions {
   openCheck: (url: string, cx: Context) => void;
   /** Puts the failed checks in the feedback batch, for the agent. */
   addChecks: (cx: Context) => void;
+  /** Reads the open PR/MR's unresolved review comments into the feedback batch. */
+  addComments: (cx: Context) => void;
   showChanges: (cx: Context) => void;
 }
 
@@ -137,6 +141,25 @@ function failedLines(state: ReviewParts["pr"], toAdd: number, p: Palette, a: Rev
   );
   const more = failed.length > SHOWN_CHECKS ? [div().px(10).py(2).text_xs().text_color(p.dim).child(`and ${failed.length - SHOWN_CHECKS} more`)] : [];
   return [v_flex().id("rv-failed").pb(4).flex_shrink_0().border_b_1().border_color(p.border).child(head).children(rows).children(more)];
+}
+
+/** For an open PR/MR: its unresolved review comments, read on a click and handed to the agent. */
+function commentsLine(state: ReviewParts["pr"], reading: boolean, p: Palette, a: ReviewActions): Element[] {
+  if (state?.pr?.state !== "OPEN") return [];
+  return [
+    h_flex()
+      .id("rv-comments")
+      .px(10)
+      .py(4)
+      .gap(8)
+      .items_center()
+      .flex_shrink_0()
+      .text_xs()
+      .border_b_1()
+      .border_color(p.border)
+      .child(div().flex_1().min_w_0().truncate().text_color(p.dim).child(`Review comments on the ${state.label}`))
+      .child(textButton("rv-comments-add", reading ? "Reading…" : "Add unresolved to feedback", p, a.addComments, false, !reading)),
+  ];
 }
 
 /** The base moved on: landing the branch may conflict. */
@@ -276,6 +299,7 @@ export function reviewPane(parts: ReviewParts, p: Palette, a: ReviewActions): El
     .children(behindLine(parts.behind, p))
     .child(prLine(parts.pr, p, a))
     .children(failedLines(parts.pr, parts.checksToAdd, p, a))
+    .children(commentsLine(parts.pr, parts.readingComments, p, a))
     .child(v_flex().id("gitdeck-review").flex_1().min_h_0().overflow_y_scroll().pb(8).children(done).children(body))
     .children(foot);
 }

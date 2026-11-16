@@ -6,6 +6,7 @@ import { agents, panes } from "herdr";
 import { feedbackTargets, type FeedbackTarget } from "./core/feedback.ts";
 import { changedSince, newNote, queueFor, toDraft, withoutNote, withoutSent } from "./core/feedbackBatch.ts";
 import { checkNotes } from "./core/forge/failedChecks.ts";
+import { threadNotes, type ReviewThread } from "./core/forge/reviewThreads.ts";
 import type { FailedCheck } from "./core/forge/types.ts";
 import { batchMessage, noteId, readNotes, saveNotes, sendNotes } from "./feedbackSend.ts";
 import { feedbackBar } from "./ui/feedbackBar.ts";
@@ -14,6 +15,8 @@ import type { Palette } from "./ui/style.ts";
 export class FeedbackPanel {
   open = false;
   busy = false;
+  /** Reading the PR/MR's review comments (on the person's click). */
+  reading = false;
   status: { ok: boolean; text: string } | null = null;
   /** The agent the person chose (terminal address); null for the default. */
   chosen: string | null = null;
@@ -64,6 +67,21 @@ export class FeedbackPanel {
     saveNotes(repo, [...notes, ...added]);
     this.open = true;
     this.say(true, `Added ${added.length} failed check${added.length === 1 ? "" : "s"}: send them when ready`, cx);
+  }
+
+  /** The open review threads read: those not waiting in the batch go in as drafts, and the batch opens. */
+  addThreads(repo: string, read: { threads: readonly ReviewThread[]; error: string | null }, label: "PR" | "MR", head: string | null, cx: Context): void {
+    this.reading = false;
+    if (read.error !== null) return this.say(false, `Couldn't read the review comments: ${read.error}`, cx);
+    const notes = readNotes(repo);
+    const added = threadNotes(read.threads, label, notes).map((n) => newNote(noteId(), n, { path: "", head, blob: null }));
+    if (added.length === 0) {
+      const none = read.threads.length === 0 ? `No unresolved review comments on the ${label}` : "Those review comments are in the batch already";
+      return this.say(true, none, cx);
+    }
+    saveNotes(repo, [...notes, ...added]);
+    this.open = true;
+    this.say(true, `Added ${added.length} review comment${added.length === 1 ? "" : "s"}: send them when ready`, cx);
   }
 
   render(repo: string, remote: boolean, blobs: ReadonlyMap<string, string>, p: Palette): Element | null {

@@ -4,7 +4,7 @@ import type { Exec, Git } from "../src/core/git/runner.ts";
 import { forgeOf, parseRemote } from "../src/core/forge/remote.ts";
 import { parseBranchPr, parsePrs, prListArgs, prViewArgs } from "../src/core/forge/github.ts";
 import { failedJobsArgs, mrListArgs, mrViewArgs, parseBranchMr, parseFailedJobs, parseMrs, pipelineId } from "../src/core/forge/gitlab.ts";
-import { loadBranchPr, loadPrs, setForge } from "../src/core/forge/index.ts";
+import { loadBranchPr, loadPrs, loadReviewThreads, setForge } from "../src/core/forge/index.ts";
 
 const T = { cwd: "/r", on: null };
 
@@ -263,4 +263,23 @@ test("setForge names the forge in the repo's own config, and nothing else", asyn
     ["config", "--local", "gitdeck.forge", "github"],
     ["config", "--local", "gitdeck.forge", "none"],
   ]);
+});
+
+test("loadReviewThreads asks the forge's CLI, and says why when it can't", async () => {
+  const gh = JSON.stringify({ data: { repository: { pullRequest: { reviewThreads: { nodes: [
+    { isResolved: false, path: "a.ts", line: 3, comments: { nodes: [{ author: { login: "bo" }, body: "Fix", url: "u" }] } },
+  ] }, reviews: { nodes: [] } } } } });
+  const calls: [string, string[], unknown][] = [];
+  const read = await loadReviewThreads(gitFor("git@github.com:o/r.git"), async (c, a, o) => (calls.push([c, a, o]), { code: 0, stdout: gh, stderr: "" }), T, "/home", 7);
+  assert.deepEqual(read, { threads: [{ path: "a.ts", line: 3, url: "u", comments: [{ author: "bo", body: "Fix" }] }], error: null });
+  assert.equal(calls[0]?.[0], "gh");
+  assert.deepEqual(calls[0]?.[2], { cwd: "/home", on: null });
+  const gl = await loadReviewThreads(gitFor("git@gitlab.com:g/app.git"), async (c, a) => ({ code: 0, stdout: c === "glab" && a[0] === "api" ? "[]" : "x", stderr: "" }), T, "/home", 9);
+  assert.deepEqual(gl, { threads: [], error: null });
+  const denied = await loadReviewThreads(gitFor("git@gitlab.com:g/app.git"), async () => ({ code: 1, stdout: "", stderr: "glab: 403 Forbidden\nmore" }), T, "/home", 9);
+  assert.deepEqual(denied, { threads: [], error: "glab: 403 Forbidden" });
+  const gone = await loadReviewThreads(gitFor("git@gitlab.com:g/app.git"), async () => { throw new Error("spawn glab ENOENT"); }, T, "/home", 9);
+  assert.deepEqual(gone, { threads: [], error: "Can't run glab: spawn glab ENOENT" });
+  const none = await loadReviewThreads(gitFor("git@example.org:x/y.git", "none"), async () => ({ code: 0, stdout: "", stderr: "" }), T, "/home", 1);
+  assert.deepEqual(none, { threads: [], error: "No GitHub or GitLab remote" });
 });
