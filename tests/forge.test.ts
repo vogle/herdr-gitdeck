@@ -271,7 +271,7 @@ test("loadReviewThreads asks the forge's CLI, and says why when it can't", async
   ] }, reviews: { nodes: [] } } } } });
   const calls: [string, string[], unknown][] = [];
   const read = await loadReviewThreads(gitFor("git@github.com:o/r.git"), async (c, a, o) => (calls.push([c, a, o]), { code: 0, stdout: gh, stderr: "" }), T, "/home", 7);
-  assert.deepEqual(read, { threads: [{ path: "a.ts", line: 3, url: "u", comments: [{ author: "bo", body: "Fix" }] }], error: null });
+  assert.deepEqual(read, { threads: [{ path: "a.ts", line: 3, url: "u", comments: [{ author: "bo", role: "outside", body: "Fix" }] }], error: null });
   assert.equal(calls[0]?.[0], "gh");
   assert.deepEqual(calls[0]?.[2], { cwd: "/home", on: null });
   const gl = await loadReviewThreads(gitFor("git@gitlab.com:g/app.git"), async (c, a) => ({ code: 0, stdout: c === "glab" && a[0] === "api" ? "[]" : "x", stderr: "" }), T, "/home", 9);
