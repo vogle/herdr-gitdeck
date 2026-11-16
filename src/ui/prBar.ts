@@ -5,7 +5,7 @@
 
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import type { BranchPr, ForgeKind } from "../core/forge/index.ts";
+import type { BranchPr, ForgeChoice } from "../core/forge/index.ts";
 import { checksText, checksTone, prNumber, prState } from "../core/forge/summary.ts";
 import { toneColor } from "./review.ts";
 import { ICONS, icon, textButton, type Palette } from "./style.ts";
@@ -59,7 +59,7 @@ export function prBar(pr: BranchPr, label: "PR" | "MR", p: Palette, a: PrBarActi
  * In the PR bar's place when origin is on a host gitdeck can't tell (no CLI, or
  * both, signed in to it): the question, where it's seen without opening a tab.
  */
-export function forgeQuestion(host: string, p: Palette, choose: (kind: ForgeKind, cx: Context) => void): Element {
+export function forgeQuestion(host: string, p: Palette, choose: (kind: ForgeChoice, cx: Context) => void): Element {
   return h_flex()
     .id("forge-question")
     .px(12)
@@ -72,9 +72,10 @@ export function forgeQuestion(host: string, p: Palette, choose: (kind: ForgeKind
     .border_color(p.border)
     .bg(p.chrome)
     .child(icon(ICONS.pr, p.dim, 13))
-    .child(div().flex_1().min_w_0().truncate().text_color(p.muted).child(`origin is on ${host}: GitLab or GitHub? PRs and checks show once it's named`))
+    .child(div().flex_1().min_w_0().truncate().text_color(p.muted).child(`origin is on ${host}: GitLab, GitHub, or neither? Reviews and checks show once it's named`))
     .child(textButton("forge-q-gitlab", "GitLab", p, (cx) => choose("gitlab", cx)))
-    .child(textButton("forge-q-github", "GitHub", p, (cx) => choose("github", cx)));
+    .child(textButton("forge-q-github", "GitHub", p, (cx) => choose("github", cx)))
+    .child(textButton("forge-q-none", "Neither", p, (cx) => choose("none", cx)));
 }
 
 /** The row when there's no PR to show: being read, none, or why it can't be read. A click reads it again. */

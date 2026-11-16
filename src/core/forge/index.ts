@@ -6,9 +6,9 @@ import type { Exec, Git, Target } from "../git/runner.ts";
 import { parseBranchPr, parsePrs, prListArgs, prViewArgs } from "./github.ts";
 import { mrListArgs, mrViewArgs, parseBranchMr, parseMrs } from "./gitlab.ts";
 import { forgeOf, parseRemote } from "./remote.ts";
-import type { BranchPr, Forge, ForgeKind, PrList } from "./types.ts";
+import type { BranchPr, Forge, ForgeChoice, ForgeKind, PrList } from "./types.ts";
 
-export type { BranchPr, Checks, Forge, ForgeKind, PrList, PullRequest } from "./types.ts";
+export type { BranchPr, Checks, Forge, ForgeChoice, ForgeKind, PrList, PullRequest } from "./types.ts";
 
 /** Where to ask the CLIs which hosts they are signed in to: outside the repo. */
 interface Probe {
@@ -35,8 +35,9 @@ async function signedInForge(probe: Probe, target: Target, host: string): Promis
 }
 
 /**
- * origin's host, and its forge; `git config gitdeck.forge github|gitlab` names it
- * for any host. With a probe, an unnamed host is read from the signed-in CLIs.
+ * origin's host, and its forge; `git config gitdeck.forge github|gitlab|none` names
+ * it for any host. With a probe, an unnamed host is read from the signed-in CLIs.
+ * The host comes back only while it's unnamed: the person is asked which it is.
  */
 async function readOrigin(git: Git, target: Target, probe?: Probe): Promise<{ forge: Forge | null; host: string | null }> {
   const [url, override] = await Promise.all([
@@ -45,7 +46,7 @@ async function readOrigin(git: Git, target: Target, probe?: Probe): Promise<{ fo
   ]);
   const remote = parseRemote(url);
   const forge = forgeOf(remote, override);
-  if (forge !== null || remote === null || override !== null || !probe) return { forge, host: remote?.host ?? null };
+  if (forge !== null || remote === null || override !== null || !probe) return { forge, host: forge === null && override === null ? (remote?.host ?? null) : null };
   const kind = await signedInForge(probe, target, remote.host);
   const found = kind === null ? null : forgeOf(remote, kind);
   return { forge: found, host: found === null ? remote.host : null };
@@ -55,8 +56,8 @@ export async function readForge(git: Git, target: Target): Promise<Forge | null>
   return (await readOrigin(git, target)).forge;
 }
 
-/** Names origin's forge for this repo (its own .git/config), for a host that isn't github.com or gitlab.com. */
-export async function setForge(git: Git, target: Target, kind: ForgeKind): Promise<void> {
+/** Names origin's forge for this repo (its own .git/config), for a host that isn't github.com or gitlab.com; "none" stops the asking. */
+export async function setForge(git: Git, target: Target, kind: ForgeChoice): Promise<void> {
   await git(target, ["config", "--local", "gitdeck.forge", kind]);
 }
 
@@ -93,13 +94,14 @@ export interface BranchPrState {
   forge: ForgeKind | null;
 }
 
-/** The branch's PR or MR; none (and no error) without a forge or one to show. */
-export async function loadBranchPr(git: Git, exec: Exec, target: Target, away: string, branch: string): Promise<BranchPrState> {
+/** The branch's PR or MR; none (and no error) without a forge or one to show. Without a branch, only the forge. */
+export async function loadBranchPr(git: Git, exec: Exec, target: Target, away: string, branch: string | null): Promise<BranchPrState> {
   const { forge, host: origin } = await readOrigin(git, target, { exec, away });
   if (forge === null) return { pr: null, error: null, label: "PR", host: origin, forge: null };
   const label = forge.label;
   const host = null;
   const known = { label, host, forge: forge.kind };
+  if (branch === null) return { pr: null, error: null, ...known };
   const args = forge.kind === "github" ? prViewArgs(forge.repo, branch) : mrViewArgs(forge.repo, branch);
   try {
     const r = await exec(forge.cli, args, { cwd: away, on: target.on });

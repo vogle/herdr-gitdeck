@@ -147,6 +147,7 @@ test("loadBranchPr: none without a forge or a PR/MR, an error when the CLI fails
   assert.deepEqual(await loadBranchPr(gitFor("https://git.acme.dev/o/r"), ok, T, "/home", "x"), { pr: null, error: null, label: "PR", host: "git.acme.dev", forge: null }, "an unknown host is named, to be told which forge it is");
   assert.equal((await loadBranchPr(gitFor("not a url"), ok, T, "/home", "x")).host, null, "no host without a remote to read");
   assert.equal((await loadBranchPr(gitFor("https://git.acme.dev/o/r", "gitlab"), ok, T, "/home", "x")).host, null, "a named forge isn't asked about");
+  assert.deepEqual(await loadBranchPr(gitFor("git@gitlab.com:o/r.git"), ok, T, "/home", null), { pr: null, error: null, label: "MR", host: null, forge: "gitlab" }, "no branch: only the forge");
   const gone: Exec = async () => {
     throw new Error("spawn gh ENOENT");
   };
@@ -178,6 +179,17 @@ test("an unknown host is read as the forge whose CLI alone is signed in to it", 
   assert.equal((await loadPrs(gitFor("https://git.acme.dev/o/r"), gone, T, "/home")).host, "git.acme.dev", "no CLI: ask");
 });
 
+test("a host named as neither forge is never asked about or probed again", async () => {
+  const calls: string[] = [];
+  const spy: Exec = async (c) => {
+    calls.push(c);
+    return { code: 0, stdout: "secret\n", stderr: "" };
+  };
+  assert.deepEqual(await loadBranchPr(gitFor("https://git.acme.dev/o/r", "none"), spy, T, "/home", "x"), { pr: null, error: null, label: "PR", host: null, forge: null });
+  assert.equal((await loadPrs(gitFor("https://git.acme.dev/o/r", "none"), spy, T, "/home")).host, null);
+  assert.deepEqual(calls, [], "no CLI runs for it");
+});
+
 test("setForge names the forge in the repo's own config, and nothing else", async () => {
   const calls: string[][] = [];
   const git: Git = async (_t, args) => {
@@ -186,8 +198,10 @@ test("setForge names the forge in the repo's own config, and nothing else", asyn
   };
   await setForge(git, T, "gitlab");
   await setForge(git, T, "github");
+  await setForge(git, T, "none");
   assert.deepEqual(calls, [
     ["config", "--local", "gitdeck.forge", "gitlab"],
     ["config", "--local", "gitdeck.forge", "github"],
+    ["config", "--local", "gitdeck.forge", "none"],
   ]);
 });

@@ -23,6 +23,8 @@ export function checksTone({ passed, failed, pending }: Checks): "failed" | "pen
   return passed > 0 ? "passed" : "none";
 }
 
+const a = (label: "PR" | "MR"): string => (label === "MR" ? "an MR" : "a PR");
+
 export type PrRow =
   | { kind: "pr"; pr: BranchPr }
   | { kind: "ask"; host: string }
@@ -33,13 +35,14 @@ export type PrRow =
 /**
  * What the row under the header shows for the branch: its PR, the question of
  * which forge origin is, that it's being read, why it can't be, or why there's
- * none. Always something, so the row keeps its place.
+ * none. Always something, so the row keeps its place. `known` is the repo's
+ * forge word from an earlier read, for while this branch's is read.
  */
-export function prRow(state: BranchPrState | null, branch: string | null, mainLine = false): PrRow {
-  if (branch === null) return { kind: "none", text: "Detached HEAD: no branch to have a PR" };
-  if (state === null) return { kind: "reading", text: "Checking for a PR or MR…" };
+export function prRow(state: BranchPrState | null, branch: string | null, mainLine = false, known: "PR" | "MR" | null = null): PrRow {
+  if (state === null) return { kind: "reading", text: known === null ? "Reading origin…" : `Checking for ${a(known)}…` };
   if (state.host !== null) return { kind: "ask", host: state.host };
-  if (state.forge === null) return { kind: "none", text: "No GitHub or GitLab remote: no PRs to show" };
+  if (state.forge === null) return { kind: "none", text: "No GitHub or GitLab remote: no pull or merge requests here" };
+  if (branch === null) return { kind: "none", text: `Detached HEAD: no branch to have ${a(state.label)}` };
   if (state.pr !== null) return { kind: "pr", pr: state.pr };
   if (state.error !== null) return { kind: "error", text: `Can't read the ${state.label}: ${state.error}` };
   if (mainLine) return { kind: "none", text: `On the main line: ${state.label}s come from other branches` };

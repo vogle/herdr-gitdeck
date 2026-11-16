@@ -3,7 +3,7 @@
 
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex, v_virtual_list, Scrollbar } from "gpui-base";
-import type { ForgeKind } from "../core/forge/index.ts";
+import type { ForgeChoice } from "../core/forge/index.ts";
 import type { InspectView } from "../core/inspect.ts";
 import { MAX_STATS, type Stats } from "../core/stats.ts";
 import { ago } from "../core/time.ts";
@@ -19,7 +19,7 @@ export interface InspectActions {
   openTreeFile: (index: number, cx: Context) => void;
   closeTreeFile: (cx: Context) => void;
   /** Names origin's forge, for a host gitdeck doesn't know. */
-  setForge: (kind: ForgeKind, cx: Context) => void;
+  setForge: (kind: ForgeChoice, cx: Context) => void;
 }
 
 interface Row {
@@ -113,7 +113,8 @@ function title(v: InspectView): string {
   if (v.kind === "file-log") return `History: ${v.path}`;
   if (v.kind === "stats") return "Repository statistics";
   if (v.kind === "prs") {
-    if (v.data?.host != null) return "Pull / merge requests (read-only)";
+    // Until a forge is read there's no telling which word (or CLI) it is.
+    if (v.data == null || v.data.repo === null) return "Pull / merge requests (read-only)";
     const mr = v.data?.label === "MR";
     return `${mr ? "Merge requests" : "Pull requests"}${v.data?.repo ? ` of ${v.data.repo}` : ""} (via ${mr ? "glab" : "gh"}, read-only): a click jumps to the head commit`;
   }
@@ -136,6 +137,7 @@ export function inspectPane(v: InspectView, p: Palette, a: InspectActions): Elem
             .child(div().flex_1().min_w_0().text_color(p.dim).child(error ?? ""))
             .child(textButton("prs-forge-gitlab", "GitLab", p, (cx) => a.setForge("gitlab", cx)))
             .child(textButton("prs-forge-github", "GitHub", p, (cx) => a.setForge("github", cx)))
+            .child(textButton("prs-forge-none", "Neither", p, (cx) => a.setForge("none", cx)))
       : error !== null
         ? div().p(12).text_color(p.removed).child(error)
         : rows.length === 0

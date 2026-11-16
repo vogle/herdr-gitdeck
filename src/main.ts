@@ -9,7 +9,7 @@ import { forgeQuestion, prBar, prNote } from "./ui/prBar.ts";
 import { ChangesPanel } from "./changes.ts";
 import { loadReflog, type InspectView } from "./core/inspect.ts";
 import { loadBlob, loadTree } from "./core/tree.ts";
-import { loadBranchPr, loadPrs, setForge, type BranchPrState, type ForgeKind } from "./core/forge/index.ts";
+import { loadBranchPr, loadPrs, setForge, type BranchPrState, type ForgeChoice } from "./core/forge/index.ts";
 import { prRow } from "./core/forge/summary.ts";
 
 import { backStep, isWide, viewerFocused, type PanelTab } from "./core/panel.ts";
@@ -156,7 +156,7 @@ export default class GitDeck extends View {
   /** Review groups folded shut: the rest (docs, icons, locks) starts folded. */
   reviewFolded: ReadonlySet<ReviewGroup> = new Set(["other"]);
   /** The shown branch's PR or MR (over the network), for the PR bar and the Review tab. */
-  pr: { repo: string; branch: string; state: BranchPrState } | null = null;
+  pr: { repo: string; branch: string | null; state: BranchPrState } | null = null;
   /** Wide enough for the list and the commit side by side. */
   wide = false;
   /** Takes the keyboard so Esc goes back one level. */
@@ -482,11 +482,12 @@ export default class GitDeck extends View {
     cx.notify();
   }
 
-  /** The shown branch's PR or MR; read once per repo and branch unless `again`. */
+  /** The shown branch's PR or MR (on a detached HEAD, just origin's forge); read once per repo and branch unless `again`. */
   async readPr(cx: AsyncContext, again: boolean): Promise<void> {
     const target = this.repoTarget();
-    const branch = target ? this.herd.statuses[target.cwd]?.status?.branch : null;
-    if (!target || !branch) return;
+    const status = target ? this.herd.statuses[target.cwd]?.status : null;
+    if (!target || !status) return;
+    const branch = status.branch;
     if (!again && this.pr?.repo === target.cwd && this.pr.branch === branch) return;
     const state = await loadBranchPr(this.git, exec, target, await this.homeFor(target), branch);
     if (this.herd.selected !== target.cwd) return;
@@ -510,7 +511,7 @@ export default class GitDeck extends View {
 
   /** The PR state for the shown repo's current branch; null while unread or on another branch. */
   shownPr(path: string): BranchPrState | null {
-    const branch = this.herd.statuses[path]?.status?.branch;
+    const branch = this.herd.statuses[path]?.status?.branch ?? null;
     return this.pr?.repo === path && this.pr.branch === branch ? this.pr.state : null;
   }
 
@@ -589,7 +590,9 @@ export default class GitDeck extends View {
   prRowFor(path: string | null, state: BranchPrState | null, p: Palette): Element | null {
     if (path === null) return null;
     const branch = this.herd.statuses[path]?.status?.branch ?? null;
-    const row = prRow(state, branch, this.compare?.repo === path && this.compare.base === null);
+    // The repo's forge word from its last read, while this branch's is read.
+    const known = this.pr?.repo === path && this.pr.state.forge !== null ? this.pr.state.label : null;
+    const row = prRow(state, branch, this.compare?.repo === path && this.compare.base === null, known);
     if (row.kind === "pr") {
       return prBar(row.pr, state?.label ?? "PR", p, { review: (cx) => this.selectTab("review", cx), open: (url, cx) => this.openLink(url, cx) });
     }
@@ -599,7 +602,7 @@ export default class GitDeck extends View {
   }
 
   /** Names origin's forge for this repo, then reads its PR (and the PR list, when open) again. */
-  nameForge(kind: ForgeKind, cx: Context): void {
+  nameForge(kind: ForgeChoice, cx: Context): void {
     const target = this.repoTarget();
     if (!target) return;
     cx.spawn(async (cx) => {

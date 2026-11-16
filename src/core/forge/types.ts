@@ -2,6 +2,9 @@
 
 export type ForgeKind = "github" | "gitlab";
 
+/** What a person names origin's host as: one of the forges, or neither (never asked again). */
+export type ForgeChoice = ForgeKind | "none";
+
 export interface Forge {
   kind: ForgeKind;
   /** What the forge calls a review request. */

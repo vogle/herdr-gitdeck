@@ -5,7 +5,7 @@
 
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import type { BranchPrState, ForgeKind } from "../core/forge/index.ts";
+import type { BranchPrState, ForgeChoice } from "../core/forge/index.ts";
 import { checksText, checksTone, prState } from "../core/forge/summary.ts";
 import type { CommitFile } from "../core/git/show.ts";
 import type { Review } from "../core/review.ts";
@@ -37,7 +37,7 @@ export interface ReviewActions {
   toggleViewed: (path: string, cx: Context) => void;
   toggleGroup: (group: ReviewGroup, cx: Context) => void;
   /** Names origin's forge for a host gitdeck doesn't know (a self-hosted GitLab or GitHub). */
-  setForge: (kind: ForgeKind, cx: Context) => void;
+  setForge: (kind: ForgeChoice, cx: Context) => void;
   showChanges: (cx: Context) => void;
 }
 
@@ -56,8 +56,10 @@ function prLine(state: ReviewParts["pr"], p: Palette, a: ReviewActions): Element
     return row
       .child(div().flex_1().min_w_0().truncate().text_color(p.dim).child(`origin is on ${state.host}: which is it?`))
       .child(textButton("rv-forge-gitlab", "GitLab", p, (cx) => a.setForge("gitlab", cx)))
-      .child(textButton("rv-forge-github", "GitHub", p, (cx) => a.setForge("github", cx)));
+      .child(textButton("rv-forge-github", "GitHub", p, (cx) => a.setForge("github", cx)))
+      .child(textButton("rv-forge-none", "Neither", p, (cx) => a.setForge("none", cx)));
   }
+  if (state.forge === null) return row.text_color(p.dim).child("No GitHub or GitLab remote: no pull or merge requests here");
   const pr = state.pr;
   if (pr === null) return row.text_color(p.dim).child(`No ${state.label} for this branch`);
   return row
