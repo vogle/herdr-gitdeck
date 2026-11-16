@@ -9,7 +9,7 @@ import type { BranchPrState, ForgeChoice } from "../core/forge/index.ts";
 import { checksText, checksTone, prState } from "../core/forge/summary.ts";
 import type { CommitFile } from "../core/git/show.ts";
 import type { Review } from "../core/review.ts";
-import { viewedCount, viewState, type Seen } from "../core/reviewed.ts";
+import { notViewed, viewedCount, viewState, type Seen } from "../core/reviewed.ts";
 import { groupReview, type ReviewGroup } from "../core/reviewOrder.ts";
 import { kindIcon, lineCounts, statusLetter } from "./changeFiles.ts";
 import { ICONS, icon, textButton, type Palette } from "./style.ts";
@@ -23,6 +23,8 @@ export interface ReviewParts {
   /** The files marked viewed in this repo, with the blob each had then. */
   seen: Seen;
   folded: ReadonlySet<ReviewGroup>;
+  /** List only the files still to read (hide the viewed ones). */
+  hideViewed: boolean;
   /** Files changed in the work tree but not committed, worded; null when there are none. */
   uncommitted: string | null;
   /** The base moved on far ahead of the branch, worded; null while it's close. */
@@ -40,6 +42,7 @@ export interface ReviewActions {
   toggleGroup: (group: ReviewGroup, cx: Context) => void;
   /** Names origin's forge for a host gitdeck doesn't know (a self-hosted GitLab or GitHub). */
   setForge: (kind: ForgeChoice, cx: Context) => void;
+  toggleHideViewed: (cx: Context) => void;
   /** Opens a failed check's page in the browser. */
   openCheck: (url: string, cx: Context) => void;
   /** Puts the failed checks in the feedback batch, for the agent. */
@@ -245,8 +248,11 @@ export function reviewPane(parts: ReviewParts, p: Palette, a: ReviewActions): El
   const viewed = viewedCount(files.map((f) => f.path), parts.seen, blobs);
   const title =
     r === null ? `Reading changes since ${parts.base}…` : r.error ?? `${viewed} / ${files.length} viewed · since ${parts.base}  +${added} −${deleted}`;
-  const groups = groupReview(files);
+  const shown = parts.hideViewed ? notViewed(files, parts.seen, blobs) : files;
+  const groups = groupReview(shown);
   let index = 0;
+  const allRead = parts.hideViewed && files.length > 0 && shown.length === 0;
+  const done = allRead ? [div().p(14).text_color(p.dim).child(`All ${files.length} viewed, none changed since`)] : [];
   const body = groups.flatMap((g) => {
     const rows = g.files.map((f) => ({ f, i: index++ }));
     const head = groupHead(g.group, g.files, viewedCount(g.files.map((f) => f.path), parts.seen, blobs), parts, p, a);
@@ -263,12 +269,13 @@ export function reviewPane(parts: ReviewParts, p: Palette, a: ReviewActions): El
         .border_b_1()
         .border_color(p.border)
         .child(div().flex_1().min_w_0().truncate().text_xs().text_color(r?.error ? p.removed : p.muted).child(title))
+        .child(textButton("review-hide-viewed", parts.hideViewed ? "Show all" : "Hide viewed", p, a.toggleHideViewed, parts.hideViewed))
         .child(textButton("review-refresh", "Refresh", p, a.refresh)),
     )
     .children(uncommittedLine(parts.uncommitted, p, a))
     .children(behindLine(parts.behind, p))
     .child(prLine(parts.pr, p, a))
     .children(failedLines(parts.pr, parts.checksToAdd, p, a))
-    .child(v_flex().id("gitdeck-review").flex_1().min_h_0().overflow_y_scroll().pb(8).children(body))
+    .child(v_flex().id("gitdeck-review").flex_1().min_h_0().overflow_y_scroll().pb(8).children(done).children(body))
     .children(foot);
 }

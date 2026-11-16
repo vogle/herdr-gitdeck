@@ -155,6 +155,8 @@ export default class GitDeck extends View {
   review: { repo: string; data: Review | null } | null = null;
   /** Review groups folded shut: the rest (docs, icons, locks) starts folded. */
   reviewFolded: ReadonlySet<ReviewGroup> = new Set(["other"]);
+  /** The Review tab lists only the files still to read. */
+  reviewHideViewed = false;
   /** The shown branch's PR or MR (over the network), for the PR bar and the Review tab. */
   pr: { repo: string; branch: string | null; state: BranchPrState } | null = null;
   /** Wide enough for the list and the commit side by side. */
@@ -781,6 +783,7 @@ export default class GitDeck extends View {
                   pr: this.shownPr(repo.path),
                   seen: seenFor(shared(REVIEWED_KEY), repo.path),
                   folded: this.reviewFolded,
+                  hideViewed: this.reviewHideViewed,
                   uncommitted: uncommittedNote(result?.status ?? null),
                   behind: behindNote(this.compare?.repo === repo.path ? this.compare.data : null),
                   checksToAdd: this.feedback.checksToAdd(repo.path, this.shownPr(repo.path)?.pr?.failed ?? []),
@@ -810,6 +813,10 @@ export default class GitDeck extends View {
                     cx.spawn((cx) => this.readReview(cx, true));
                   },
                   setForge: (kind, cx) => this.nameForge(kind, cx),
+                  toggleHideViewed: (cx) => {
+                    this.reviewHideViewed = !this.reviewHideViewed;
+                    cx.notify();
+                  },
                   openCheck: (url, cx) => this.openLink(url, cx),
                   addChecks: (cx) => this.feedback.addChecks(repo.path, this.shownPr(repo.path)?.pr?.failed ?? [], result?.status?.oid ?? null, cx),
                 },

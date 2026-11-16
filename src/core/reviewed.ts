@@ -63,6 +63,11 @@ export function viewedCount(paths: readonly string[], seen: Seen, blobs: Readonl
   return paths.filter((p) => viewState(seen, p, blobs.get(p)) === "viewed").length;
 }
 
+/** The files still to read: never viewed, or changed since they were. */
+export function notViewed<T extends { path: string }>(files: readonly T[], seen: Seen, blobs: ReadonlyMap<string, string>): T[] {
+  return files.filter((f) => viewState(seen, f.path, blobs.get(f.path)) !== "viewed");
+}
+
 export interface QueueFile {
   path: string;
   oldPath: string | null;

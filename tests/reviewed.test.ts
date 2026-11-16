@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { neighbor, parseBlobs, parseQueue, seenFor, viewState, viewedCount, withViewed } from "../src/core/reviewed.ts";
+import { neighbor, notViewed, parseBlobs, parseQueue, seenFor, viewState, viewedCount, withViewed } from "../src/core/reviewed.ts";
 
 const A = "a".repeat(40);
 const B = "b".repeat(40);
@@ -71,4 +71,12 @@ test("neighbor steps through the queue and stops at the ends", () => {
   assert.equal(neighbor(queue, "b.ts", 1), null);
   assert.equal(neighbor(queue, "a.ts", -1), null);
   assert.equal(neighbor(queue, "zzz.ts", 1), null);
+});
+
+test("notViewed keeps the files still to read: never viewed, or changed since", () => {
+  const files = [{ path: "a.ts" }, { path: "b.ts" }, { path: "c.ts" }, { path: "gone.ts" }];
+  const blobs = new Map([["a.ts", "a1"], ["b.ts", "b2"], ["c.ts", "c1"]]);
+  const seen = { "a.ts": "a1", "b.ts": "b1", "gone.ts": "g1" };
+  assert.deepEqual(notViewed(files, seen, blobs).map((f) => f.path), ["b.ts", "c.ts"], "a viewed as is; gone.ts has no blob now, so its mark still holds");
+  assert.deepEqual(notViewed(files, {}, blobs), files);
 });
