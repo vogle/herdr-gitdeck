@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  chipTip,
   emptyHerd,
   withRepos,
   select,
@@ -105,4 +106,15 @@ test("groupRepos keeps order and groups by folder, root and direct children toge
 
 test("selectedRepo of an empty herd is null", () => {
   assert.equal(selectedRepo(emptyHerd()), null);
+});
+
+test("a chip's tooltip says which repo holds the others, and what each sits inside", () => {
+  const root = { path: "/w/BNKR", name: "BNKR", group: "", isRoot: true };
+  const sub = { path: "/w/BNKR/svc", name: "svc", group: "", isRoot: false };
+  const deep = { path: "/w/BNKR/libs/ui", name: "ui", group: "libs", isRoot: false };
+  const herd = [root, sub, deep];
+  assert.equal(chipTip(root, herd, "fix/x"), "Root repo: holds the others · fix/x");
+  assert.equal(chipTip(sub, herd, "main"), "svc, inside BNKR · main");
+  assert.equal(chipTip(deep, herd, "main"), "libs/ui, inside BNKR · main");
+  assert.equal(chipTip(sub, [sub, deep], "main"), "svc · main", "no root repo: nothing to sit inside");
 });

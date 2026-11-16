@@ -90,3 +90,11 @@ export function groupRepos(repos: readonly HerdRepo[]): RepoGroup[] {
     return [...groups, { group: repo.group, repos: [repo] }];
   }, []);
 }
+
+/** A strip chip's tooltip: the root says it holds the others, the rest what they sit inside; then the branch. */
+export function chipTip(repo: HerdRepo, repos: readonly HerdRepo[], branch: string): string {
+  if (repo.isRoot) return `Root repo: holds the others · ${branch}`;
+  const name = `${repo.group === "" ? "" : `${repo.group}/`}${repo.name}`;
+  const root = repos.find((r) => r.isRoot);
+  return `${name}${root ? `, inside ${root.name}` : ""} · ${branch}`;
+}

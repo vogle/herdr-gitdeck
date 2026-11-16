@@ -3,7 +3,7 @@
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { summarize } from "../core/git/status.ts";
-import { groupRepos, type HerdRepo, type HerdState, type StatusResult } from "../core/herd.ts";
+import { chipTip, groupRepos, type HerdRepo, type HerdState, type StatusResult } from "../core/herd.ts";
 import { reposShown, type AgentChip } from "../core/repoAgents.ts";
 import { agentColor, badge, ICONS, icon, textButton, type Palette } from "./style.ts";
 
@@ -109,12 +109,15 @@ function repoChip(repo: HerdRepo, state: HerdState, p: Palette, onPick: (path: s
     .cursor_pointer()
     .when(here, (el) => el.bg(p.selected))
     .hover((el) => el.bg(here ? p.selected : p.hover))
-    .tooltip(`${repo.group === "" ? "" : `${repo.group}/`}${repo.name} · ${branch}`)
+    .tooltip(chipTip(repo, state.repos, branch))
     .on_click((_e, cx) => onPick(repo.path, cx))
     .when(chips.length > 0, (el) => el.child(h_flex().gap(3).items_center().children(agentDots(chips, p))))
     .child(div().max_w(180).truncate().text_color(here ? p.foreground : p.muted).child(repo.name))
     .child(h_flex().gap(6).items_center().text_xs().text_color(p.muted).children(statusBadges(result, p)));
 }
+
+/** A thin line after the root repo's chip: the ones past it sit inside it. */
+const rootDivider = (p: Palette): Element => div().id("strip-root-divider").w(1).h(16).mx(2).flex_shrink_0().bg(p.border);
 
 /** Every repo at once under the header, so switching takes one click; wraps rather than hides. */
 export function repoStrip(state: HerdState, p: Palette, onPick: (path: string, cx: Context) => void, byRepo: HerdAgents["byRepo"]): Element | null {
@@ -122,6 +125,7 @@ export function repoStrip(state: HerdState, p: Palette, onPick: (path: string, c
   return h_flex()
     .id("repo-strip")
     .flex_wrap()
+    .items_center()
     .gap(4)
     .px(8)
     .py(5)
@@ -129,7 +133,14 @@ export function repoStrip(state: HerdState, p: Palette, onPick: (path: string, c
     .text_xs()
     .border_b_1()
     .border_color(p.border)
-    .children(groupRepos(state.repos).flatMap((g) => g.repos.map((r) => repoChip(r, state, p, onPick, byRepo[r.path] ?? []))));
+    .children(
+      groupRepos(state.repos).flatMap((g) =>
+        g.repos.flatMap((r) => {
+          const chip = repoChip(r, state, p, onPick, byRepo[r.path] ?? []);
+          return r.isRoot ? [chip, rootDivider(p)] : [chip];
+        }),
+      ),
+    );
 }
 
 export function repoList(state: HerdState, p: Palette, onPick: (path: string, cx: Context) => void, agents: HerdAgents): Element {
