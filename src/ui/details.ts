@@ -9,6 +9,7 @@ import type { CommitFile } from "../core/git/show.ts";
 import type { RepoStatus, StatusEntry } from "../core/git/status.ts";
 import { UNCOMMITTED, type HistoryView } from "../core/historyView.ts";
 import { dateTime } from "../core/time.ts";
+import { kindIcon, lineCounts, statusLetter } from "./changeFiles.ts";
 import { monoFont, textButton, type Palette } from "./style.ts";
 
 const DIFF_LIST = "gitdeck-diff";
@@ -23,32 +24,43 @@ export interface DetailActions {
   browseTree: (cx: Context) => void;
 }
 
-export function statusColor(letter: string, p: Palette) {
-  if (letter === "D" || letter === "!") return p.removed;
-  if (letter === "A" || letter === "?") return p.added;
-  if (letter === "R" || letter === "C") return p.info;
-  return p.changed;
-}
-
-export function fileRow(id: string, letter: string, path: string, counts: string, p: Palette, onOpen: (cx: Context) => void): Element {
+/**
+ * A file row as the Changes and Review tabs draw one: its kind as an icon in its
+ * status color, the name and its folder, then whatever trails (counts) and the
+ * status letter again.
+ */
+export function fileRow(id: string, letter: string, path: string, trailing: Element[], p: Palette, onOpen?: (cx: Context) => void): Element {
   const cut = path.lastIndexOf("/");
   return h_flex()
     .id(id)
-    .h(22)
+    .h(24)
     .px(10)
-    .gap(8)
+    .gap(6)
     .items_center()
-    .cursor_pointer()
-    .hover((el) => el.bg(p.hover))
-    .on_click((_e, cx) => onOpen(cx))
-    .child(div().w(12).flex_shrink_0().text_color(statusColor(letter, p)).child(letter))
-    .child(div().flex_shrink_0().child(cut >= 0 ? path.slice(cut + 1) : path))
-    .child(div().min_w_0().flex_1().truncate().text_color(p.dim).child(cut >= 0 ? path.slice(0, cut + 1) : ""))
-    .child(div().flex_shrink_0().text_xs().text_color(p.dim).child(counts));
+    .when(onOpen !== undefined, (el) => el.cursor_pointer().hover((h) => h.bg(p.hover)).on_click((_e, cx) => onOpen?.(cx)))
+    .child(kindIcon({ path, letter }, p))
+    .child(
+      h_flex()
+        .flex_1()
+        .min_w_0()
+        .gap(6)
+        .items_center()
+        .child(
+          div()
+            .flex_shrink(1)
+            .min_w_0()
+            .truncate()
+            .when(letter === "D", (el) => el.line_through().text_color(p.muted))
+            .child(cut >= 0 ? path.slice(cut + 1) : path),
+        )
+        .when(cut >= 0, (el) => el.child(div().flex_1().min_w_0().truncate().text_xs().text_color(p.dim).child(path.slice(0, cut)))),
+    )
+    .children(trailing)
+    .child(statusLetter(letter, p));
 }
 
-export function counts(f: CommitFile): string {
-  return f.binary ? "binary" : `+${f.added} −${f.deleted}`;
+function counts(f: CommitFile, p: Palette): Element {
+  return f.binary ? div().flex_shrink_0().text_xs().text_color(p.dim).child("binary") : lineCounts({ added: f.added, deleted: f.deleted, binary: false }, p);
 }
 
 function bar(title: string, p: Palette, ...buttons: Element[]): Element {
@@ -91,23 +103,29 @@ function commitBody(view: HistoryView, p: Palette, actions: DetailActions): Elem
     .when(d.committer !== d.author || d.commitTime !== d.time, (el) => el.child(line("committer", `${d.committer}  ${dateTime(d.commitTime)}`, p)))
     .when(d.parents.length > 0, (el) => el.child(line(d.parents.length > 1 ? "parents" : "parent", d.parents.map((h) => h.slice(0, 10)).join(" "), p, true)));
   const files = c.files.slice(0, MAX_FILES).map((f, i) =>
-    fileRow(`cf:${i}`, f.status, f.path, counts(f), p, (cx) => actions.openFile(f.path, cx)),
+    fileRow(`cf:${i}`, f.status, f.path, [counts(f, p)], p, (cx) => actions.openFile(f.path, cx)),
   );
   const title = div().px(10).pt(8).pb(2).text_xs().text_color(p.dim).child(`${c.files.length} file${c.files.length === 1 ? "" : "s"} changed`);
   return [header, title, ...files];
 }
 
-function entryLetter(e: StatusEntry): string {
+export function entryLetter(e: StatusEntry): string {
   if (e.kind === "untracked") return "?";
   if (e.kind === "conflict") return "!";
   if (e.kind === "renamed") return "R";
   return e.index !== "." ? e.index : e.worktree;
 }
 
+/** "staged" after a file with changes in the index. */
+export function stagedTag(e: StatusEntry, p: Palette): Element[] {
+  const staged = e.kind !== "untracked" && e.kind !== "conflict" && e.index !== ".";
+  return staged ? [div().flex_shrink_0().text_xs().text_color(p.added).child("staged")] : [];
+}
+
 function worktreeBody(status: RepoStatus | null, p: Palette, actions: DetailActions): Element[] {
   const files = (status?.entries ?? []).filter((e) => e.kind !== "ignored");
   return files.slice(0, MAX_FILES).map((e, i) =>
-    fileRow(`wf:${i}`, entryLetter(e), e.path, e.kind !== "untracked" && e.index !== "." ? "staged" : "", p, (cx) => actions.openFile(e.path, cx)),
+    fileRow(`wf:${i}`, entryLetter(e), e.path, stagedTag(e, p), p, (cx) => actions.openFile(e.path, cx)),
   );
 }
 

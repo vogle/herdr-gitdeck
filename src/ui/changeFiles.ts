@@ -21,7 +21,7 @@ const MAX_FILES = 500;
 const indent = (depth: number): number => 10 + depth * 14;
 
 function letterColor(letter: string, p: Palette) {
-  if (letter === "D") return p.removed;
+  if (letter === "D" || letter === "!") return p.removed;
   if (letter === "A" || letter === "?") return p.added;
   if (letter === "R" || letter === "C") return p.info;
   return p.changed;
