@@ -147,3 +147,10 @@ test("refreshHistory skips the log when refs, HEAD and the limit are unchanged",
   assert.ok((await refreshHistory(git, T, 1000, first.key, "head1")).history, "more commits asked for");
   assert.equal(calls.filter((c) => c[0] === "for-each-ref").length, 4, "refs read once per refresh");
 });
+
+test("loadHistory reads which forge each remote is on, and none when git config finds nothing", async () => {
+  const h = await loadHistory(fake({ log: LOG, "for-each-ref": REFS, config: "remote.origin.url git@github.com:a/b.git\n" }), T, 500);
+  assert.deepEqual(h.remotes, { origin: "github" });
+  const none = await loadHistory(fake({ log: LOG, "for-each-ref": REFS, config: new GitError("", [], 1, "") }), T, 500);
+  assert.deepEqual(none.remotes, {});
+});

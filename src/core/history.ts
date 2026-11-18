@@ -11,6 +11,7 @@ import {
 import { parseDiff, type Diff } from "./git/diff.ts";
 import { stagedDiffArgs, unstagedDiffArgs } from "./stage.ts";
 import { layoutLanes, type Lanes } from "./graph/lanes.ts";
+import { parseRemoteKinds, REMOTES_ARGS, type RemoteKind } from "./graph/remoteKind.ts";
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -20,13 +21,15 @@ export interface History {
   refs: readonly Ref[];
   byCommit: Readonly<Record<string, readonly Ref[]>>;
   stashes: readonly Stash[];
+  /** Each remote's forge, for the icon on its branch labels. */
+  remotes: Readonly<Record<string, RemoteKind>>;
   /** The log stopped at its limit: older commits exist. */
   limited: boolean;
   error: string | null;
 }
 
 export const EMPTY_HISTORY: History = {
-  commits: [], lanes: { rows: [], width: 0 }, refs: [], byCommit: {}, stashes: [], limited: false, error: null,
+  commits: [], lanes: { rows: [], width: 0 }, refs: [], byCommit: {}, stashes: [], remotes: {}, limited: false, error: null,
 };
 
 async function stashesOf(git: Git, target: Target): Promise<Stash[]> {
@@ -38,20 +41,23 @@ async function stashesOf(git: Git, target: Target): Promise<Stash[]> {
 }
 
 export async function loadHistory(git: Git, target: Target, limit: number, knownRefs?: string): Promise<History> {
-  const [refsOut, stashes] = await Promise.all([
+  const [refsOut, stashes, remotesOut] = await Promise.all([
     knownRefs ?? git(target, [...REFS_ARGS]).catch(() => ""),
     stashesOf(git, target),
+    // Exits 1 when there's no remote.
+    git(target, [...REMOTES_ARGS]).catch(() => ""),
   ]);
+  const remotes = parseRemoteKinds(remotesOut);
   const refs = parseRefs(refsOut);
   let commits: Commit[];
   try {
     commits = parseLog(await git(target, logArgs(limit)));
   } catch (error) {
     // Before the first commit HEAD names nothing and there are no refs: an empty history.
-    if (refs.length === 0) return { ...EMPTY_HISTORY, stashes };
-    return { ...EMPTY_HISTORY, refs, byCommit: refsByCommit(refs), stashes, error: message(error) };
+    if (refs.length === 0) return { ...EMPTY_HISTORY, stashes, remotes };
+    return { ...EMPTY_HISTORY, refs, byCommit: refsByCommit(refs), stashes, remotes, error: message(error) };
   }
-  return { commits, lanes: layoutLanes(commits), refs, byCommit: refsByCommit(refs), stashes, limited: commits.length >= limit, error: null };
+  return { commits, lanes: layoutLanes(commits), refs, byCommit: refsByCommit(refs), stashes, remotes, limited: commits.length >= limit, error: null };
 }
 
 /**

@@ -63,6 +63,12 @@ export function palette(): Palette {
       pick(t, "ansi3", "#d29922"),
       pick(t, "ansi6", "#39c5cf"),
       pick(t, "ansi1", "#f85149"),
+      pick(t, "ansi12", "#79c0ff"),
+      pick(t, "ansi10", "#56d364"),
+      pick(t, "ansi13", "#d2a8ff"),
+      pick(t, "ansi11", "#e3b341"),
+      pick(t, "ansi14", "#56d4dd"),
+      pick(t, "ansi9", "#ff7b72"),
     ],
   };
 }
@@ -83,6 +89,11 @@ export const ICONS = {
   external: "mods/gitdeck/icons/external.svg",
   folder: "mods/gitdeck/icons/folder.svg",
   folderOpen: "mods/gitdeck/icons/folder-open.svg",
+  check: "mods/gitdeck/icons/check.svg",
+  tag: "mods/gitdeck/icons/tag.svg",
+  github: "mods/gitdeck/icons/forge-github.svg",
+  gitlab: "mods/gitdeck/icons/forge-gitlab.svg",
+  git: "mods/gitdeck/icons/forge-git.svg",
 } as const;
 
 /** A changed file's icon by its kind (Lucide, see icons/LICENSE-lucide.txt); its color says its status. */

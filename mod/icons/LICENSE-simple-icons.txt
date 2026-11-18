@@ -1,0 +1,4 @@
+forge-github.svg, forge-gitlab.svg and forge-git.svg are from Simple Icons
+(https://simpleicons.org, simple-icons@13.21.0), released under CC0 1.0 Universal.
+The marks themselves belong to GitHub, GitLab and Git; they are shown only to say
+which service a remote is on.
