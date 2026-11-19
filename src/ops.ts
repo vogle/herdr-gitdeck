@@ -13,14 +13,14 @@ import {
   type ResetMode,
 } from "./core/ops.ts";
 import {
-  commitActions, confirmOps, emptyOps, finished, forRepoOps, holdOps, started, toggleMore, startNaming, stopNaming, withOperation, withPlan,
+  chooseFromMenu, closeMenu, commitActions, confirmOps, emptyOps, finished, fitMenu, forRepoOps, holdOps, openMenu, placeMenu, started, startNaming, stopNaming, withOperation, withPlan,
   type CommitAction, type OpsView,
 } from "./core/opsView.ts";
 import { files } from "./changes.ts";
 import { agentHold, type RepoAgent } from "./core/repoAgents.ts";
 import { FLOW_KINDS, flowBase, flowBranch, flowKinds } from "./core/flow.ts";
 import { cycleStep, loadPlan, moveStep, runPlan, type RebasePlan } from "./core/rebase.ts";
-import { actionKey, needsConfirm, type OpsActions, type OpsParts } from "./ui/ops.ts";
+import { actionKey, MENU_ITEM, MENU_PAD, MENU_WIDTH, needsConfirm, type OpsActions, type OpsParts } from "./ui/ops.ts";
 
 export interface OpsHost {
   git: Git;
@@ -33,6 +33,8 @@ export interface OpsHost {
   agents: () => readonly RepoAgent[];
   /** The selected commit (never the uncommitted row). */
   selected: () => { hash: string; parents: number } | null;
+  /** A commit of the history by its hash. */
+  commit: (hash: string) => { hash: string; parents: number } | null;
   changed: (cx: AsyncContext) => Promise<void>;
 }
 
@@ -54,9 +56,15 @@ export class OpsPanel {
     this.name = InputState.new({ placeholder: "name" });
   }
 
-  /** Another commit was selected: a pending confirm or name is dropped. */
+  /** Another commit was selected: a pending confirm, name or menu is dropped. */
   reselected(): void {
-    this.view = stopNaming(confirmOps(this.view, null));
+    this.view = { ...stopNaming(closeMenu(this.view)), subject: null };
+  }
+
+  /** The commit the actions are for: the menu's, the one an action was picked on, else the selected one. */
+  private subject(): { hash: string; parents: number } | null {
+    const hash = this.view.menu?.hash ?? this.view.subject;
+    return hash ? this.host.commit(hash) : this.host.selected();
   }
 
   forRepo(repo: string | null): void {
@@ -74,7 +82,7 @@ export class OpsPanel {
   }
 
   commitList(): CommitAction[] | null {
-    const sel = this.host.selected();
+    const sel = this.subject();
     const status = this.host.status();
     if (!sel || !status) return null;
     const history = this.host.history();
@@ -92,7 +100,12 @@ export class OpsPanel {
     const status = this.host.status();
     const branches = (this.host.history()?.refs ?? []).filter((r) => r.kind === "branch").map((r) => r.name);
     const flow = flowKinds(branches);
-    return { view: this.view, ahead: status?.ahead ?? 0, behind: status?.behind ?? 0, commit: this.commitList(), name: this.name, flow };
+    const menu = this.view.menu;
+    const items = menu !== null && menu.x !== null && menu.y !== null ? this.commitList() : null;
+    return {
+      view: this.view, ahead: status?.ahead ?? 0, behind: status?.behind ?? 0, name: this.name, flow,
+      menu: menu && items ? { x: menu.x ?? 0, y: menu.y ?? 0, actions: items } : null,
+    };
   }
 
   /**
@@ -138,7 +151,7 @@ export class OpsPanel {
   }
 
   commitAction(a: CommitAction, cx: Context): void {
-    const sel = this.host.selected();
+    const sel = this.subject();
     if (!sel) return;
     const key = actionKey(a);
     if (needsConfirm(a.kind) && this.view.confirm !== key) {
@@ -146,6 +159,7 @@ export class OpsPanel {
       cx.notify();
       return;
     }
+    this.view = chooseFromMenu(this.view);
     const at = a.ref ?? sel.hash;
     const short = a.ref ?? sel.hash.slice(0, 10);
     const stash = this.host.history()?.stashes.find((s) => s.hash === sel.hash)?.name ?? "";
@@ -214,7 +228,7 @@ export class OpsPanel {
       },
       commitAction: (a, cx) => this.commitAction(a, cx),
       reset: (mode: ResetMode, cx) => {
-        const sel = this.host.selected();
+        const sel = this.subject();
         if (!sel) return;
         // A hard reset loses uncommitted work: it asks once more.
         if (mode === "hard" && this.view.confirm !== "reset-hard") {
@@ -263,8 +277,21 @@ export class OpsPanel {
         cx.notify();
       },
       runHeld: () => this.pending?.(),
-      toggleMore: (cx) => {
-        this.view = toggleMore(this.view);
+      openMenu: (hash, cx) => {
+        this.view = openMenu(this.view, hash);
+        cx.notify();
+      },
+      placeMenu: (e, cx) => {
+        const at = e.local_position;
+        const items = this.view.menu ? (this.commitList()?.length ?? 0) : 0;
+        if (!at || !e.bounds || items === 0) return;
+        const { x, y } = fitMenu(at.x, at.y, e.bounds, MENU_WIDTH, items * MENU_ITEM + MENU_PAD * 2);
+        this.view = placeMenu(this.view, x, y);
+        cx.notify();
+      },
+      closeMenu: (cx) => {
+        if (this.view.menu === null) return;
+        this.view = closeMenu(this.view);
         cx.notify();
       },
       dismiss: (cx) => {

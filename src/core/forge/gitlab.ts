@@ -6,6 +6,23 @@ export const mrListArgs = (repo: string): string[] => ["mr", "list", "--repo", r
 
 export const mrViewArgs = (repo: string, branch: string): string[] => ["mr", "view", branch, "--repo", repo, "--output", "json"];
 
+/** The open MRs from a branch: asked when the branch has had several, which `mr view <branch>` won't choose between. */
+export const openMrsArgs = (repo: string, branch: string): string[] => ["mr", "list", "--repo", repo, "--source-branch", branch, "--output", "json"];
+
+/** glab's answer to `mr view <branch>` when the branch has had more than one MR. */
+export const MANY_MRS = /must select a merge request/i;
+
+/** The first open MR's number in an `mr list` answer; null when there's none. */
+export function firstMrNumber(json: string): number | null {
+  try {
+    const list: unknown = JSON.parse(json);
+    const iid = Array.isArray(list) ? record(list[0])?.iid : undefined;
+    return typeof iid === "number" ? iid : null;
+  } catch {
+    return null;
+  }
+}
+
 /** GitLab's opened/closed/merged as GitHub's OPEN/CLOSED/MERGED. */
 const STATE: Record<string, string> = { opened: "OPEN", closed: "CLOSED", merged: "MERGED", locked: "CLOSED" };
 const state = (v: unknown): string => STATE[str(v)] ?? str(v).toUpperCase();

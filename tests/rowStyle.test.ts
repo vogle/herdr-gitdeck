@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { REMOTES_ARGS, parseRemoteKinds, remoteKindOf } from "../src/core/graph/remoteKind.ts";
+import { REMOTES_ARGS, forgeNamedLate, originHost, parseRemoteKinds, remoteKindOf } from "../src/core/graph/remoteKind.ts";
 import { authorBadge, splitSubject } from "../src/core/graph/rowText.ts";
 
-test("remotes are read with the forge override in one call", () => {
-  assert.deepEqual(REMOTES_ARGS, ["config", "--get-regexp", "^(remote\\..*\\.url|gitdeck\\.forge)$"]);
+test("remotes are read with the forge override and the avatars setting in one call", () => {
+  assert.deepEqual(REMOTES_ARGS, ["config", "--get-regexp", "^(remote\\..*\\.url|gitdeck\\.(forge|avatars))$"]);
 });
 
 test("each remote's forge is guessed from its host", () => {
@@ -49,4 +49,17 @@ test("an author shows as initials with a color that stays the same for the name"
   assert.equal(authorBadge("Allan Im", 12).color, authorBadge("Allan Im", 12).color);
   const c = authorBadge("Someone Else", 6).color;
   assert.ok(c >= 0 && c < 6);
+});
+
+test("originHost names origin's host, the place its authors' pictures come from", () => {
+  assert.equal(originHost("remote.origin.url git@bsp-git.uzen.io:bsp/app.git\ngitdeck.avatars true"), "bsp-git.uzen.io");
+  assert.equal(originHost("remote.up.url https://github.com/a/b.git"), null, "no origin");
+  assert.equal(originHost(""), null);
+});
+
+test("forgeNamedLate: origin was drawn as plain git, and the CLIs have since named its forge", () => {
+  assert.equal(forgeNamedLate({ origin: "git" }, "gitlab"), true);
+  assert.equal(forgeNamedLate({ origin: "gitlab" }, "gitlab"), false, "already drawn so");
+  assert.equal(forgeNamedLate({ origin: "git" }, null), false, "still unknown");
+  assert.equal(forgeNamedLate({}, "github"), false, "no origin");
 });

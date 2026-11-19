@@ -5,7 +5,8 @@ import { parseRemote } from "../forge/remote.ts";
 
 export type RemoteKind = "github" | "gitlab" | "git";
 
-export const REMOTES_ARGS: readonly string[] = ["config", "--get-regexp", "^(remote\\..*\\.url|gitdeck\\.forge)$"];
+/** Each remote's URL, plus gitdeck's own settings that change what the graph draws. */
+export const REMOTES_ARGS: readonly string[] = ["config", "--get-regexp", "^(remote\\..*\\.url|gitdeck\\.(forge|avatars))$"];
 
 function kindOfUrl(url: string): RemoteKind {
   const host = parseRemote(url)?.host.toLowerCase() ?? "";
@@ -24,6 +25,17 @@ export function parseRemoteKinds(output: string): Readonly<Record<string, Remote
     return [[m[1], kind]];
   });
   return Object.fromEntries(entries);
+}
+
+/** origin's host (where its authors' pictures come from); null without an origin. */
+export function originHost(output: string): string | null {
+  const url = /^remote\.origin\.url\s+(.+)$/m.exec(output)?.[1];
+  return url ? (parseRemote(url)?.host.toLowerCase() ?? null) : null;
+}
+
+/** origin was drawn as plain git, and its forge has since been named (by the signed-in CLIs): the graph is drawn again. */
+export function forgeNamedLate(kinds: Readonly<Record<string, RemoteKind>>, forge: "github" | "gitlab" | null): boolean {
+  return kinds.origin === "git" && forge !== null;
 }
 
 /** The forge of a remote branch ("origin/feat/x"): its remote is the name before the first slash. */

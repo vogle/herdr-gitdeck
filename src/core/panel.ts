@@ -1,4 +1,4 @@
-// gitdeck as a right-side panel: the drill-down's back step, the wide breakpoint,
+// gitdeck as a right-side panel: the drill-down's back step,
 // and the viewer tab that shows what needs the whole width (diffs, blame, stats).
 // The panel asks for a view by writing a request to a shared value; the viewer
 // tab (a gitdeck pane in the main area) reads it.
@@ -7,8 +7,6 @@ import type { DiffSource } from "./history.ts";
 
 /** The shared value carrying what the viewer tab shows. */
 export const VIEWER_KEY = "gitdeck.viewer";
-/** Panel widths from here up get two columns. */
-export const WIDE_PX = 640;
 
 export type PanelTab = "changes" | "review" | "history" | "branches" | "more";
 /** The tab bar's order, for agent work: what the agent changed, then the branch review; the panel opens on the first. */
@@ -19,8 +17,6 @@ export function tabCommand(command: string): PanelTab | null {
   const name = command.startsWith("tab:") ? command.slice(4) : "";
   return PANEL_TABS.find((t) => t === name) ?? null;
 }
-
-export const isWide = (width: number): boolean => width >= WIDE_PX;
 
 export type BackStep = "inspect" | "file" | "commit";
 
@@ -42,7 +38,9 @@ export type ViewerRequest =
   | (Where & { view: "blame" | "file-log"; rev: string; path: string })
   | (Where & { view: "stats" })
   /** One side of an uncommitted file, to stage (or, staged, unstage) by hunk or line. */
-  | (Where & { view: "stage"; path: string; staged: boolean });
+  | (Where & { view: "stage"; path: string; staged: boolean })
+  /** A file as it is at a commit (the History tab's File Tree). */
+  | (Where & { view: "file"; rev: string; path: string });
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -65,7 +63,7 @@ export function parseViewer(v: unknown): ViewerRequest | null {
   const where: Where = { repo: v.repo, on: v.on };
   if (v.view === "stats") return { ...where, view: "stats" };
   if (v.view === "stage") return isText(v.path) && typeof v.staged === "boolean" ? { ...where, view: "stage", path: v.path, staged: v.staged } : null;
-  if (v.view === "blame" || v.view === "file-log") {
+  if (v.view === "blame" || v.view === "file-log" || v.view === "file") {
     return isText(v.rev) && isText(v.path) ? { ...where, view: v.view, rev: v.rev, path: v.path } : null;
   }
   if (v.view !== "diff") return null;
@@ -88,6 +86,7 @@ const base = (path: string): string => path.slice(path.lastIndexOf("/") + 1);
 
 export function viewerTitle(r: ViewerRequest): string {
   if (r.view === "diff") return base(r.source.path);
+  if (r.view === "file") return base(r.path);
   if (r.view === "blame") return `Blame ${base(r.path)}`;
   if (r.view === "file-log") return `History ${base(r.path)}`;
   if (r.view === "stage") return `${r.staged ? "Unstage" : "Stage"} ${base(r.path)}`;

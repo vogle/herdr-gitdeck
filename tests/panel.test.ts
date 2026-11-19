@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  backStep, findViewerTab, tabCommand, isWide, PANEL_TABS, liveDiff, parseReturn, returnPoint, staleViewerTab, viewerFocused, VIEWER_TAB_NAME, parseViewer, viewerBack, viewerKey, viewerShow, viewerTitle, WIDE_PX,
+  backStep, findViewerTab, tabCommand, PANEL_TABS, liveDiff, parseReturn, returnPoint, staleViewerTab, viewerFocused, VIEWER_TAB_NAME, parseViewer, viewerBack, viewerKey, viewerShow, viewerTitle,
   type ViewerRequest,
 } from "../src/core/panel.ts";
 
@@ -10,12 +10,6 @@ const diff: ViewerRequest = {
   source: { kind: "commit", hash: "h2", parents: ["h1"], path: "a/b.ts", oldPath: null },
 };
 const blame: ViewerRequest = { view: "blame", repo: "/r", on: null, rev: "h2", path: "a/b.ts" };
-
-test("the panel turns two-column at the wide breakpoint", () => {
-  assert.equal(isWide(WIDE_PX - 1), false);
-  assert.equal(isWide(WIDE_PX), true);
-  assert.equal(isWide(368), false);
-});
 
 test("back closes the innermost level first", () => {
   assert.equal(backStep({ inspect: true, file: "x", selected: "h" }), "inspect");
@@ -38,6 +32,8 @@ test("parseViewer accepts every well-formed request", () => {
   assert.deepEqual(parseViewer(ix), ix);
   const stage = { view: "stage", repo: "/r", on: null, path: "p", staged: false };
   assert.deepEqual(parseViewer(stage), stage);
+  const file = { view: "file", repo: "/r", on: null, rev: "h", path: "a/b.ts" };
+  assert.deepEqual(parseViewer(file), file);
 });
 
 test("parseViewer rejects anything malformed", () => {
@@ -56,6 +52,8 @@ test("parseViewer rejects anything malformed", () => {
     { view: "diff", repo: "/r", on: null, source: { kind: "other", path: "p" } },
     { view: "stage", repo: "/r", on: null, path: "p" },
     { view: "stage", repo: "/r", on: null, path: "", staged: true },
+    { view: "file", repo: "/r", on: null, rev: "h" },
+    { view: "file", repo: "/r", on: null, rev: "", path: "p" },
   ]) assert.equal(parseViewer(bad), null, JSON.stringify(bad));
 });
 
@@ -70,6 +68,7 @@ test("viewerTitle names what is shown", () => {
   assert.equal(viewerTitle({ view: "file-log", repo: "/r", on: null, rev: "h", path: "b.ts" }), "History b.ts");
   assert.equal(viewerTitle({ view: "stats", repo: "/x/proj", on: null }), "Stats proj");
   assert.equal(viewerTitle({ view: "stage", repo: "/r", on: null, path: "a/b.ts", staged: false }), "Stage b.ts");
+  assert.equal(viewerTitle({ view: "file", repo: "/r", on: null, rev: "h", path: "a/b.ts" }), "b.ts");
   assert.equal(viewerTitle({ view: "stage", repo: "/r", on: null, path: "a/b.ts", staged: true }), "Unstage b.ts");
 });
 

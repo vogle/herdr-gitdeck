@@ -2,9 +2,10 @@
 // at the project and run outside the repo, so it never reads the work tree or
 // the repo's config.
 
+import type { AvatarSource } from "../avatars.ts";
 import type { Exec, Git, Target } from "../git/runner.ts";
 import { parseBranchPr, parsePrs, prListArgs, prViewArgs } from "./github.ts";
-import { failedJobsArgs, mrListArgs, mrViewArgs, parseBranchMr, parseFailedJobs, parseMrs, pipelineId } from "./gitlab.ts";
+import { failedJobsArgs, firstMrNumber, MANY_MRS, mrListArgs, mrViewArgs, openMrsArgs, parseBranchMr, parseFailedJobs, parseMrs, pipelineId } from "./gitlab.ts";
 import { forgeOf, parseRemote } from "./remote.ts";
 import { discussionsArgs, parseDiscussions, parseThreads, threadsArgs, type ReviewThread } from "./reviewThreads.ts";
 import type { BranchPr, Forge, ForgeChoice, ForgeKind, PrList } from "./types.ts";
@@ -50,8 +51,21 @@ async function readOrigin(git: Git, target: Target, probe?: Probe): Promise<{ fo
   const forge = forgeOf(remote, override);
   if (forge !== null || remote === null || override !== null || !probe) return { forge, host: forge === null && override === null ? (remote?.host ?? null) : null };
   const kind = await signedInForge(probe, target, remote.host);
+  // Kept as gitdeck.forge, so what reads only the config (the graph's icons) knows it too.
+  if (kind !== null) await setForge(git, target, kind).catch(() => undefined);
   const found = kind === null ? null : forgeOf(remote, kind);
   return { forge: found, host: found === null ? remote.host : null };
+}
+
+/** origin as the source of authors' pictures: its forge's kind, host and project; null when it isn't a known forge. */
+export async function readAvatarSource(git: Git, target: Target): Promise<AvatarSource | null> {
+  const [url, override] = await Promise.all([
+    git(target, ["remote", "get-url", "origin"]).catch(() => ""),
+    git(target, ["config", "--get", "gitdeck.forge"]).then((v) => v.trim(), () => null),
+  ]);
+  const remote = parseRemote(url);
+  const forge = forgeOf(remote, override);
+  return forge && remote ? { kind: forge.kind, host: remote.host, path: remote.path } : null;
 }
 
 export async function readForge(git: Git, target: Target): Promise<Forge | null> {
@@ -98,6 +112,11 @@ async function withFailedJobs(exec: Exec, target: Target, away: string, repo: st
 /** The CLIs' words for "this branch has none". */
 const NONE = /no pull requests found|no (?:open )?merge requests? (?:available|found)/i;
 
+/** A CLI's error as one line: its first with words, past blank lines and a bare "ERROR" heading. */
+export function cliError(stderr: string, fallback: string): string {
+  return stderr.split("\n").map((l) => l.trim()).find((l) => l !== "" && !/^error:?$/i.test(l)) ?? fallback;
+}
+
 export interface BranchPrState {
   pr: BranchPr | null;
   error: string | null;
@@ -118,13 +137,20 @@ export async function loadBranchPr(git: Git, exec: Exec, target: Target, away: s
   if (branch === null) return { pr: null, error: null, ...known };
   const args = forge.kind === "github" ? prViewArgs(forge.repo, branch) : mrViewArgs(forge.repo, branch);
   try {
-    const r = await exec(forge.cli, args, { cwd: away, on: target.on });
+    let r = await exec(forge.cli, args, { cwd: away, on: target.on });
+    if (r.code !== 0 && forge.kind === "gitlab" && MANY_MRS.test(r.stderr)) {
+      // The branch has had several MRs (a long-lived branch like main): show its open one, if any.
+      const list = await exec(forge.cli, openMrsArgs(forge.repo, branch), { cwd: away, on: target.on });
+      const number = list.code === 0 ? firstMrNumber(list.stdout) : null;
+      if (number === null) return { pr: null, error: list.code === 0 ? null : cliError(list.stderr, `${forge.cli} failed (${list.code})`), ...known };
+      r = await exec(forge.cli, mrViewArgs(forge.repo, String(number)), { cwd: away, on: target.on });
+    }
     if (r.code === 0) {
       const pr = forge.kind === "github" ? parseBranchPr(r.stdout, forge.repo) : parseBranchMr(r.stdout);
       return { pr: pr && forge.kind === "gitlab" ? await withFailedJobs(exec, target, away, forge.repo, pr, pipelineId(r.stdout)) : pr, error: null, ...known };
     }
     if (NONE.test(r.stderr)) return { pr: null, error: null, ...known };
-    return { pr: null, error: r.stderr.split("\n")[0] || `${forge.cli} failed (${r.code})`, ...known };
+    return { pr: null, error: cliError(r.stderr, `${forge.cli} failed (${r.code})`), ...known };
   } catch (error) {
     return { pr: null, error: failure(forge.cli, error), ...known };
   }

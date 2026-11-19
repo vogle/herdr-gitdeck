@@ -8,6 +8,7 @@ import type { ImagePair } from "../core/imageDiff.ts";
 import type { CommitFile } from "../core/git/show.ts";
 import type { RepoStatus, StatusEntry } from "../core/git/status.ts";
 import { UNCOMMITTED, type HistoryView } from "../core/historyView.ts";
+import { authorBadge } from "../core/graph/rowText.ts";
 import { dateTime } from "../core/time.ts";
 import { kindIcon, lineCounts, statusLetter } from "./changeFiles.ts";
 import { monoFont, textButton, type Palette } from "./style.ts";
@@ -22,6 +23,8 @@ export interface DetailActions {
   close: (cx: Context) => void;
   /** Every file as it was at the selected commit. */
   browseTree: (cx: Context) => void;
+  /** Selects another commit (a parent). */
+  jump: (hash: string, cx: Context) => void;
 }
 
 /**
@@ -63,50 +66,114 @@ function counts(f: CommitFile, p: Palette): Element {
   return f.binary ? div().flex_shrink_0().text_xs().text_color(p.dim).child("binary") : lineCounts({ added: f.added, deleted: f.deleted, binary: false }, p);
 }
 
-function bar(title: string, p: Palette, ...buttons: Element[]): Element {
+/** The commit pane's row of tabs (Commit, File Tree) and its buttons. */
+export function tabBar(p: Palette, ...buttons: Element[]): Element {
   return h_flex()
-    .h(28)
-    .px(8)
-    .gap(6)
+    .h(30)
+    .px(6)
+    .gap(2)
     .items_center()
     .flex_shrink_0()
     .border_b_1()
     .border_color(p.border)
-    .child(div().flex_1().min_w_0().truncate().text_xs().text_color(p.muted).child(title))
     .children(buttons);
 }
 
-function line(label: string, value: string, p: Palette, mono = false): Element {
-  return h_flex()
-    .gap(8)
-    .text_xs()
-    .child(div().w(64).flex_shrink_0().text_color(p.dim).child(label))
-    .child(div().min_w_0().truncate().text_color(p.muted).when(mono, (el) => el.font_family(monoFont())).child(value));
+/** A label in small capitals, right-aligned in a column of its own, as Fork lays the commit out. */
+function label(text: string, p: Palette): Element {
+  return div().w(64).flex_shrink_0().text_right().text_size(10).text_color(p.dim).child(text);
 }
 
-function commitBody(view: HistoryView, p: Palette, actions: DetailActions): Element[] {
+/** The author's saved picture, large, or their initials on their color. */
+function face(name: string, picture: string | null, p: Palette): Element {
+  if (picture !== null) return image(picture).w(40).h(40).flex_shrink_0().rounded(6);
+  const { initials, color } = authorBadge(name, p.lanes.length);
+  return div()
+    .w(40)
+    .h(40)
+    .flex_shrink_0()
+    .rounded(6)
+    .bg(p.lanes[color] ?? p.accent)
+    .flex()
+    .items_center()
+    .justify_center()
+    .font_semibold()
+    .text_color(p.surface)
+    .child(initials);
+}
+
+function person(role: string, name: string, email: string, time: number, picture: string | null, p: Palette): Element {
+  return h_flex()
+    .gap(10)
+    .items_start()
+    .child(h_flex().w(64).flex_shrink_0().justify_end().child(face(name, picture, p)))
+    .child(
+      v_flex()
+        .flex_1()
+        .min_w_0()
+        .gap(1)
+        .child(div().text_size(10).text_color(p.dim).child(role))
+        .child(
+          h_flex()
+            .gap(6)
+            .items_center()
+            .min_w_0()
+            .child(div().flex_shrink_0().font_medium().child(name))
+            .child(div().min_w_0().truncate().text_xs().text_color(p.dim).child(email)),
+        )
+        .child(div().text_xs().text_color(p.muted).child(dateTime(time))),
+    );
+}
+
+function divider(p: Palette): Element {
+  return div().h(1).mx(10).my(8).flex_shrink_0().bg(p.border);
+}
+
+function commitBody(view: HistoryView, p: Palette, actions: DetailActions, avatar: (email: string) => string | null): Element[] {
   const c = view.commit;
   if (!c) return [div().p(12).text_color(p.dim).child("Reading commit…")];
   if (c.error || !c.detail) return [div().p(12).text_color(p.removed).child(c.error ?? "Commit not found")];
   const d = c.detail;
   const [subject = "", ...rest] = d.message.split("\n");
-  const body = rest.join("\n").trim();
-  const header = v_flex()
-    .p(10)
-    .gap(3)
-    .border_b_1()
-    .border_color(p.border)
-    .child(div().font_medium().child(subject))
-    .when(body !== "", (el) => el.child(div().pt(2).pb(4).text_xs().text_color(p.muted).child(body)))
-    .child(line("commit", d.hash, p, true))
-    .child(line("author", `${d.author} <${d.email}>  ${dateTime(d.time)}`, p))
-    .when(d.committer !== d.author || d.commitTime !== d.time, (el) => el.child(line("committer", `${d.committer}  ${dateTime(d.commitTime)}`, p)))
-    .when(d.parents.length > 0, (el) => el.child(line(d.parents.length > 1 ? "parents" : "parent", d.parents.map((h) => h.slice(0, 10)).join(" "), p, true)));
+  // Wrapped by its author at ~72 columns; rejoined so the panel's own width wraps it.
+  const body = rest.join("\n").trim().split(/\n{2,}/).map((par) => par.replace(/\n(?![-*•]|\d+[.)])/g, " ")).join("\n\n");
+  const sameCommitter = d.committer === d.author && d.commitTime === d.time;
+  const parents = d.parents.map((h, i) =>
+    div()
+      .id(`parent:${i}`)
+      .cursor_pointer()
+      .font_family(monoFont())
+      .text_color(p.info)
+      .underline()
+      .hover((el) => el.text_color(p.accent))
+      .on_click((_e, cx) => actions.jump(h, cx))
+      .child(h.slice(0, 7)),
+  );
+  const head = v_flex()
+    .px(10)
+    .pt(10)
+    .gap(8)
+    .child(person("AUTHOR", d.author, d.email, d.time, avatar(d.email), p))
+    .when(!sameCommitter, (el) => el.child(person("COMMITTER", d.committer, d.committerEmail, d.commitTime, avatar(d.committerEmail), p)))
+    .child(
+      v_flex()
+        .gap(3)
+        .text_xs()
+        .child(h_flex().gap(10).items_center().child(label("SHA", p)).child(div().min_w_0().truncate().font_family(monoFont()).text_color(p.muted).child(d.hash)))
+        .when(parents.length > 0, (el) =>
+          el.child(h_flex().gap(10).items_center().child(label(parents.length > 1 ? "PARENTS" : "PARENT", p)).child(h_flex().gap(8).children(parents))),
+        ),
+    );
+  const message = v_flex()
+    .px(10)
+    .gap(6)
+    .child(div().pl(74).font_medium().child(subject))
+    .when(body !== "", (el) => el.child(div().pl(74).text_xs().text_color(p.muted).child(body)));
   const files = c.files.slice(0, MAX_FILES).map((f, i) =>
     fileRow(`cf:${i}`, f.status, f.path, [counts(f, p)], p, (cx) => actions.openFile(f.path, cx)),
   );
-  const title = div().px(10).pt(8).pb(2).text_xs().text_color(p.dim).child(`${c.files.length} file${c.files.length === 1 ? "" : "s"} changed`);
-  return [header, title, ...files];
+  const title = div().px(10).pb(2).text_xs().text_color(p.dim).child(`${c.files.length} file${c.files.length === 1 ? "" : "s"} changed`);
+  return [head, divider(p), message, divider(p), title, ...files];
 }
 
 export function entryLetter(e: StatusEntry): string {
@@ -219,20 +286,15 @@ export function diffBody(diff: Diff | null, p: Palette, find?: DiffFind): Elemen
     );
 }
 
-export function details(view: HistoryView, status: RepoStatus | null, p: Palette, actions: DetailActions): Element | null {
+export function details(view: HistoryView, status: RepoStatus | null, p: Palette, actions: DetailActions, avatar: (email: string) => string | null = () => null): Element | null {
   if (view.selected === null) return null;
   const pane = v_flex().flex_1().min_h_0().border_t_1().border_color(p.border).bg(p.surface);
   const uncommitted = view.selected === UNCOMMITTED;
-  const title = uncommitted ? "Uncommitted changes" : `Commit ${view.selected.slice(0, 10)}`;
-  const body = uncommitted ? worktreeBody(status, p, actions) : commitBody(view, p, actions);
+  const body = uncommitted ? worktreeBody(status, p, actions) : commitBody(view, p, actions, avatar);
+  const tabs = uncommitted
+    ? [div().flex_1().px(4).text_xs().text_color(p.muted).child("Uncommitted changes")]
+    : [textButton("details-commit", "Commit", p, () => {}, true), textButton("details-tree", "File Tree", p, actions.browseTree), div().flex_1()];
   return pane
-    .child(
-      bar(
-        title,
-        p,
-        ...(uncommitted ? [] : [textButton("details-tree", "Files at commit", p, actions.browseTree)]),
-        textButton("details-close", "← Back", p, actions.close),
-      ),
-    )
+    .child(tabBar(p, ...tabs, textButton("details-close", "Close", p, actions.close)))
     .child(v_flex().id("details-body").flex_1().min_h_0().overflow_y_scrollbar().pb(6).children(body));
 }

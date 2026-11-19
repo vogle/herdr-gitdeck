@@ -283,3 +283,73 @@ test("loadReviewThreads asks the forge's CLI, and says why when it can't", async
   const none = await loadReviewThreads(gitFor("git@example.org:x/y.git", "none"), async () => ({ code: 0, stdout: "", stderr: "" }), T, "/home", 1);
   assert.deepEqual(none, { threads: [], error: "No GitHub or GitLab remote" });
 });
+
+test("a forge read from the signed-in CLIs is written to gitdeck.forge, so the rest of gitdeck knows it too", async () => {
+  const runs = (glab: boolean, gh: boolean) => {
+    const writes: string[][] = [];
+    const git: Git = async (_t, args) => {
+      if (args[0] === "remote") return "https://git.acme.dev/o/r\n";
+      if (args.includes("--local")) {
+        writes.push(args);
+        return "";
+      }
+      throw new Error("not set");
+    };
+    const exec: Exec = async (c, a) => {
+      if (c === "glab" && a[0] === "config") return { code: 0, stdout: glab ? "secret\n" : "\n", stderr: "" };
+      if (c === "gh" && a[0] === "auth") return gh ? { code: 0, stdout: "secret\n", stderr: "" } : { code: 1, stdout: "", stderr: "no token" };
+      return { code: 1, stdout: "", stderr: "no open merge request available" };
+    };
+    return { git, exec, writes };
+  };
+  const gitlab = runs(true, false);
+  await loadBranchPr(gitlab.git, gitlab.exec, T, "/home", "x");
+  assert.deepEqual(gitlab.writes, [["config", "--local", "gitdeck.forge", "gitlab"]]);
+  const github = runs(false, true);
+  await loadPrs(github.git, github.exec, T, "/home");
+  assert.deepEqual(github.writes, [["config", "--local", "gitdeck.forge", "github"]]);
+  const both = runs(true, true);
+  await loadBranchPr(both.git, both.exec, T, "/home", "x");
+  assert.deepEqual(both.writes, [], "undecided: nothing written, the person is asked");
+  const broken: Git = async (_t, args) => {
+    if (args[0] === "remote") return "https://git.acme.dev/o/r\n";
+    throw new Error("config is locked");
+  };
+  const mr = await loadBranchPr(broken, gitlab.exec, T, "/home", "x");
+  assert.equal(mr.label, "MR", "a failed write still reads the forge");
+});
+
+test("readAvatarSource names origin's forge, host and project, for authors' pictures", async () => {
+  const { readAvatarSource } = await import("../src/core/forge/index.ts");
+  assert.deepEqual(await readAvatarSource(gitFor("git@github.com:vogle/gitdeck.git"), T), { kind: "github", host: "github.com", path: "vogle/gitdeck" });
+  assert.deepEqual(await readAvatarSource(gitFor("https://git.acme.dev/g/app.git", "gitlab"), T), { kind: "gitlab", host: "git.acme.dev", path: "g/app" });
+  assert.equal(await readAvatarSource(gitFor("https://git.acme.dev/g/app.git"), T), null, "an unnamed host is no source");
+  assert.equal(await readAvatarSource(gitFor("https://git.acme.dev/g/app.git", "none"), T), null);
+});
+
+const MANY = "  \n   ERROR  \n  \n  you must select a merge request: merge request ID number required. Possible matches:\n\n!612 (main) by @f\n!602 (main) by @f\n";
+
+test("loadBranchPr: a branch with many past MRs shows its open one, read by number", async () => {
+  const calls: string[][] = [];
+  const exec: Exec = async (_c, a) => {
+    calls.push(a);
+    if (a[1] === "view" && a[2] === "main") return { code: 1, stdout: "", stderr: MANY };
+    if (a[1] === "list") return { code: 0, stdout: JSON.stringify([{ iid: 7, title: "open one" }]), stderr: "" };
+    if (a[1] === "view" && a[2] === "7") return { code: 0, stdout: JSON.stringify({ iid: 7, title: "open one", state: "opened", web_url: "w" }), stderr: "" };
+    return { code: 1, stdout: "", stderr: "unexpected" };
+  };
+  const state = await loadBranchPr(gitFor("git@gitlab.com:o/r.git"), exec, T, "/home", "main");
+  assert.equal(state.error, null);
+  assert.equal(state.pr?.number, 7);
+  assert.deepEqual(calls[1], ["mr", "list", "--repo", "o/r", "--source-branch", "main", "--output", "json"], "only open MRs from the branch");
+});
+
+test("loadBranchPr: a branch with many past MRs and none open has no MR, and no error", async () => {
+  const exec: Exec = async (_c, a) => (a[1] === "list" ? { code: 0, stdout: "[]", stderr: "" } : { code: 1, stdout: "", stderr: MANY });
+  assert.deepEqual(await loadBranchPr(gitFor("git@gitlab.com:o/r.git"), exec, T, "/home", "main"), { pr: null, error: null, label: "MR", host: null, forge: "gitlab" });
+});
+
+test("loadBranchPr: a CLI error is its first line with words, not a blank or a bare ERROR heading", async () => {
+  const exec: Exec = async () => ({ code: 1, stdout: "", stderr: "  \n   ERROR  \n\n  403 Forbidden  \n" });
+  assert.equal((await loadBranchPr(gitFor("git@gitlab.com:o/r.git"), exec, T, "/home", "x")).error, "403 Forbidden");
+});

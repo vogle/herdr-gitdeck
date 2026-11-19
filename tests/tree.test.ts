@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { treeArgs, parseTree, blobArgs, blobText, loadTree, loadBlob, MAX_BLOB, lfsPointer, parseGitmodules } from "../src/core/tree.ts";
+import { treeArgs, parseTree, blobArgs, blobText, loadTree, loadBlob, loadFileAt, MAX_BLOB, lfsPointer, parseGitmodules } from "../src/core/tree.ts";
 
 const A = "a".repeat(40);
 
@@ -36,6 +36,23 @@ test("loadTree and loadBlob report errors as text and skip what can't be shown",
   };
   assert.equal((await loadTree(failing, at, A)).error, "bad object");
   assert.equal((await loadBlob(failing, at, A, { path: "f", size: 1, kind: "file", hash: "" })).note, "bad object");
+});
+
+test("loadFileAt reads one path of a commit's tree, then its content", async () => {
+  const at = { cwd: "/r", on: null };
+  const calls: string[][] = [];
+  const git = async (_t: unknown, args: string[]) => {
+    calls.push(args);
+    return args[0] === "ls-tree" ? `100644 blob ${"1".repeat(40)} 3\ta/b.ts\x00` : "x\ny\n";
+  };
+  assert.deepEqual(await loadFileAt(git, at, A, "a/b.ts"), { lines: ["x", "y"], note: null });
+  assert.deepEqual(calls[0], ["ls-tree", "-z", "--long", A, "--", "a/b.ts"], "the path is never read as an option");
+  const none = async () => "";
+  assert.match((await loadFileAt(none, at, A, "gone.ts")).note ?? "", /not in/);
+  const failing = async () => {
+    throw new Error("bad object");
+  };
+  assert.equal((await loadFileAt(failing, at, A, "a")).note, "bad object");
 });
 
 const OID = "b".repeat(64);

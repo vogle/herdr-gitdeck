@@ -7,8 +7,7 @@ import type { ForgeChoice } from "../core/forge/index.ts";
 import type { InspectView } from "../core/inspect.ts";
 import { MAX_STATS, type Stats } from "../core/stats.ts";
 import { ago } from "../core/time.ts";
-import { fileKind } from "../core/fileKind.ts";
-import { FILE_ICONS, icon, monoFont, textButton, type Palette } from "./style.ts";
+import { monoFont, textButton, type Palette } from "./style.ts";
 
 const LIST = "gitdeck-inspect";
 const ROW = 18;
@@ -16,15 +15,12 @@ const ROW = 18;
 export interface InspectActions {
   jump: (hash: string, cx: Context) => void;
   close: (cx: Context) => void;
-  /** The tree: open a file, or go back to the list. */
-  openTreeFile: (index: number, cx: Context) => void;
-  closeTreeFile: (cx: Context) => void;
   /** Names origin's forge, for a host gitdeck doesn't know. */
   setForge: (kind: ForgeChoice, cx: Context) => void;
 }
 
 interface Row {
-  /** The commit a click jumps to; the tree's rows open a file instead. */
+  /** The commit a click jumps to. */
   hash: string;
   /** Built when the list lays the row out: a virtual list draws only elements made inside its renderer. */
   cells: () => Element[];
@@ -49,27 +45,6 @@ function rowsOf(v: InspectView, p: Palette, now: number): Row[] {
       cells: () => [dim(c.hash.slice(0, 7), 60), div().flex_1().min_w_0().truncate().child(c.subject), dim(c.author, 120), dim(ago(now, c.time), 60)],
     }));
   }
-  if (v.kind === "tree") {
-    if (v.file) {
-      const blob = v.blob;
-      if (!blob) return [{ hash: "", cells: () => [div().text_color(p.dim).child("Reading file…")] }];
-      const note = blob.note;
-      if (note) return [{ hash: "", cells: () => [div().text_color(p.dim).child(note)] }];
-      return blob.lines.map((text, i) => ({
-        hash: "",
-        cells: () => [div().w(36).flex_shrink_0().text_right().text_color(p.dim).child(String(i + 1)), div().flex_1().min_w_0().truncate().child(text === "" ? " " : text)],
-      }));
-    }
-    return (v.data?.items ?? []).map((f) => ({
-      hash: "",
-      cells: () => [
-        icon(FILE_ICONS[fileKind(f.path)], p.muted, 14),
-        div().flex_shrink(1).min_w_0().truncate().child(f.path.slice(f.path.lastIndexOf("/") + 1)),
-        div().flex_1().min_w_0().truncate().text_color(p.dim).child(f.path.slice(0, Math.max(0, f.path.lastIndexOf("/")))),
-        dim(f.kind === "file" ? `${f.size} B` : f.kind, 80),
-      ],
-    }));
-  }
   if (v.kind === "stats") return statsRows(v.data, p, now);
   if (v.kind === "prs") {
     const color = (s: string) => (s === "OPEN" ? p.added : s === "MERGED" ? p.info : p.dim);
@@ -85,6 +60,8 @@ function rowsOf(v: InspectView, p: Palette, now: number): Row[] {
       ],
     }));
   }
+  // A commit's files show in the commit pane (treePane), not here.
+  if (v.kind === "tree") return [];
   return (v.data?.items ?? []).map((e) => ({
     hash: e.hash,
     cells: () => [dim(e.name, 80), dim(e.hash.slice(0, 7), 60), div().flex_1().min_w_0().truncate().child(e.action), dim(ago(now, e.time), 60)],
@@ -126,7 +103,6 @@ function title(v: InspectView): string {
     const mr = v.data?.label === "MR";
     return `${mr ? "Merge requests" : "Pull requests"}${v.data?.repo ? ` of ${v.data.repo}` : ""} (via ${mr ? "glab" : "gh"}, read-only): a click jumps to the head commit`;
   }
-  if (v.kind === "tree") return v.file ? `${v.file.path} at ${v.rev.slice(0, 10)}` : `Files at ${v.rev.slice(0, 10)} (${v.data?.items.length ?? 0})`;
   return "Reflog: where HEAD has been";
 }
 
@@ -154,7 +130,7 @@ export function inspectPane(v: InspectView, p: Palette, a: InspectActions): Elem
             .relative()
             .flex_1()
             .min_h_0()
-            .when(v.kind === "blame" || (v.kind === "tree" && v.file !== null), (el) => el.font_family(monoFont()))
+            .when(v.kind === "blame", (el) => el.font_family(monoFont()))
             .text_xs()
             .child(
               v_virtual_list(LIST, rows.length, ROW, (i) => String(i), (range) =>
@@ -164,7 +140,6 @@ export function inspectPane(v: InspectView, p: Palette, a: InspectActions): Elem
               )
                 .on_item_click((key, cx) => {
                   if (v.kind === "stats") return;
-                  if (v.kind === "tree") return v.file === null ? a.openTreeFile(Number(key), cx) : undefined;
                   const row = rows[Number(key)];
                   if (row) a.jump(row.hash, cx);
                 })
@@ -187,7 +162,6 @@ export function inspectPane(v: InspectView, p: Palette, a: InspectActions): Elem
         .border_b_1()
         .border_color(p.border)
         .child(div().flex_1().min_w_0().truncate().text_xs().text_color(p.muted).child(title(v)))
-        .when(v.kind === "tree" && v.file !== null, (el) => el.child(textButton("tree-back", "← Files", p, a.closeTreeFile)))
         .child(textButton("inspect-close", "×", p, a.close)),
     )
     .child(body);

@@ -4,7 +4,7 @@
 // asks for it through the shared VIEWER_KEY value, so a restart shows it again.
 
 import { div, type AsyncContext, type Context, type Element } from "gpui-kit";
-import { h_flex, v_flex, Input, InputState, VirtualListScrollHandle } from "gpui-base";
+import { h_flex, v_flex, Input, InputState, VirtualListScrollHandle, type EditorState } from "gpui-base";
 import { appHome, exec, focused, panes, run, setShared, shared, spaces } from "herdr";
 import { sameDiff, type Diff } from "./core/git/diff.ts";
 import type { Git, Target } from "./core/git/runner.ts";
@@ -14,7 +14,7 @@ import { hunkPick, picks, startPicks, togglePick, withFreshDiff, type LinePicks 
 import type { Pick } from "./core/stage.ts";
 import { applyPicks, loadStageDiff } from "./core/staging.ts";
 import { files } from "./changes.ts";
-import { loadImagePair } from "./core/imageDiff.ts";
+import { loadImageAt, loadImagePair } from "./core/imageDiff.ts";
 import { blameRev, loadBlame, loadFileLog, type InspectView } from "./core/inspect.ts";
 import {
   findViewerTab, liveDiff, parseViewer, staleViewerTab, VIEWER_TAB_NAME, viewerBack, viewerKey, viewerShow, viewerFocused, viewerTitle, VIEWER_KEY,
@@ -27,6 +27,9 @@ import { neighbor, parseQueue, REVIEW_QUEUE_KEY, REVIEWED_KEY, withViewed, type 
 import { diffBody } from "./ui/details.ts";
 import { FeedbackBox } from "./feedbackBox.ts";
 import { inspectPane } from "./ui/inspect.ts";
+import { codeState, fileBody, imageBody, type Picture } from "./ui/fileBody.ts";
+import { isMarkdown, isSvg } from "./core/codeView.ts";
+import { loadFileAt, type BlobView } from "./core/tree.ts";
 import { stagePane } from "./ui/stagePane.ts";
 import { textButton, type Palette } from "./ui/style.ts";
 
@@ -74,7 +77,7 @@ function queueOf(r: ViewerRequest | null): ReviewQueue | null {
 }
 
 type Staging = { kind: "stage"; picks: LinePicks; busy: boolean; error: string | null };
-type Shown = { kind: "diff"; diff: Diff } | Staging | { kind: "inspect"; view: InspectView } | { kind: "note"; text: string };
+type Shown = { kind: "diff"; diff: Diff } | Staging | { kind: "inspect"; view: InspectView } | { kind: "file"; blob: BlobView; code: EditorState | null; rendered: boolean; picture: Picture | null } | { kind: "image"; path: string | null; note: string | null } | { kind: "note"; text: string };
 
 export class Viewer {
   nav: ViewerNav = { current: null, back: [] };
@@ -181,6 +184,7 @@ export class Viewer {
   async load(cx: AsyncContext): Promise<void> {
     const request = this.nav.current;
     if (!request) return;
+    this.release(this.shown);
     this.shown = null;
     this.feedback.reset();
     cx.notify();
@@ -188,13 +192,27 @@ export class Viewer {
     if (this.nav.current === request) {
       this.shown = shown;
       this.match(true);
-    }
+    } else this.release(shown);
     cx.notify();
+  }
+
+  /** Frees a file's code view, held by the host until released. */
+  private release(shown: Shown | null): void {
+    if (shown?.kind === "file") shown.code?.release();
   }
 
   private async read(r: ViewerRequest): Promise<Shown> {
     const target: Target = { cwd: r.repo, on: r.on };
     if (r.view === "stats") return { kind: "inspect", view: { kind: "stats", data: await loadStats(this.git, target) } };
+    if (r.view === "file") {
+      // An image is drawn, not read as text.
+      const picture = await loadImageAt(this.git, exec, target, r.rev, r.path, { abs: `${appHome()}/${IMAGE_CACHE}`, rel: IMAGE_CACHE });
+      const svg = isSvg(r.path);
+      if (picture && !svg) return { kind: "image", ...picture };
+      const blob = await loadFileAt(this.git, target, r.rev, r.path);
+      // Markdown and SVG open rendered; their source is a click away.
+      return { kind: "file", blob, code: codeState(r.path, blob), rendered: isMarkdown(r.path) || svg, picture: svg ? picture : null };
+    }
     if (r.view !== "diff" && r.view !== "stage") {
       const view: InspectView =
         r.view === "blame"
@@ -268,8 +286,16 @@ export class Viewer {
     const deleted = this.shown?.kind === "diff" && this.shown.diff.deleted === true;
     const inspect = (view: "blame" | "file-log") => (cx: Context) =>
       commit && this.go({ view, repo: r.repo, on: r.on, rev: view === "blame" ? blameRev(commit, deleted) : commit.hash, path: commit.path }, cx);
+    const at = (view: "blame" | "file-log") => (cx: Context) => r.view === "file" && this.go({ view, repo: r.repo, on: r.on, rev: r.rev, path: r.path }, cx);
     const fileButtons = commit
       ? [textButton("viewer-blame", "Blame", p, inspect("blame")), textButton("viewer-history", "History", p, inspect("file-log"))]
+      : r.view === "file"
+        ? [
+            ...this.markdownToggle(r, p),
+            // Blame is by line: an image has none.
+            ...(this.shown?.kind === "image" ? [] : [textButton("viewer-blame", "Blame", p, at("blame"))]),
+            textButton("viewer-history", "History", p, at("file-log")),
+          ]
       : liveDiff(r)
         ? // Read again every few seconds anyway; this is for right now.
           [textButton("viewer-reload", "Reload", p, () => this.tick.fire())]
@@ -328,6 +354,17 @@ export class Viewer {
     return queueOf(r)?.files.find((f) => f.path === path)?.blob ?? null;
   }
 
+  /** Rendered (or, for SVG, Picture) or Source, for a markdown or SVG file. */
+  private markdownToggle(r: ViewerRequest, p: Palette): Element[] {
+    const s = this.shown;
+    if (r.view !== "file" || !(isMarkdown(r.path) || isSvg(r.path)) || s?.kind !== "file" || s.blob.note) return [];
+    const show = (rendered: boolean) => (cx: Context) => {
+      if (this.shown === s) this.shown = { ...s, rendered };
+      cx.notify();
+    };
+    return [textButton("viewer-rendered", isSvg(r.path) ? "Picture" : "Rendered", p, show(true), s.rendered), textButton("viewer-source", "Source", p, show(false), !s.rendered)];
+  }
+
   /** The find box and how many rows hold what is typed. */
   private findBox(p: Palette): Element {
     const typed = this.find.value().trim() !== "";
@@ -350,6 +387,10 @@ export class Viewer {
         ? div().p(12).text_color(p.dim).child("Reading…")
         : s.kind === "note"
           ? div().p(12).text_color(p.changed).child(s.text)
+          : s.kind === "file"
+            ? fileBody(s.blob, s.code, s.rendered, s.picture, p)
+            : s.kind === "image"
+              ? imageBody(s.path, s.note, p)
           : s.kind === "diff"
             ? v_flex()
                 .flex_1()
@@ -368,7 +409,7 @@ export class Viewer {
                 click: (row, cx) => this.stageClick(row, cx),
                 apply: (cx) => this.stage(picks(s.picks), cx),
               })
-            : inspectPane(s.view, p, { jump: () => {}, close: () => run("tab.close"), openTreeFile: () => {}, closeTreeFile: () => {}, setForge: () => {} });
+            : inspectPane(s.view, p, { jump: () => {}, close: () => run("tab.close"), setForge: () => {} });
     return v_flex().flex_1().min_h_0().child(this.bar(r, p)).child(body);
   }
 }

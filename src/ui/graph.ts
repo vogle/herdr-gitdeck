@@ -1,7 +1,7 @@
 // The commit graph: one row per commit with its lane lines, refs, subject,
 // author and age. A virtual list, so only the rows on screen are built.
 
-import { div, PathBuilder, type Color, type Context, type Element } from "gpui-kit";
+import { div, image, PathBuilder, type Color, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex, v_virtual_list, Scrollbar, type VirtualListScrollHandle } from "gpui-base";
 import type { Commit } from "../core/git/log.ts";
 import type { Ref } from "../core/git/refs.ts";
@@ -134,16 +134,18 @@ function subject(text: string, color: Color): Element {
     .child(div().min_w_0().truncate().child(rest.trimStart()));
 }
 
-/** The author as initials on a color of their own: no picture is fetched. */
-function author(name: string, p: Palette): Element {
+/** The author's picture when one is saved, else their initials on a color of their own. */
+function author(name: string, picture: string | null, p: Palette): Element {
   const { initials, color } = authorBadge(name, p.lanes.length);
   return h_flex()
-    .w(110)
+    .w(96)
     .flex_shrink_0()
     .gap(5)
     .items_center()
     .child(
-      div()
+      picture !== null
+        ? image(picture).w(16).h(16).flex_shrink_0().rounded(8)
+        : div()
         .w(16)
         .h(16)
         .flex_shrink_0()
@@ -160,7 +162,10 @@ function author(name: string, p: Palette): Element {
     .child(div().min_w_0().truncate().text_xs().text_color(p.muted).child(name));
 }
 
-function row(view: HistoryView, i: number, width: number, now: number, p: Palette): Element {
+/** An author's saved picture, as `image()` takes it; null draws their initials. */
+export type AvatarOf = (email: string) => string | null;
+
+function row(view: HistoryView, i: number, width: number, now: number, p: Palette, avatar: AvatarOf): Element {
   const commit = view.rows[i] as Commit;
   const uncommitted = commit.hash === UNCOMMITTED;
   const lane = view.lanes.rows[i];
@@ -180,8 +185,8 @@ function row(view: HistoryView, i: number, width: number, now: number, p: Palett
     .children(labels(refs, p, color, view.history?.remotes ?? {}))
     // Merge commits are muted.
     .child(subject(commit.subject, uncommitted ? p.muted : merge ? p.dim : p.foreground))
-    .when(!uncommitted, (el) => el.child(author(commit.author, p)))
-    .child(div().w(32).flex_shrink_0().text_right().text_xs().text_color(p.dim).child(ago(now, commit.time)));
+    .when(!uncommitted, (el) => el.child(author(commit.author, avatar(commit.email), p)))
+    .child(div().w(26).flex_shrink_0().text_right().text_xs().text_color(p.dim).child(ago(now, commit.time)));
 }
 
 function moreRow(p: Palette): Element {
@@ -193,7 +198,10 @@ export interface GraphActions {
   more: (cx: Context) => void;
 }
 
-export function graphList(view: HistoryView, p: Palette, scroll: VirtualListScrollHandle, actions: GraphActions): Element {
+/** A commit row was right-clicked; absent, rows have no menu. */
+export type OpenMenu = (hash: string, cx: Context) => void;
+
+export function graphList(view: HistoryView, p: Palette, scroll: VirtualListScrollHandle, actions: GraphActions, avatar: AvatarOf, menu?: OpenMenu): Element {
   const limited = Boolean(view.history?.limited) && !view.searching;
   const count = view.rows.length + (limited ? 1 : 0);
   const width = PAD * 2 + Math.max(1, view.lanes.width) * LANE;
@@ -211,11 +219,12 @@ export function graphList(view: HistoryView, p: Palette, scroll: VirtualListScro
     .child(
       v_virtual_list(GRAPH_LIST, count, ROW, (i) => view.rows[i]?.hash ?? MORE, (range) =>
         Array.from({ length: range.end - range.start }, (_x, k) => range.start + k).map((i) =>
-          i < view.rows.length ? row(view, i, width, now, p) : moreRow(p),
+          i < view.rows.length ? row(view, i, width, now, p, avatar) : moreRow(p),
         ),
       )
         // Rows of a virtual list can't hold handlers: the list reports the row's key.
         .on_item_click((key, cx) => (key === MORE ? actions.more(cx) : actions.pick(key, cx)))
+        .when(menu !== undefined, (el) => el.on_item_secondary_click((key, _e, cx) => (key === MORE || key === UNCOMMITTED ? undefined : menu?.(key, cx))))
         .track_scroll(scroll)
         .size_full(),
     )

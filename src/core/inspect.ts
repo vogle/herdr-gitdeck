@@ -3,7 +3,7 @@
 
 import { logArgs, parseLog, type Commit } from "./git/log.ts";
 import type { Git, Target } from "./git/runner.ts";
-import type { BlobView, TreeFile } from "./tree.ts";
+import type { TreeFile } from "./tree.ts";
 import type { Stats } from "./stats.ts";
 import type { PrList } from "./forge/index.ts";
 
@@ -121,4 +121,4 @@ export type InspectView =
   | { kind: "reflog"; data: Loaded<ReflogEntry> | null }
   | { kind: "stats"; data: Stats | null }
   | { kind: "prs"; data: PrList | null }
-  | { kind: "tree"; rev: string; data: Loaded<TreeFile> | null; file: TreeFile | null; blob: BlobView | null };
+  | { kind: "tree"; rev: string; data: Loaded<TreeFile> | null; open: ReadonlySet<string> };
