@@ -6,7 +6,7 @@
 import { div, image, type Element } from "gpui-kit";
 import { Editor, EditorState, TextView, v_flex } from "gpui-base";
 import { theme } from "herdr";
-import { codeLanguage } from "../core/codeView.ts";
+import { codeLanguage, markdownWithoutImages } from "../core/codeView.ts";
 import type { BlobView } from "../core/tree.ts";
 import { monoFont, type Palette } from "./style.ts";
 
@@ -55,7 +55,7 @@ export function fileBody(blob: BlobView, code: EditorState | null, rendered: boo
       .min_h_0()
       .px(24)
       .py(16)
-      .child(TextView.markdown("gitdeck-markdown", blob.lines.join("\n")).selectable().scrollable().size_full());
+      .child(TextView.markdown("gitdeck-markdown", markdownWithoutImages(blob.lines.join("\n"))).selectable().scrollable().size_full());
   }
   return code ? Editor.new(code).flex_1().min_h_0() : div().p(12).text_color(p.dim).child("Reading…");
 }

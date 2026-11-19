@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { codeLanguage, isMarkdown, isSvg } from "../src/core/codeView.ts";
+import { codeLanguage, isMarkdown, isSvg, markdownWithoutImages } from "../src/core/codeView.ts";
 
 test("codeLanguage names the highlighter's language from the extension, as the Files tab does", () => {
   assert.equal(codeLanguage("src/a.ts"), "js");
@@ -26,4 +26,17 @@ test("isSvg is true for SVG files only", () => {
   assert.equal(isSvg("icons/A.SVG"), true);
   assert.equal(isSvg("svg"), false);
   assert.equal(isSvg("a.svgz"), false);
+});
+
+test("markdownWithoutImages: pictures become links, so opening a file fetches nothing", () => {
+  assert.equal(markdownWithoutImages("a ![logo](https://t.example/p.png) b"), "a [logo](https://t.example/p.png) b");
+  assert.equal(markdownWithoutImages("![][ref]\n\n[ref]: https://t.example/p.png"), "[image][ref]\n\n[ref]: https://t.example/p.png", "a reference picture, with no alt text");
+  assert.equal(markdownWithoutImages('x <img src="https://t.example/p.png" alt="badge"> y'), "x [badge](https://t.example/p.png) y", "an HTML picture");
+  assert.equal(markdownWithoutImages("<IMG SRC='a.png'>"), "[image](a.png)");
+  assert.equal(markdownWithoutImages("\\![not a picture](x)"), "\\![not a picture](x)", "an escaped bang stays");
+});
+
+test("markdownWithoutImages leaves code blocks as written", () => {
+  const md = "```\n![x](y)\n<img src=\"z\">\n```\n~~~js\n![a](b)\n~~~\n![c](d)";
+  assert.equal(markdownWithoutImages(md), "```\n![x](y)\n<img src=\"z\">\n```\n~~~js\n![a](b)\n~~~\n[c](d)");
 });
