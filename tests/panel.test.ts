@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  backStep, findViewerTab, isWide, liveDiff, parseReturn, returnPoint, staleViewerTab, viewerFocused, VIEWER_TAB_NAME, parseViewer, viewerBack, viewerKey, viewerShow, viewerTitle, WIDE_PX,
+  backStep, findViewerTab, tabCommand, PANEL_TABS, liveDiff, parseReturn, returnPoint, staleViewerTab, viewerFocused, VIEWER_TAB_NAME, parseViewer, viewerBack, viewerKey, viewerShow, viewerTitle,
   type ViewerRequest,
 } from "../src/core/panel.ts";
 
@@ -10,12 +10,6 @@ const diff: ViewerRequest = {
   source: { kind: "commit", hash: "h2", parents: ["h1"], path: "a/b.ts", oldPath: null },
 };
 const blame: ViewerRequest = { view: "blame", repo: "/r", on: null, rev: "h2", path: "a/b.ts" };
-
-test("the panel turns two-column at the wide breakpoint", () => {
-  assert.equal(isWide(WIDE_PX - 1), false);
-  assert.equal(isWide(WIDE_PX), true);
-  assert.equal(isWide(368), false);
-});
 
 test("back closes the innermost level first", () => {
   assert.equal(backStep({ inspect: true, file: "x", selected: "h" }), "inspect");
@@ -36,6 +30,10 @@ test("parseViewer accepts every well-formed request", () => {
   assert.deepEqual(parseViewer(un), un);
   const ix = { view: "diff", repo: "/r", on: null, source: { kind: "index", path: "p", staged: true } };
   assert.deepEqual(parseViewer(ix), ix);
+  const stage = { view: "stage", repo: "/r", on: null, path: "p", staged: false };
+  assert.deepEqual(parseViewer(stage), stage);
+  const file = { view: "file", repo: "/r", on: null, rev: "h", path: "a/b.ts" };
+  assert.deepEqual(parseViewer(file), file);
 });
 
 test("parseViewer rejects anything malformed", () => {
@@ -52,6 +50,10 @@ test("parseViewer rejects anything malformed", () => {
     { view: "diff", repo: "/r", on: null, source: { kind: "worktree", path: "p" } },
     { view: "diff", repo: "/r", on: null, source: { kind: "index", path: "p" } },
     { view: "diff", repo: "/r", on: null, source: { kind: "other", path: "p" } },
+    { view: "stage", repo: "/r", on: null, path: "p" },
+    { view: "stage", repo: "/r", on: null, path: "", staged: true },
+    { view: "file", repo: "/r", on: null, rev: "h" },
+    { view: "file", repo: "/r", on: null, rev: "", path: "p" },
   ]) assert.equal(parseViewer(bad), null, JSON.stringify(bad));
 });
 
@@ -65,6 +67,9 @@ test("viewerTitle names what is shown", () => {
   assert.equal(viewerTitle(blame), "Blame b.ts");
   assert.equal(viewerTitle({ view: "file-log", repo: "/r", on: null, rev: "h", path: "b.ts" }), "History b.ts");
   assert.equal(viewerTitle({ view: "stats", repo: "/x/proj", on: null }), "Stats proj");
+  assert.equal(viewerTitle({ view: "stage", repo: "/r", on: null, path: "a/b.ts", staged: false }), "Stage b.ts");
+  assert.equal(viewerTitle({ view: "file", repo: "/r", on: null, rev: "h", path: "a/b.ts" }), "b.ts");
+  assert.equal(viewerTitle({ view: "stage", repo: "/r", on: null, path: "a/b.ts", staged: true }), "Unstage b.ts");
 });
 
 test("viewerKey is the same for equal requests", () => {
@@ -113,6 +118,7 @@ test("liveDiff: only an uncommitted diff can change under the viewer", () => {
   assert.equal(liveDiff({ ...at, view: "diff", source: { kind: "worktree", path: "p", hasHead: true } }), true);
   assert.equal(liveDiff({ ...at, view: "diff", source: { kind: "commit", hash: "h", parents: [], path: "p", oldPath: null } }), false);
   assert.equal(liveDiff({ ...at, view: "stats" }), false);
+  assert.equal(liveDiff({ ...at, view: "stage", path: "p", staged: false }), true, "lines picked to stage");
   assert.equal(liveDiff(null), false);
 });
 
@@ -133,4 +139,16 @@ test("parseReturn keeps a well-formed point whose tab still exists", () => {
   for (const bad of [null, "t1", { tab: "gone", terminal: null }, { tab: "t1", terminal: 3 }, { tab: "", terminal: null }]) {
     assert.equal(parseReturn(bad, spaces), null);
   }
+});
+
+test("the panel tabs follow agent work: Changes opens first, then Review", () => {
+  assert.deepEqual(PANEL_TABS, ["changes", "review", "history", "branches", "more"]);
+});
+
+test("a tab:<name> command names a panel tab; anything else names none", () => {
+  for (const tab of PANEL_TABS) assert.equal(tabCommand(`tab:${tab}`), tab);
+  assert.equal(tabCommand("tab:nope"), null);
+  assert.equal(tabCommand("tab:"), null);
+  assert.equal(tabCommand("review"), null);
+  assert.equal(tabCommand("refresh"), null);
 });

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { imageExt, blobIdArgs, writeBlobArgs, loadImagePair, MAX_IMAGE } from "../src/core/imageDiff.ts";
+import { imageExt, pictureExt, sizedSvg, blobIdArgs, writeBlobArgs, loadImagePair, loadImageAt, MAX_IMAGE } from "../src/core/imageDiff.ts";
 
 const A = "a".repeat(40);
 const P = "p".repeat(40).replace(/p/g, "b");
@@ -64,4 +64,38 @@ test("not an image, another machine, too big, or a failed write: no pictures, a 
   assert.match((await loadImagePair(fakeGit({ ":a.png": `${NEW}\n`, "cat-file -s": "5\n" }), fails, local, src, cache))?.note ?? "", /disk full/);
   const bad = fakeGit({ ":a.png": "not-an-id\n", "cat-file -s": "5\n" });
   assert.deepEqual(await loadImagePair(bad, ok, local, src, cache), { old: null, new: null, note: null });
+});
+
+test("loadImageAt writes one commit's image for the viewer tab, or says why not", async () => {
+  const exec = async () => ({ code: 0, stdout: "", stderr: "" });
+  const git = fakeGit({ [`${A}:img/a.png`]: `${NEW}\n`, "cat-file -s": "5\n" });
+  assert.deepEqual(await loadImageAt(git, exec, local, A, "img/a.png", cache), { path: `${cache.rel}/${NEW}.png`, note: null });
+  assert.equal(await loadImageAt(git, exec, local, A, "a.txt", cache), null, "not an image");
+  assert.match((await loadImageAt(git, exec, { cwd: "/r", on: "box" }, A, "a.png", cache))?.note ?? "", /this machine/);
+  assert.match((await loadImageAt(fakeGit({}), exec, local, A, "gone.png", cache))?.note ?? "", /not in/);
+});
+
+test("pictureExt adds SVG for the viewer tab; a diff keeps SVG as text", () => {
+  assert.equal(pictureExt("logo.SVG"), "svg");
+  assert.equal(pictureExt("a.png"), "png");
+  assert.equal(pictureExt("a.txt"), null);
+  assert.equal(imageExt("logo.svg"), null);
+});
+
+test("sizedSvg sets a large drawing size on the root tag only, replacing any it had", () => {
+  assert.equal(sizedSvg('<svg viewBox="0 0 16 16"><g/></svg>', 512), '<svg width="512" height="512" viewBox="0 0 16 16"><g/></svg>');
+  assert.equal(sizedSvg('<?xml?>\n<svg width="16" height=\'8\' x="1"><svg width="2"/></svg>', 64), '<?xml?>\n<svg width="64" height="64" x="1"><svg width="2"/></svg>');
+  assert.equal(sizedSvg("not svg", 64), "not svg");
+});
+
+test("loadImageAt writes an SVG resized, so it is drawn sharp", async () => {
+  const runs: string[][] = [];
+  const exec = async (c: string, a: string[]) => {
+    runs.push([c, ...a]);
+    return { code: 0, stdout: "", stderr: "" };
+  };
+  const git = fakeGit({ [`${A}:icons/x.svg`]: `${NEW}\n`, "cat-file -s": "40\n", [`cat-file blob ${NEW}`]: '<svg viewBox="0 0 16 16"/>' });
+  assert.deepEqual(await loadImageAt(git, exec, local, A, "icons/x.svg", cache), { path: `${cache.rel}/${NEW}.big.svg`, note: null });
+  const write = runs.find((r) => r[0] === "sh");
+  assert.ok(write?.some((a) => a.includes('width="1024"')), "the resized text goes in as an argument");
 });

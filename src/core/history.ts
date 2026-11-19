@@ -11,6 +11,8 @@ import {
 import { parseDiff, type Diff } from "./git/diff.ts";
 import { stagedDiffArgs, unstagedDiffArgs } from "./stage.ts";
 import { layoutLanes, type Lanes } from "./graph/lanes.ts";
+import { avatarsOn } from "./avatars.ts";
+import { originHost, parseRemoteKinds, REMOTES_ARGS, type RemoteKind } from "./graph/remoteKind.ts";
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
@@ -20,13 +22,19 @@ export interface History {
   refs: readonly Ref[];
   byCommit: Readonly<Record<string, readonly Ref[]>>;
   stashes: readonly Stash[];
+  /** Each remote's forge, for the icon on its branch labels. */
+  remotes: Readonly<Record<string, RemoteKind>>;
+  /** Authors' pictures are fetched, unless `gitdeck.avatars` is false. */
+  avatars: boolean;
+  /** origin's host: pictures are kept per server, so one person's GitHub and GitLab pictures stay apart. */
+  avatarHost: string | null;
   /** The log stopped at its limit: older commits exist. */
   limited: boolean;
   error: string | null;
 }
 
 export const EMPTY_HISTORY: History = {
-  commits: [], lanes: { rows: [], width: 0 }, refs: [], byCommit: {}, stashes: [], limited: false, error: null,
+  commits: [], lanes: { rows: [], width: 0 }, refs: [], byCommit: {}, stashes: [], remotes: {}, avatars: false, avatarHost: null, limited: false, error: null,
 };
 
 async function stashesOf(git: Git, target: Target): Promise<Stash[]> {
@@ -37,27 +45,34 @@ async function stashesOf(git: Git, target: Target): Promise<Stash[]> {
   }
 }
 
-export async function loadHistory(git: Git, target: Target, limit: number, knownRefs?: string): Promise<History> {
-  const [refsOut, stashes] = await Promise.all([
+/** Each remote's URL and gitdeck.forge; empty when there's none (git exits 1). */
+const readRemotes = (git: Git, target: Target): Promise<string> => git(target, [...REMOTES_ARGS]).catch(() => "");
+
+export async function loadHistory(git: Git, target: Target, limit: number, knownRefs?: string, knownRemotes?: string): Promise<History> {
+  const [refsOut, stashes, remotesOut] = await Promise.all([
     knownRefs ?? git(target, [...REFS_ARGS]).catch(() => ""),
     stashesOf(git, target),
+    knownRemotes ?? readRemotes(git, target),
   ]);
+  const remotes = parseRemoteKinds(remotesOut);
+  const avatars = avatarsOn(remotesOut);
+  const avatarHost = originHost(remotesOut);
   const refs = parseRefs(refsOut);
   let commits: Commit[];
   try {
     commits = parseLog(await git(target, logArgs(limit)));
   } catch (error) {
     // Before the first commit HEAD names nothing and there are no refs: an empty history.
-    if (refs.length === 0) return { ...EMPTY_HISTORY, stashes };
-    return { ...EMPTY_HISTORY, refs, byCommit: refsByCommit(refs), stashes, error: message(error) };
+    if (refs.length === 0) return { ...EMPTY_HISTORY, stashes, remotes, avatars, avatarHost };
+    return { ...EMPTY_HISTORY, refs, byCommit: refsByCommit(refs), stashes, remotes, avatars, avatarHost, error: message(error) };
   }
-  return { commits, lanes: layoutLanes(commits), refs, byCommit: refsByCommit(refs), stashes, limited: commits.length >= limit, error: null };
+  return { commits, lanes: layoutLanes(commits), refs, byCommit: refsByCommit(refs), stashes, remotes, avatars, avatarHost, limited: commits.length >= limit, error: null };
 }
 
 /**
  * Reads the history again only when something it shows can have changed: the
- * refs (one cheap for-each-ref), `extra` (HEAD and the stash count, from the
- * status already read) or the limit. `history` is null when nothing changed.
+ * refs (one cheap for-each-ref), the remotes' forges (one git config), `extra`
+ * (HEAD and the stash count, from the status already read) or the limit. `history` is null when nothing changed.
  */
 export async function refreshHistory(
   git: Git,
@@ -66,10 +81,10 @@ export async function refreshHistory(
   key: string | null,
   extra: string,
 ): Promise<{ key: string; history: History | null }> {
-  const refsOut = await git(target, [...REFS_ARGS]).catch(() => "");
-  const next = `${limit}\x1e${extra}\x1e${refsOut}`;
+  const [refsOut, remotesOut] = await Promise.all([git(target, [...REFS_ARGS]).catch(() => ""), readRemotes(git, target)]);
+  const next = `${limit}\x1e${extra}\x1e${refsOut}\x1e${remotesOut}`;
   if (next === key) return { key, history: null };
-  return { key: next, history: await loadHistory(git, target, limit, refsOut) };
+  return { key: next, history: await loadHistory(git, target, limit, refsOut, remotesOut) };
 }
 
 /** The graph row standing for the work tree's changes. */

@@ -7,9 +7,21 @@ export const STATUS_ARGS: readonly string[] = [
   "--branch",
   "--show-stash",
   "-z",
-  "--untracked-files=normal",
+  // Each new file, not just its new folder: an agent's new module shows as files to review.
+  "--untracked-files=all",
   "--ignore-submodules=all",
 ];
+
+/**
+ * Untracked folders with nothing tracked inside, one entry each ("docs/"):
+ * status lists their files one by one, this tells which arrived as a whole folder.
+ */
+export const NEW_FOLDERS_ARGS: readonly string[] = ["ls-files", "--others", "--exclude-standard", "--directory", "--no-empty-directory", "-z"];
+
+/** The folder entries of NEW_FOLDERS_ARGS's output; loose files are already in status. */
+export function parseNewFolders(out: string): string[] {
+  return out.split("\0").filter((p) => p.endsWith("/"));
+}
 
 export type EntryKind = "changed" | "renamed" | "conflict" | "untracked" | "ignored";
 
@@ -34,6 +46,10 @@ export interface RepoStatus {
   behind: number;
   stash: number;
   entries: readonly StatusEntry[];
+  /** `origin/<branch>` when the branch has no upstream but origin has it (pushed without -u); else null or absent. */
+  remoteBranch?: string | null;
+  /** Wholly new folders (see NEW_FOLDERS_ARGS); absent when nothing is untracked. */
+  newFolders?: readonly string[];
 }
 
 export interface StatusSummary {
@@ -115,4 +131,15 @@ export function summarize(status: RepoStatus): StatusSummary {
     }
   }
   return { staged, unstaged, untracked, conflicts, clean: staged + unstaged + untracked + conflicts === 0 };
+}
+
+/**
+ * A branch made with `git checkout -b fix/x origin/main` tracks origin/main: it was
+ * never pushed under its own name. Treat it as having no upstream, so the header
+ * offers to publish it instead of saying it's in sync, and push never targets main.
+ */
+export function ownUpstream(s: RepoStatus): RepoStatus {
+  if (s.upstream === null || s.branch === null) return s;
+  const name = s.upstream.slice(s.upstream.indexOf("/") + 1);
+  return name === s.branch ? s : { ...s, upstream: null, ahead: 0, behind: 0 };
 }

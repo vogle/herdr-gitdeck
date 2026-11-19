@@ -24,12 +24,14 @@ export interface OpsView {
   plan: RebasePlan | null;
   /** Why the clicked action waits: an agent is working in the repo. */
   held: string | null;
-  /** More is open: the rare commit actions and the extra sync buttons show. */
-  expanded: boolean;
+  /** The right-click menu: its commit, and where in the pane it opens (null until the pane's press places it). */
+  menu: { hash: string; x: number | null; y: number | null } | null;
+  /** The commit the last menu action was picked on: a name, reset or plan that follows acts on it. */
+  subject: string | null;
 }
 
 export const emptyOps = (repo: string | null): OpsView => ({
-  repo, busy: null, error: null, notice: null, confirm: null, naming: null, operation: null, plan: null, held: null, expanded: false,
+  repo, busy: null, error: null, notice: null, confirm: null, naming: null, operation: null, plan: null, held: null, menu: null, subject: null,
 });
 
 export const forRepoOps = (v: OpsView, repo: string | null): OpsView => (v.repo === repo ? v : emptyOps(repo));
@@ -44,7 +46,20 @@ export const finished = (v: OpsView, error: string | null, notice: string | null
 /** The action waits for "Run anyway": an agent is still writing in the repo. */
 export const holdOps = (v: OpsView, why: string): OpsView => ({ ...v, held: why, confirm: null });
 
-export const toggleMore = (v: OpsView): OpsView => ({ ...v, expanded: !v.expanded, confirm: null });
+/** A row was right-clicked; the pane's own press reports where, just after (placeMenu). */
+export const openMenu = (v: OpsView, hash: string): OpsView => ({ ...v, menu: { hash, x: null, y: null }, confirm: null });
+export const placeMenu = (v: OpsView, x: number, y: number): OpsView =>
+  v.menu === null || v.menu.x !== null ? v : { ...v, menu: { ...v.menu, x, y } };
+export const closeMenu = (v: OpsView): OpsView => ({ ...v, menu: null, confirm: null });
+/** An action was picked in the menu: it closes, and what follows acts on its commit. */
+export const chooseFromMenu = (v: OpsView): OpsView => ({ ...v, menu: null, subject: v.menu?.hash ?? v.subject });
+
+/** Where a menu of `width` × `height` opens for a press at x, y: inside the pane, above or left of the press when it would run past an edge. */
+export function fitMenu(x: number, y: number, pane: { width: number; height: number }, width: number, height: number): { x: number; y: number } {
+  const left = x + width > pane.width ? pane.width - width : x;
+  const top = y + height > pane.height ? y - height : y;
+  return { x: Math.max(0, left), y: Math.max(0, top) };
+}
 
 export const confirmOps = (v: OpsView, key: string | null): OpsView => ({ ...v, confirm: key });
 export const startNaming = (v: OpsView, kind: NameKind, at: string): OpsView => ({ ...v, naming: { kind, at }, confirm: null });
@@ -94,16 +109,4 @@ export function commitActions(c: CommitFacts): CommitAction[] {
     return [];
   });
   return [...own, ...byRef];
-}
-
-/** What stays out while More is closed: moving around and the undo-like revert. */
-const COMMON: ReadonlySet<ActionKind> = new Set<ActionKind>([
-  "checkout-commit", "checkout-branch", "checkout-remote", "branch", "revert", "stash-apply", "stash-pop", "stash-drop",
-]);
-
-/** The actions to show (all of them once More is open) and how many More holds. */
-export function splitActions(actions: readonly CommitAction[], expanded: boolean): { shown: CommitAction[]; hidden: number } {
-  const common = actions.filter((a) => COMMON.has(a.kind));
-  const hidden = actions.length - common.length;
-  return { shown: expanded ? [...actions] : common, hidden };
 }

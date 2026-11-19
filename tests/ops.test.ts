@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   checkoutArgs, createBranchArgs, deleteBranchArgs, mergeArgs, rebaseArgs, cherryPickArgs, revertArgs, resetArgs, tagArgs,
-  stashPushArgs, stashArgs, sequenceArgs, fetchArgs, pullArgs, pushArgs, refNameProblem, readOperation, NET_ENV, runOp, readRemotes,
+  stashPushArgs, stashArgs, sequenceArgs, fetchArgs, pullArgs, pushArgs, linkArgs, refNameProblem, readOperation, NET_ENV, runOp, readRemotes,
 } from "../src/core/ops.ts";
 import { GitError, type Git } from "../src/core/git/runner.ts";
 
@@ -57,6 +57,7 @@ test("network: no prompts, and a first push sets the upstream", () => {
   assert.deepEqual(pullArgs(), [...NO_EDITOR, "pull", "--no-edit"]);
   assert.deepEqual(pushArgs("main", "origin/main", ["origin"]), ["push"]);
   assert.deepEqual(pushArgs("feat", null, ["up", "origin"]), ["push", "-u", "origin", "feat"]);
+  assert.deepEqual(linkArgs("origin/feat"), ["branch", "--set-upstream-to=origin/feat"], "linking only sets the upstream, offline");
   assert.deepEqual(pushArgs("feat", null, ["up"]), ["push", "-u", "up", "feat"]);
   assert.equal(pushArgs("feat", null, []), null);
   assert.equal(pushArgs(null, null, ["origin"]), null, "detached HEAD");

@@ -1,17 +1,20 @@
-// Branch and sync controls: a sync bar (fetch, pull, push, stash), the
-// operation under way with continue/abort, and the selected commit's actions.
+// Branch controls: the notices every tab shows (the operation under way with
+// continue/abort, the last result); and the selected commit's actions. Pull and
+// push live in the header (header.ts), where every tab can reach them.
 
 import type { FlowKind } from "../core/flow.ts";
 import { planProblem, type RebasePlan } from "../core/rebase.ts";
-import { div, type Context, type Element } from "gpui-kit";
+import { div, type Context, type Element, type MouseButtonEvent } from "gpui-kit";
 import { h_flex, v_flex, Input, type InputState } from "gpui-base";
-import { splitActions, type ActionKind, type CommitAction, type OpsView } from "../core/opsView.ts";
+import type { ActionKind, CommitAction, OpsView } from "../core/opsView.ts";
 import type { Operation } from "../core/ops.ts";
 import { textButton, type Palette } from "./style.ts";
 
 export interface OpsActions {
   fetch: (cx: Context) => void;
   pull: (cx: Context) => void;
+  /** Links the branch to origin's branch of the same name (pushed without -u). */
+  link: (cx: Context) => void;
   push: (cx: Context) => void;
   stash: (cx: Context) => void;
   sequence: (step: "continue" | "abort" | "skip", cx: Context) => void;
@@ -21,8 +24,11 @@ export interface OpsActions {
   createName: (cx: Context) => void;
   cancelName: (cx: Context) => void;
   dismiss: (cx: Context) => void;
-  /** Opens or closes More: the rare actions. */
-  toggleMore: (cx: Context) => void;
+  /** A commit row was right-clicked: its menu opens. */
+  openMenu: (hash: string, cx: Context) => void;
+  /** The pane's own right press, just after: where the menu opens. */
+  placeMenu: (event: MouseButtonEvent, cx: Context) => void;
+  closeMenu: (cx: Context) => void;
   /** Runs the action held while an agent works. */
   runHeld: (cx: Context) => void;
   /** Starts naming a git-flow branch. */
@@ -38,8 +44,8 @@ export interface OpsParts {
   view: OpsView;
   ahead: number;
   behind: number;
-  /** The selected commit's actions; null for none or the uncommitted row. */
-  commit: CommitAction[] | null;
+  /** The right-click menu, placed: where in the pane, and its commit's actions. */
+  menu: { x: number; y: number; actions: CommitAction[] } | null;
   name: InputState;
   /** The git-flow branches this repo can start (it has develop, main or master). */
   flow: readonly FlowKind[];
@@ -71,6 +77,10 @@ const LABEL: Record<ActionKind, string> = {
   "stash-drop": "Drop",
 };
 
+export const MENU_WIDTH = 200;
+export const MENU_ITEM = 24;
+export const MENU_PAD = 4;
+
 export const actionKey = (a: CommitAction): string => `${a.kind}:${a.ref ?? ""}`;
 
 function operationBanner(op: Operation, p: Palette, a: OpsActions): Element {
@@ -88,28 +98,10 @@ function operationBanner(op: Operation, p: Palette, a: OpsActions): Element {
     .child(textButton("op-abort", "Abort", p, (cx) => a.sequence("abort", cx)));
 }
 
-/** The sync bar, plus the operation banner and the last result. */
-export function syncBar(parts: OpsParts, p: Palette, a: OpsActions): Element[] {
+/** What every tab shows at its foot: work under way, an operation to finish, a held action, the last result. */
+export function opsNotices(parts: OpsParts, p: Palette, a: OpsActions): Element[] {
   const { view } = parts;
-  const bar = h_flex()
-    .h(28)
-    .px(8)
-    .gap(4)
-    .items_center()
-    .flex_shrink_0()
-    .border_b_1()
-    .border_color(p.border)
-    .child(textButton("op-fetch", "Fetch", p, a.fetch))
-    .child(textButton("op-pull", parts.behind > 0 ? `Pull ↓${parts.behind}` : "Pull", p, a.pull))
-    .child(textButton("op-push", parts.ahead > 0 ? `Push ↑${parts.ahead}` : "Push", p, a.push))
-    .when(view.expanded, (el) =>
-      el
-        .child(textButton("op-stash", "Stash", p, a.stash))
-        .children(parts.flow.map((k) => textButton(`flow-${k}`, `+ ${k}`, p, (cx) => a.startFlow(k, cx)))),
-    )
-    .child(textButton("op-more", view.expanded ? "Less" : "⋯", p, a.toggleMore))
-    .child(div().flex_1())
-    .when(view.busy !== null, (el) => el.child(div().text_xs().text_color(p.dim).child(`${view.busy}…`)));
+  const busy = view.busy === null ? null : div().px(10).py(3).flex_shrink_0().text_xs().text_color(p.dim).bg(p.raised).child(`${view.busy}…`);
   const message = view.error ?? view.notice;
   const result =
     message === null
@@ -137,7 +129,7 @@ export function syncBar(parts: OpsParts, p: Palette, a: OpsActions): Element[] {
           .child(textButton("op-run-held", "Run anyway", p, a.runHeld, true))
           .child(textButton("op-hold-cancel", "Cancel", p, a.dismiss));
   const flowNaming = view.naming && view.naming.kind !== "branch" && view.naming.kind !== "tag" ? namingRow(parts, p, a) : null;
-  return [bar, ...(flowNaming ? [flowNaming] : []), ...(view.operation ? [operationBanner(view.operation, p, a)] : []), ...(held ? [held] : []), ...(result ? [result] : [])];
+  return [...(busy ? [busy] : []), ...(flowNaming ? [flowNaming] : []), ...(view.operation ? [operationBanner(view.operation, p, a)] : []), ...(held ? [held] : []), ...(result ? [result] : [])];
 }
 
 function namingRow(parts: OpsParts, p: Palette, a: OpsActions): Element {
@@ -156,7 +148,6 @@ function namingRow(parts: OpsParts, p: Palette, a: OpsActions): Element {
     .child(textButton("name-cancel", "Cancel", p, a.cancelName));
 }
 
-/** The selected commit's actions, as a wrapping row of buttons. */
 const STEP_COLOR = { pick: "foreground", squash: "info", fixup: "info", drop: "removed" } as const;
 
 /** The steps of an interactive rebase, oldest first: click an action to change it. */
@@ -193,45 +184,67 @@ function planEditor(plan: RebasePlan, p: Palette, a: OpsActions, busy: boolean):
     .child(v_flex().id("gitdeck-plan").max_h(220).overflow_y_scroll().children(rows));
 }
 
+/** What an action from the menu still asks for, above the list: a name, a reset mode, or the rebase steps. */
 export function commitBar(parts: OpsParts, p: Palette, a: OpsActions): Element | null {
   if (parts.view.plan) return planEditor(parts.view.plan, p, a, parts.view.busy !== null);
-  const actions = parts.commit;
-  if (actions === null) return null;
   if (parts.view.naming?.kind === "branch" || parts.view.naming?.kind === "tag") return namingRow(parts, p, a);
   const confirm = parts.view.confirm;
-  if (confirm === "reset" || confirm === "reset-hard") {
-    return h_flex()
-      .px(8)
-      .py(3)
-      .gap(4)
-      .items_center()
-      .flex_shrink_0()
-      .border_t_1()
-      .border_color(p.border)
-      .child(div().text_xs().text_color(p.dim).child("Reset the branch here, keeping:"))
-      .child(textButton("reset-soft", "Soft (staged)", p, (cx) => a.reset("soft", cx)))
-      .child(textButton("reset-mixed", "Mixed (unstaged)", p, (cx) => a.reset("mixed", cx)))
-      .child(textButton("reset-hard", confirm === "reset-hard" ? "Hard: lose changes?" : "Hard (nothing)", p, (cx) => a.reset("hard", cx), confirm === "reset-hard"))
-      .child(textButton("reset-cancel", "Cancel", p, a.dismiss));
-  }
-  const { shown, hidden } = splitActions(actions, parts.view.expanded);
-  const more = hidden === 0 ? [] : [textButton("ca-more", parts.view.expanded ? "Less" : `⋯ ${hidden} more`, p, a.toggleMore)];
-  const buttons = shown.map((action, i) => {
-    const key = actionKey(action);
-    const asking = confirm === key;
-    const label = asking ? (CONFIRM[action.kind] ?? LABEL[action.kind]) : `${LABEL[action.kind]}${action.ref ? ` ${action.ref}` : ""}`;
-    return textButton(`ca:${i}`, label, p, (cx) => a.commitAction(action, cx), asking);
-  });
+  if (confirm !== "reset" && confirm !== "reset-hard") return null;
   return h_flex()
     .px(8)
     .py(3)
     .gap(4)
-    .flex_wrap()
     .items_center()
     .flex_shrink_0()
-    .border_t_1()
+    .border_b_1()
     .border_color(p.border)
-    .children([...buttons, ...more]);
+    .child(div().text_xs().text_color(p.dim).child("Reset the branch here, keeping:"))
+    .child(textButton("reset-soft", "Soft (staged)", p, (cx) => a.reset("soft", cx)))
+    .child(textButton("reset-mixed", "Mixed (unstaged)", p, (cx) => a.reset("mixed", cx)))
+    .child(textButton("reset-hard", confirm === "reset-hard" ? "Hard: lose changes?" : "Hard (nothing)", p, (cx) => a.reset("hard", cx), confirm === "reset-hard"))
+    .child(textButton("reset-cancel", "Cancel", p, a.dismiss));
+}
+
+/** A commit's actions, as Fork offers them: a menu where the row was right-clicked. One needing a second click asks in place. */
+export function commitMenu(parts: OpsParts, p: Palette, a: OpsActions): Element | null {
+  const menu = parts.menu;
+  if (menu === null) return null;
+  const confirm = parts.view.confirm;
+  const items = menu.actions.map((action, i) => {
+    const asking = confirm === actionKey(action);
+    const label = asking ? (CONFIRM[action.kind] ?? LABEL[action.kind]) : `${LABEL[action.kind]}${action.ref ? ` ${action.ref}` : ""}`;
+    const danger = action.kind === "reset" || action.kind === "delete-branch" || action.kind === "stash-drop";
+    return div()
+      .id(`cm:${i}`)
+      .h(MENU_ITEM)
+      .px(10)
+      .flex()
+      .items_center()
+      .rounded(4)
+      .cursor_pointer()
+      .text_xs()
+      .whitespace_nowrap()
+      .truncate()
+      .text_color(asking ? p.changed : danger ? p.removed : p.foreground)
+      .when(asking, (el) => el.bg(p.selected))
+      .hover((el) => el.bg(p.hover))
+      .on_click((_e, cx) => a.commitAction(action, cx))
+      .child(label);
+  });
+  return v_flex()
+    .id("commit-menu")
+    .absolute()
+    .left(menu.x)
+    .top(menu.y)
+    .w(MENU_WIDTH)
+    .p(MENU_PAD)
+    .rounded(6)
+    .border_1()
+    .border_color(p.border)
+    .bg(p.raised)
+    .shadow_lg()
+    .on_mouse_down_out((_e, cx) => a.closeMenu(cx))
+    .children(items);
 }
 
 export const needsConfirm = (kind: ActionKind): boolean => CONFIRM[kind] !== undefined;

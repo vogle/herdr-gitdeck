@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { emptyOps, forRepoOps, started, finished, confirmOps, holdOps, splitActions, toggleMore, startNaming, stopNaming, withOperation, withPlan, commitActions } from "../src/core/opsView.ts";
+import { emptyOps, forRepoOps, started, finished, confirmOps, holdOps, openMenu, placeMenu, closeMenu, chooseFromMenu, fitMenu, startNaming, stopNaming, withOperation, withPlan, commitActions } from "../src/core/opsView.ts";
 import type { Ref } from "../src/core/git/refs.ts";
 
 const H = "a".repeat(40);
@@ -65,25 +65,28 @@ test("an action held for a working agent waits until run or dismissed", () => {
   assert.equal(holdOps(confirmOps(emptyOps("/r"), "rebase:x"), "t").confirm, null, "a pending second click is dropped");
 });
 
-test("rare commit actions wait behind More; the common ones stay out", () => {
-  const all = [
-    { kind: "checkout-commit" }, { kind: "branch" }, { kind: "tag" }, { kind: "cherry-pick" }, { kind: "revert" },
-    { kind: "merge" }, { kind: "rebase" }, { kind: "edit-after" }, { kind: "reset" },
-    { kind: "checkout-branch", ref: "dev" }, { kind: "delete-branch", ref: "dev" },
-  ] as const;
-  const closed = splitActions(all, false);
-  assert.deepEqual(closed.shown.map((a) => a.kind), ["checkout-commit", "branch", "revert", "checkout-branch"]);
-  assert.equal(closed.hidden, 7);
-  const open = splitActions(all, true);
-  assert.equal(open.shown.length, all.length);
-  assert.equal(open.hidden, 7, "More still says how many it holds");
-  const stash = splitActions([{ kind: "stash-apply" }, { kind: "stash-pop" }, { kind: "stash-drop" }], false);
-  assert.equal(stash.hidden, 0, "a stash's three actions all stay");
+test("a right-click opens the menu on that commit; the pane's press then places it once", () => {
+  const open = openMenu(confirmOps(emptyOps("/r"), "rebase:x"), "abc");
+  assert.deepEqual(open.menu, { hash: "abc", x: null, y: null });
+  assert.equal(open.confirm, null, "a pending second click is dropped");
+  const placed = placeMenu(open, 10, 20);
+  assert.deepEqual(placed.menu, { hash: "abc", x: 10, y: 20 });
+  assert.equal(placeMenu(placed, 99, 99), placed, "a later press doesn't move it");
+  assert.equal(placeMenu(emptyOps("/r"), 1, 2).menu, null, "no menu, nothing to place");
+  assert.equal(closeMenu(placed).menu, null);
+  assert.equal(forRepoOps(placed, "/other").menu, null, "another repo starts closed");
 });
 
-test("toggleMore opens and closes, and another repo starts closed", () => {
-  const v = toggleMore(emptyOps("/r"));
-  assert.equal(v.expanded, true);
-  assert.equal(toggleMore(v).expanded, false);
-  assert.equal(forRepoOps(v, "/other").expanded, false);
+test("an action picked in the menu closes it and keeps acting on that commit", () => {
+  const picked = chooseFromMenu(placeMenu(openMenu(emptyOps("/r"), "abc"), 1, 2));
+  assert.equal(picked.menu, null);
+  assert.equal(picked.subject, "abc");
+  assert.equal(chooseFromMenu(picked).subject, "abc", "without a menu the subject stays");
+});
+
+test("fitMenu keeps the menu inside the pane, flipping it above or left of the press", () => {
+  assert.deepEqual(fitMenu(10, 10, { width: 400, height: 600 }, 180, 200), { x: 10, y: 10 });
+  assert.deepEqual(fitMenu(10, 500, { width: 400, height: 600 }, 180, 200), { x: 10, y: 300 }, "opens above near the bottom");
+  assert.deepEqual(fitMenu(300, 10, { width: 400, height: 600 }, 180, 200), { x: 220, y: 10 }, "slides left near the right edge");
+  assert.deepEqual(fitMenu(10, 50, { width: 100, height: 100 }, 180, 200), { x: 0, y: 0 }, "never above or left of the pane");
 });

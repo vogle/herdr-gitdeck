@@ -2,30 +2,91 @@
 // at the project and run outside the repo, so it never reads the work tree or
 // the repo's config.
 
+import type { AvatarSource } from "../avatars.ts";
 import type { Exec, Git, Target } from "../git/runner.ts";
 import { parseBranchPr, parsePrs, prListArgs, prViewArgs } from "./github.ts";
-import { mrListArgs, mrViewArgs, parseBranchMr, parseMrs } from "./gitlab.ts";
+import { failedJobsArgs, firstMrNumber, MANY_MRS, mrListArgs, mrViewArgs, openMrsArgs, parseBranchMr, parseFailedJobs, parseMrs, pipelineId } from "./gitlab.ts";
 import { forgeOf, parseRemote } from "./remote.ts";
-import type { BranchPr, Forge, PrList } from "./types.ts";
+import { discussionsArgs, parseDiscussions, parseThreads, threadsArgs, type ReviewThread } from "./reviewThreads.ts";
+import type { BranchPr, Forge, ForgeChoice, ForgeKind, PrList } from "./types.ts";
 
-export type { BranchPr, Checks, Forge, PrList, PullRequest } from "./types.ts";
+export type { BranchPr, Checks, Forge, ForgeChoice, ForgeKind, PrList, PullRequest } from "./types.ts";
+export type { ReviewThread } from "./reviewThreads.ts";
 
-/** The forge of origin; `git config gitdeck.forge github|gitlab` names it for any host. */
-export async function readForge(git: Git, target: Target): Promise<Forge | null> {
+/** Where to ask the CLIs which hosts they are signed in to: outside the repo. */
+interface Probe {
+  exec: Exec;
+  away: string;
+}
+
+/**
+ * The forge whose CLI alone is signed in to `host` (the person logged in there
+ * themselves, so pointing that CLI at it is safe); null when neither or both are.
+ * The token each prints is only checked for being there, never kept.
+ */
+async function signedInForge(probe: Probe, target: Target, host: string): Promise<ForgeKind | null> {
+  const has = (cli: string, args: string[]): Promise<boolean> =>
+    probe.exec(cli, args, { cwd: probe.away, on: target.on }).then(
+      (r) => r.code === 0 && r.stdout.trim() !== "",
+      () => false,
+    );
+  const [gitlab, github] = await Promise.all([
+    has("glab", ["config", "get", "token", "--host", host]),
+    has("gh", ["auth", "token", "--hostname", host]),
+  ]);
+  return gitlab === github ? null : gitlab ? "gitlab" : "github";
+}
+
+/**
+ * origin's host, and its forge; `git config gitdeck.forge github|gitlab|none` names
+ * it for any host. With a probe, an unnamed host is read from the signed-in CLIs.
+ * The host comes back only while it's unnamed: the person is asked which it is.
+ */
+async function readOrigin(git: Git, target: Target, probe?: Probe): Promise<{ forge: Forge | null; host: string | null }> {
   const [url, override] = await Promise.all([
     git(target, ["remote", "get-url", "origin"]).catch(() => ""),
     git(target, ["config", "--get", "gitdeck.forge"]).then((v) => v.trim(), () => null),
   ]);
-  return forgeOf(parseRemote(url), override);
+  const remote = parseRemote(url);
+  const forge = forgeOf(remote, override);
+  if (forge !== null || remote === null || override !== null || !probe) return { forge, host: forge === null && override === null ? (remote?.host ?? null) : null };
+  const kind = await signedInForge(probe, target, remote.host);
+  // Kept as gitdeck.forge, so what reads only the config (the graph's icons) knows it too.
+  if (kind !== null) await setForge(git, target, kind).catch(() => undefined);
+  const found = kind === null ? null : forgeOf(remote, kind);
+  return { forge: found, host: found === null ? remote.host : null };
+}
+
+/** origin as the source of authors' pictures: its forge's kind, host and project; null when it isn't a known forge. */
+export async function readAvatarSource(git: Git, target: Target): Promise<AvatarSource | null> {
+  const [url, override] = await Promise.all([
+    git(target, ["remote", "get-url", "origin"]).catch(() => ""),
+    git(target, ["config", "--get", "gitdeck.forge"]).then((v) => v.trim(), () => null),
+  ]);
+  const remote = parseRemote(url);
+  const forge = forgeOf(remote, override);
+  return forge && remote ? { kind: forge.kind, host: remote.host, path: remote.path } : null;
+}
+
+export async function readForge(git: Git, target: Target): Promise<Forge | null> {
+  return (await readOrigin(git, target)).forge;
+}
+
+/** Names origin's forge for this repo (its own .git/config), for a host that isn't github.com or gitlab.com; "none" stops the asking. */
+export async function setForge(git: Git, target: Target, kind: ForgeChoice): Promise<void> {
+  await git(target, ["config", "--local", "gitdeck.forge", kind]);
 }
 
 const failure = (cli: string, error: unknown): string => `Can't run ${cli}: ${error instanceof Error ? error.message : String(error)}`;
 
 /** `away` is a folder outside the repo (home) for the CLI to run in. */
 export async function loadPrs(git: Git, exec: Exec, target: Target, away: string): Promise<PrList> {
-  const forge = await readForge(git, target);
-  if (forge === null) return { items: [], error: "No GitHub or GitLab remote: origin isn't one (set gitdeck.forge for your own host)", repo: null, label: "PR" };
-  const base = { repo: forge.repo, label: forge.label };
+  const { forge, host } = await readOrigin(git, target, { exec, away });
+  if (forge === null) {
+    const error = host === null ? "No GitHub or GitLab remote: origin isn't one" : `origin is on ${host}: is it GitLab or GitHub?`;
+    return { items: [], error, repo: null, label: "PR", host };
+  }
+  const base = { repo: forge.repo, label: forge.label, host: null };
   const args = forge.kind === "github" ? prListArgs(forge.repo) : mrListArgs(forge.repo);
   try {
     const r = await exec(forge.cli, args, { cwd: away, on: target.on });
@@ -36,21 +97,75 @@ export async function loadPrs(git: Git, exec: Exec, target: Target, away: string
   }
 }
 
+/** A failed MR pipeline with its failed jobs in place of itself; as it was when they can't be read. */
+async function withFailedJobs(exec: Exec, target: Target, away: string, repo: string, pr: BranchPr, pipeline: number | null): Promise<BranchPr> {
+  if (pr.checks.failed === 0 || pipeline === null) return pr;
+  try {
+    const r = await exec("glab", failedJobsArgs(repo, pipeline), { cwd: away, on: target.on });
+    const jobs = r.code === 0 ? parseFailedJobs(r.stdout, repo) : [];
+    return jobs.length > 0 ? { ...pr, failed: jobs } : pr;
+  } catch {
+    return pr;
+  }
+}
+
 /** The CLIs' words for "this branch has none". */
 const NONE = /no pull requests found|no (?:open )?merge requests? (?:available|found)/i;
 
-/** The branch's PR or MR; none (and no error) without a forge or one to show. */
-export async function loadBranchPr(git: Git, exec: Exec, target: Target, away: string, branch: string): Promise<{ pr: BranchPr | null; error: string | null; label: "PR" | "MR" }> {
-  const forge = await readForge(git, target);
-  if (forge === null) return { pr: null, error: null, label: "PR" };
+/** A CLI's error as one line: its first with words, past blank lines and a bare "ERROR" heading. */
+export function cliError(stderr: string, fallback: string): string {
+  return stderr.split("\n").map((l) => l.trim()).find((l) => l !== "" && !/^error:?$/i.test(l)) ?? fallback;
+}
+
+export interface BranchPrState {
+  pr: BranchPr | null;
+  error: string | null;
+  label: "PR" | "MR";
+  /** origin's host when it isn't a known forge yet: the person names which it is. */
+  host: string | null;
+  /** The forge read, or null when origin isn't one (or isn't named yet). */
+  forge: ForgeKind | null;
+}
+
+/** The branch's PR or MR; none (and no error) without a forge or one to show. Without a branch, only the forge. */
+export async function loadBranchPr(git: Git, exec: Exec, target: Target, away: string, branch: string | null): Promise<BranchPrState> {
+  const { forge, host: origin } = await readOrigin(git, target, { exec, away });
+  if (forge === null) return { pr: null, error: null, label: "PR", host: origin, forge: null };
   const label = forge.label;
+  const host = null;
+  const known = { label, host, forge: forge.kind };
+  if (branch === null) return { pr: null, error: null, ...known };
   const args = forge.kind === "github" ? prViewArgs(forge.repo, branch) : mrViewArgs(forge.repo, branch);
   try {
-    const r = await exec(forge.cli, args, { cwd: away, on: target.on });
-    if (r.code === 0) return { pr: forge.kind === "github" ? parseBranchPr(r.stdout) : parseBranchMr(r.stdout), error: null, label };
-    if (NONE.test(r.stderr)) return { pr: null, error: null, label };
-    return { pr: null, error: r.stderr.split("\n")[0] || `${forge.cli} failed (${r.code})`, label };
+    let r = await exec(forge.cli, args, { cwd: away, on: target.on });
+    if (r.code !== 0 && forge.kind === "gitlab" && MANY_MRS.test(r.stderr)) {
+      // The branch has had several MRs (a long-lived branch like main): show its open one, if any.
+      const list = await exec(forge.cli, openMrsArgs(forge.repo, branch), { cwd: away, on: target.on });
+      const number = list.code === 0 ? firstMrNumber(list.stdout) : null;
+      if (number === null) return { pr: null, error: list.code === 0 ? null : cliError(list.stderr, `${forge.cli} failed (${list.code})`), ...known };
+      r = await exec(forge.cli, mrViewArgs(forge.repo, String(number)), { cwd: away, on: target.on });
+    }
+    if (r.code === 0) {
+      const pr = forge.kind === "github" ? parseBranchPr(r.stdout, forge.repo) : parseBranchMr(r.stdout);
+      return { pr: pr && forge.kind === "gitlab" ? await withFailedJobs(exec, target, away, forge.repo, pr, pipelineId(r.stdout)) : pr, error: null, ...known };
+    }
+    if (NONE.test(r.stderr)) return { pr: null, error: null, ...known };
+    return { pr: null, error: cliError(r.stderr, `${forge.cli} failed (${r.code})`), ...known };
   } catch (error) {
-    return { pr: null, error: failure(forge.cli, error), label };
+    return { pr: null, error: failure(forge.cli, error), ...known };
+  }
+}
+
+/** The open review threads on PR/MR `number`: read once, when the person asks for them. */
+export async function loadReviewThreads(git: Git, exec: Exec, target: Target, away: string, number: number): Promise<{ threads: ReviewThread[]; error: string | null }> {
+  const { forge } = await readOrigin(git, target);
+  if (forge === null) return { threads: [], error: "No GitHub or GitLab remote" };
+  const args = forge.kind === "github" ? threadsArgs(forge.repo, number) : discussionsArgs(forge.repo, number);
+  try {
+    const r = await exec(forge.cli, args, { cwd: away, on: target.on });
+    if (r.code !== 0) return { threads: [], error: r.stderr.split("\n")[0] || `${forge.cli} failed (${r.code})` };
+    return { threads: forge.kind === "github" ? parseThreads(r.stdout) : parseDiscussions(r.stdout), error: null };
+  } catch (error) {
+    return { threads: [], error: failure(forge.cli, error) };
   }
 }

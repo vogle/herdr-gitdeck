@@ -11,7 +11,7 @@ const base = (path: string): string => path.slice(path.lastIndexOf("/") + 1);
 
 function verb(files: readonly ChangeFile[]): string {
   const all = (letters: string) => files.every((f) => letters.includes(f.letter));
-  if (all("AU")) return "Add";
+  if (all("A?")) return "Add";
   if (all("D")) return "Remove";
   if (all("R")) return "Rename";
   return "Update";

@@ -96,3 +96,14 @@ export async function loadBlob(git: Git, target: Target, rev: string, file: Tree
     return { lines: [], note: error instanceof Error ? error.message : String(error) };
   }
 }
+
+/** One file of a commit, as the viewer tab shows it: its tree entry read first, so a submodule or a huge file is named, not read. */
+export async function loadFileAt(git: Git, target: Target, rev: string, path: string): Promise<BlobView> {
+  try {
+    const file = parseTree(await git(target, ["ls-tree", "-z", "--long", rev, "--", path])).find((f) => f.path === path);
+    if (!file) return { lines: [], note: `${path} is not in ${rev.slice(0, 10)}` };
+    return await loadBlob(git, target, rev, file);
+  } catch (error) {
+    return { lines: [], note: error instanceof Error ? error.message : String(error) };
+  }
+}

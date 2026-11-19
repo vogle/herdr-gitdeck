@@ -2,6 +2,9 @@
 
 export type ForgeKind = "github" | "gitlab";
 
+/** What a person names origin's host as: one of the forges, or neither (never asked again). */
+export type ForgeChoice = ForgeKind | "none";
+
 export interface Forge {
   kind: ForgeKind;
   /** What the forge calls a review request. */
@@ -30,12 +33,21 @@ export interface PrList {
   error: string | null;
   repo: string | null;
   label: "PR" | "MR";
+  /** origin's host when it isn't a known forge yet: the person names which it is. */
+  host: string | null;
 }
 
 export interface Checks {
   passed: number;
   failed: number;
   pending: number;
+}
+
+/** A check that failed: what it's called, its page, and the command that prints its log (null when the CLI can't). */
+export interface FailedCheck {
+  name: string;
+  url: string;
+  log: string | null;
 }
 
 /** The shown branch's PR or MR, for the Review tab. */
@@ -49,6 +61,10 @@ export interface BranchPr {
   /** APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED or "". */
   review: string;
   checks: Checks;
+  /** The branch it merges into ("" when the forge didn't say). */
+  target: string;
+  /** Each failed check (GitLab: each failed job, or the pipeline when its jobs can't be read). */
+  failed: readonly FailedCheck[];
 }
 
 export const str = (v: unknown): string => (typeof v === "string" ? v : "");

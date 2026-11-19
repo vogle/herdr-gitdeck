@@ -15,6 +15,8 @@ export interface Diff {
   rows: readonly DiffRow[];
   /** More rows than the cap: the rest were dropped. */
   truncated: boolean;
+  /** The file is gone on the new side (its header said "deleted file mode"). */
+  deleted?: boolean;
   /** A changed image's two versions, drawn above the (binary) diff. */
   images?: ImagePair | null;
 }
@@ -39,8 +41,9 @@ export function parseDiff(output: string, cap = DIFF_ROW_CAP): Diff {
   const rows: DiffRow[] = [];
   const at = { old: 0, new: 0 };
   let inHunk = false;
+  let deleted = false;
   for (const line of output.split("\n")) {
-    if (rows.length >= cap) return { rows, truncated: true };
+    if (rows.length >= cap) return { rows, truncated: true, deleted };
     if (line.startsWith("diff --git ")) inHunk = false;
     const hunk = HUNK.exec(line);
     if (hunk) {
@@ -50,12 +53,13 @@ export function parseDiff(output: string, cap = DIFF_ROW_CAP): Diff {
       rows.push({ kind: "hunk", old: null, new: null, text: line });
     } else if (!inHunk) {
       if (line.startsWith("Binary files ")) rows.push(note("Binary file changed"));
+      else if (line.startsWith("deleted file mode ")) deleted = true;
     } else if (line !== "") {
       const row = bodyRow(line, at);
       if (row) rows.push(row);
     }
   }
-  return { rows: rows.length > 0 ? rows : [note("No text changes")], truncated: false };
+  return { rows: rows.length > 0 ? rows : [note("No text changes")], truncated: false, deleted };
 }
 
 /** Two reads of a diff show the same thing (images aside: only uncommitted diffs are re-read, and they have none). */

@@ -3,13 +3,18 @@
 
 import { logArgs, parseLog, type Commit } from "./git/log.ts";
 import type { Git, Target } from "./git/runner.ts";
-import type { BlobView, TreeFile } from "./tree.ts";
+import type { TreeFile } from "./tree.ts";
 import type { Stats } from "./stats.ts";
 import type { PrList } from "./forge/index.ts";
 
 /** A commit's version of the file: the work-tree one would run clean filters. */
 export const blameArgs = (rev: string, path: string): string[] =>
   ["blame", "--porcelain", "--no-textconv", "--no-progress", rev, "--", path];
+
+/** The revision to blame a commit diff's file at: before the commit when the commit deleted it (it isn't there after). */
+export function blameRev(source: { hash: string; parents: readonly string[] }, deleted: boolean): string {
+  return deleted ? (source.parents[0] ?? source.hash) : source.hash;
+}
 
 export interface BlameLine {
   hash: string;
@@ -116,4 +121,4 @@ export type InspectView =
   | { kind: "reflog"; data: Loaded<ReflogEntry> | null }
   | { kind: "stats"; data: Stats | null }
   | { kind: "prs"; data: PrList | null }
-  | { kind: "tree"; rev: string; data: Loaded<TreeFile> | null; file: TreeFile | null; blob: BlobView | null };
+  | { kind: "tree"; rev: string; data: Loaded<TreeFile> | null; open: ReadonlySet<string> };

@@ -70,6 +70,9 @@ export function pushArgs(branch: string | null, upstream: string | null, remotes
   return branch === null || remote === undefined ? null : ["push", "-u", remote, branch];
 }
 
+/** Makes the current branch track a remote branch it was pushed to without -u: no network, no commits move. */
+export const linkArgs = (remoteBranch: string): string[] => ["branch", `--set-upstream-to=${remoteBranch}`];
+
 const MARKERS: ReadonlyArray<readonly [string, Operation]> = [
   ["MERGE_HEAD", "merge"],
   ["CHERRY_PICK_HEAD", "cherry-pick"],

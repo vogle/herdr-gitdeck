@@ -1,19 +1,22 @@
-// The shown repo as a side panel: a row of tabs (changes, history, branches,
+// The shown repo as a side panel: a row of tabs (changes, review, history, branches,
 // more), one list per tab that drills down to a commit, and the sync bar at the
-// bottom. Diffs, blame and statistics open in the viewer tab instead; from
-// WIDE_PX up the history tab shows the list and the commit side by side.
+// bottom. Diffs, blame and statistics open in the viewer tab instead; the
+// history tab shows the selected commit below its list.
 
 import { div, type Context, type Element } from "gpui-kit";
-import { h_flex, v_flex, Input, type InputState, type VirtualListScrollHandle } from "gpui-base";
+import { h_flex, v_flex, v_resizable, resizable_panel, Input, type InputState, type VirtualListScrollHandle } from "gpui-base";
 import type { RepoStatus } from "../core/git/status.ts";
+import { changesTabLabel } from "../core/headerText.ts";
 import { UNCOMMITTED, type HistoryView } from "../core/historyView.ts";
+import type { ForgeChoice } from "../core/forge/index.ts";
 import type { InspectView } from "../core/inspect.ts";
-import type { PanelTab } from "../core/panel.ts";
+import { PANEL_TABS, type PanelTab } from "../core/panel.ts";
 import { changesPane, type ChangesActions, type ChangesParts } from "./changes.ts";
 import { details, type DetailActions } from "./details.ts";
 import { graphList, type GraphActions } from "./graph.ts";
 import { inspectPane } from "./inspect.ts";
-import { commitBar, syncBar, type OpsActions, type OpsParts } from "./ops.ts";
+import { treePane } from "./treePane.ts";
+import { commitBar, commitMenu, opsNotices, type OpsActions, type OpsParts } from "./ops.ts";
 import { reviewPane, type ReviewActions, type ReviewParts } from "./review.ts";
 import { sidebar } from "./sidebar.ts";
 import { textButton, type Palette } from "./style.ts";
@@ -27,11 +30,17 @@ export interface HistoryActions extends GraphActions, DetailActions {
   closeInspect: (cx: Context) => void;
   /** Takes the repo as it is now as seen: the new-file dots and counts clear. */
   markSeen: (cx: Context) => void;
-  treeFile: (index: number | null, cx: Context) => void;
+  /** Opens a File Tree file in the viewer tab. */
+  treeFile: (index: number, cx: Context) => void;
+  /** Opens or folds a folder of the File Tree tab. */
+  toggleTreeFolder: (folder: string, cx: Context) => void;
+  setForge: (kind: ForgeChoice, cx: Context) => void;
 }
 
 export interface HistoryParts {
   view: HistoryView;
+  /** An author's saved picture, as `image()` takes it; null draws their initials. */
+  avatar: (email: string) => string | null;
   status: RepoStatus | null;
   /** The repo's own config names filter programs: no work-tree diffs. */
   untrusted: readonly string[] | null;
@@ -44,8 +53,6 @@ export interface HistoryParts {
   /** The reflog, pull requests or a commit's files, in place of the tab's list. */
   inspect: InspectView | null;
   tab: PanelTab;
-  /** The panel is wide enough for two columns. */
-  wide: boolean;
   /** What is new since the person last looked; null before the first look. */
   news: { files: number; commits: number | null } | null;
   /** The branch against main, for the Review tab. */
@@ -55,8 +62,7 @@ export interface HistoryParts {
 const TAB_LABELS: Record<PanelTab, string> = { changes: "Changes", review: "Review", history: "History", branches: "Branches", more: "More" };
 
 function tabRow(parts: HistoryParts, p: Palette, actions: HistoryActions): Element {
-  const changed = parts.status?.entries.filter((e) => e.kind !== "ignored").length ?? 0;
-  const label = (tab: PanelTab) => (tab === "changes" && changed > 0 ? `${TAB_LABELS[tab]} ${changed}` : TAB_LABELS[tab]);
+  const label = (tab: PanelTab) => (tab === "changes" ? changesTabLabel(parts.status) : TAB_LABELS[tab]);
   return h_flex()
     .h(32)
     .px(6)
@@ -65,7 +71,7 @@ function tabRow(parts: HistoryParts, p: Palette, actions: HistoryActions): Eleme
     .flex_shrink_0()
     .border_b_1()
     .border_color(p.border)
-    .children((Object.keys(TAB_LABELS) as PanelTab[]).map((tab) =>
+    .children(PANEL_TABS.map((tab) =>
       textButton(`tab-${tab}`, label(tab), p, (cx) => actions.selectTab(tab, cx), parts.tab === tab),
     ));
 }
@@ -111,24 +117,53 @@ function searchRow(parts: HistoryParts, p: Palette): Element {
     .child(div().flex_shrink_0().text_xs().text_color(p.dim).child(count));
 }
 
-/** The commit list, or (narrow) the selected commit in its place, or (wide) both. */
+const SPLIT = "gitdeck-history-split";
+/** The commit pane's height before the divider is first dragged. */
+const DETAIL_PX = 340;
+
+/** The selected commit, or its files when the File Tree tab is open. */
+function commitPane(parts: HistoryParts, p: Palette, actions: HistoryActions): Element {
+  const tree = parts.inspect?.kind === "tree" ? parts.inspect : null;
+  if (tree === null) return details(parts.view, parts.status, p, actions, parts.avatar) ?? div();
+  return treePane(tree, p, {
+    commit: actions.closeInspect,
+    close: (cx) => {
+      actions.closeInspect(cx);
+      actions.close(cx);
+    },
+    toggleFolder: actions.toggleTreeFolder,
+    file: actions.treeFile,
+  });
+}
+
+/** The commit list, and the selected commit below it; a right-click on a row opens its actions. */
 function historyTab(parts: HistoryParts, p: Palette, actions: HistoryActions): Element {
-  const { view } = parts;
-  const list = v_flex().flex_1().min_w_0().min_h_0().child(searchRow(parts, p)).child(graphList(view, p, parts.scroll, actions));
-  const open = view.selected !== null && view.selected !== UNCOMMITTED;
-  if (!open) return list;
-  const commitActions = parts.ops ? commitBar(parts.ops.parts, p, parts.ops.actions) : null;
-  const detail = v_flex()
+  const { view, ops } = parts;
+  const menu = ops ? commitMenu(ops.parts, p, ops.actions) : null;
+  const list = v_flex()
+    .relative()
     .flex_1()
     .min_w_0()
     .min_h_0()
-    .when(commitActions !== null, (el) => el.child(commitActions ?? div()))
-    .child(details(view, parts.status, p, actions) ?? div());
-  if (!parts.wide) return detail;
-  return h_flex().flex_1().min_h_0().items_start().child(list.h_full().border_r_1().border_color(p.border)).child(detail.h_full());
+    .child(searchRow(parts, p))
+    .child(graphList(view, p, parts.scroll, actions, parts.avatar, ops ? ops.actions.openMenu : undefined))
+    // After the row's own handler: the press, as this pane sees it, places the menu.
+    .when(ops !== null, (el) => el.on_mouse_down("right", (e, cx) => ops?.actions.placeMenu(e, cx)))
+    .when(menu !== null, (el) => el.child(menu ?? div()));
+  const open = view.selected !== null && view.selected !== UNCOMMITTED;
+  // The commit opens below the list, as Fork's does; the divider between them drags, and the window keeps its place.
+  const body = v_resizable(SPLIT)
+    .flex_1()
+    .min_h_0()
+    .child(resizable_panel().size_range(120).child(list.size_full()))
+    .when(open, (el) =>
+      el.child(resizable_panel().size(DETAIL_PX).size_range(120).child(v_flex().size_full().min_w_0().overflow_hidden().child(commitPane(parts, p, actions)))),
+    );
+  const pending = ops ? commitBar(ops.parts, p, ops.actions) : null;
+  return pending === null ? body : v_flex().flex_1().min_h_0().child(pending).child(body);
 }
 
-function moreTab(p: Palette, actions: HistoryActions): Element {
+function moreTab(p: Palette, actions: HistoryActions, ops: HistoryParts["ops"]): Element {
   const row = (id: string, label: string, hint: string, onClick: (cx: Context) => void) =>
     v_flex()
       .id(id)
@@ -147,16 +182,21 @@ function moreTab(p: Palette, actions: HistoryActions): Element {
     .min_h_0()
     .child(row("more-reflog", "Reflog", "Where HEAD has been", actions.reflog))
     .child(row("more-prs", "Pull / merge requests", "GitHub via gh, GitLab via glab (read-only)", actions.prs))
-    .child(row("more-stats", "Statistics", "Authors and commits per month, in a tab", actions.stats));
+    .child(row("more-stats", "Statistics", "Authors and commits per month, in a tab", actions.stats))
+    .when(ops !== null, (el) =>
+      el
+        .child(row("more-stash", "Stash changes", "Put the uncommitted changes aside; Branches lists them", (cx) => ops?.actions.stash(cx)))
+        .children((ops?.parts.flow ?? []).map((k) => row(`more-flow-${k}`, `Start a ${k} branch`, "git-flow: name it, then switch to it", (cx) => ops?.actions.startFlow(k, cx)))),
+    );
 }
 
 function tabBody(parts: HistoryParts, p: Palette, actions: HistoryActions): Element {
-  if (parts.inspect) {
+  // A commit's File Tree opens in the commit pane, under the list.
+  if (parts.inspect && !(parts.inspect.kind === "tree" && parts.tab === "history")) {
     return inspectPane(parts.inspect, p, {
       jump: actions.jump,
       close: actions.closeInspect,
-      openTreeFile: (i, cx) => actions.treeFile(i, cx),
-      closeTreeFile: (cx) => actions.treeFile(null, cx),
+      setForge: actions.setForge,
     });
   }
   if (parts.tab === "changes") {
@@ -165,7 +205,7 @@ function tabBody(parts: HistoryParts, p: Palette, actions: HistoryActions): Elem
   }
   if (parts.tab === "review") return reviewPane(parts.review.parts, p, parts.review.actions);
   if (parts.tab === "branches") return h_flex().flex_1().min_h_0().child(sidebar(parts.view.history, p, actions.jump, true));
-  if (parts.tab === "more") return moreTab(p, actions);
+  if (parts.tab === "more") return moreTab(p, actions, parts.ops);
   return historyTab(parts, p, actions);
 }
 
@@ -201,6 +241,6 @@ export function historyPane(parts: HistoryParts, p: Palette, actions: HistoryAct
     .children([newsLine(parts, p, actions)].filter((e): e is Element => e !== null))
     .child(v_flex().flex_1().min_h_0().child(tabBody(parts, p, actions)))
     .when(parts.ops !== null, (el) =>
-      el.child(v_flex().flex_shrink_0().border_t_1().border_color(p.border).children(parts.ops ? syncBar(parts.ops.parts, p, parts.ops.actions) : [])),
+      el.child(v_flex().flex_shrink_0().children(parts.ops ? opsNotices(parts.ops.parts, p, parts.ops.actions) : [])),
     );
 }
