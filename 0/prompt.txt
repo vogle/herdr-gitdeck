@@ -1,0 +1,188 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+1. Primary Request and Intent:
+   - The project is gitdeck, a Herdr desktop-app git client mod, at `/Volumes/WorkSpace/vogle/herdr-gitdeck`, on branch `feat/agent-centered-panel`. Features are built around supervising coding agents.
+   - The user asked for every Review improvement task to be done, in this order: 0, 1, 3, 7, 8, 2, 4, 5, 6.
+     - 0: commit existing work.
+     - 1: use the PR's target branch as the review/compare base.
+     - 3: a note for uncommitted changes.
+     - 7: forge (GitLab/GitHub) buttons on the PR-list error.
+     - 8: a warning when far behind the base (proposed threshold: ≥20 commits behind).
+     - 2: a failed-checks list plus a send-to-agent action (approach A: name, link, and the command `gh run view <id> --log-failed` for the agent to run).
+     - 4: a "new since viewed" filter.
+     - 5: whole-file feedback notes.
+     - 6: fetch PR/MR review comments and send them to the agent.
+   - The user chose to commit after each task and to check each task themselves.
+   - The user's feedback during task 7:
+     - The forge question was hard to find inside More. It should appear up front.
+     - The PR row under the header should show the state, including in sub-repos.
+     - Latest: "PR 자리는 항상 확보해두고 처음에 아무런 내용이 없고 체크중이면 로딩중이라고 나오던지 했으면 해" (always reserve the PR row; show a loading/checking state).
+
+2. Key Technical Concepts:
+   - Herdr mod runtime rules:
+     - No Node APIs and no setTimeout.
+     - Never keep a `cx`.
+     - Exec has no stdin and a 30 s limit.
+     - Immutable state.
+   - Data comes from `gh pr view --json ...baseRefName,statusCheckRollup` and from glab MR JSON (`target_branch`, `head_pipeline`).
+     - A real `statusCheckRollup` CheckRun carries `name`, `conclusion`, `status`, `detailsUrl` (…/actions/runs/<run>/job/<job>) and `workflowName`. Confirmed on PR #8.
+   - Forge detection:
+     - `glab config get token --host H`: non-empty stdout means signed in.
+     - `gh auth token --hostname H`: code 0 with non-empty output means signed in.
+     - When exactly one CLI is signed in, use that forge. Tokens are never kept or printed.
+     - `bsp-git.uzen.io`: glab is signed in, gh is not.
+   - Self-hosted GitLab at `bsp-git.uzen.io` needs VPN, and the user connected it. bsp-fo MRs target `stg`, e.g. `fix/ECPF_OP-2505 -> stg`.
+
+3. Files and Code Sections:
+   - **`src/core/forge/types.ts`**
+     - `BranchPr` gained `target: string`.
+     - `PrList` gained `host: string | null`.
+   - **`src/core/forge/github.ts`**
+     - `prViewArgs` now requests the json fields `number,title,state,isDraft,url,reviewDecision,statusCheckRollup,baseRefName`.
+     - `parseBranchPr` returns `target: str(o.baseRefName)`.
+   - **`src/core/forge/gitlab.ts`**: `parseBranchMr` adds `target: str(o.target_branch)`.
+   - **`src/core/forge/index.ts`**
+     - Added `interface Probe { exec; away }`.
+     - Added `signedInForge(probe, target, host)`, which runs the glab and gh checks in parallel with `{cwd: probe.away, on: target.on}` and returns `gitlab === github ? null : ...`.
+     - `readOrigin(git, target, probe?)` falls back to detection only when there is no forge, a remote exists, there is no override, and a probe is given.
+     - `loadPrs`:
+       - With no host: error "No GitHub or GitLab remote: origin isn't one".
+       - With an unknown host: error "origin is on ${host}: is it GitLab or GitHub?" plus `host`.
+       - The success base includes `host: null`.
+     - `BranchPrState` gained `forge: ForgeKind | null`. Results use `const known = { label, host, forge: forge.kind }`.
+   - **`src/core/forge/summary.ts`**
+     - Imports `type BranchPrState` from `./index.ts`.
+     - Adds:
+       ```ts
+       export type PrRow = | { kind: "pr"; pr: BranchPr } | { kind: "ask"; host: string } | { kind: "reading"; text: string } | { kind: "error"; text: string } | { kind: "none"; text: string };
+       export function prRow(state: BranchPrState | null, branch: string | null, mainLine = false): PrRow {
+         if (branch === null) return { kind: "none", text: "Detached HEAD: no branch to have a PR" };
+         if (state === null) return { kind: "reading", text: "Checking for a PR or MR…" };
+         if (state.host !== null) return { kind: "ask", host: state.host };
+         if (state.forge === null) return { kind: "none", text: "No GitHub or GitLab remote: no PRs to show" };
+         if (state.pr !== null) return { kind: "pr", pr: state.pr };
+         if (state.error !== null) return { kind: "error", text: `Can't read the ${state.label}: ${state.error}` };
+         if (mainLine) return { kind: "none", text: `On the main line: ${state.label}s come from other branches` };
+         return { kind: "none", text: `No ${state.label} for this branch yet` };
+       }
+       ```
+   - **`src/core/review.ts`**: adds `reviewBase(refs, current, target)`.
+     - With no target, it uses `baseBranch`.
+     - When `current === target`, it returns null.
+     - Otherwise it tries `[target, origin/target]` among branch/remote refs, then falls back to `baseBranch`.
+   - **`src/core/headerText.ts`**: adds `uncommittedNote(status)`, which returns "N file(s) not committed yet: not in this review", or null. Ignored files are not counted.
+   - **`src/ui/review.ts`**
+     - `ReviewParts.uncommitted: string | null`.
+     - `ReviewActions.showChanges`.
+     - `uncommittedLine` adds a row with a "Changes" button.
+     - `prLine` shows `→ ${pr.target}`.
+     - Review still has its own forge question in `prLine`.
+   - **`src/ui/inspect.ts`**
+     - `InspectActions.setForge`.
+     - In the PR list, when `v.data?.host` is set, it shows the question with `prs-forge-gitlab` / `prs-forge-github` buttons.
+     - The title becomes "Pull / merge requests (read-only)" while the host is unknown.
+   - **`src/ui/historyPane.ts`**: `HistoryActions.setForge` is passed through to `inspectPane`, and imports `ForgeKind`.
+   - **`src/viewer.ts`**: the inspectPane actions add `setForge: () => {}`.
+   - **`src/ui/prBar.ts`**
+     - Imports `ForgeKind` and `textButton`.
+     - `forgeQuestion(host, p, choose)` is the row "origin is on ${host}: GitLab or GitHub? PRs and checks show once it's named" with buttons `forge-q-gitlab` / `forge-q-github`.
+     - `prNote(text, error, p, again: ((cx)=>void)|null)` is clickable (tooltip "Read it again") only when `again` is set.
+   - **`src/main.ts`**
+     - Imports:
+       - `loadCompare, loadReview, reviewBase`
+       - `loadBranchPr, loadPrs, setForge, type BranchPrState, type ForgeKind`
+       - `prRow` from `./core/forge/summary.ts`
+       - `forgeQuestion, prBar, prNote`
+       - `conflictWarning, uncommittedNote`
+       - `palette, type Palette`
+     - The refresh path computes `reviewBase(read.history.refs, status?.branch ?? null, this.shownPr(target.cwd)?.pr?.target ?? null)`.
+     - `readReview` drops a stale result with `if (this.herd.selected !== target.cwd || this.compare?.base !== base) return;`.
+     - `readPr` calls `await this.followTarget(cx, target)`. `followTarget` recomputes the base, then the compare, then `readReview(cx,false)` when on the Review tab.
+     - `nameForge(kind, cx)` runs `setForge`, then `readPr`, then reloads the open PR list. Review, the inspect pane and the header all share it.
+     - `prRowFor(path, state, p)`:
+       ```ts
+       if (path === null) return null;
+       const branch = this.herd.statuses[path]?.status?.branch ?? null;
+       const row = prRow(state, branch, this.compare?.repo === path && this.compare.base === null);
+       if (row.kind === "pr") return prBar(row.pr, state?.label ?? "PR", p, { review: ..., open: ... });
+       if (row.kind === "ask") return forgeQuestion(row.host, p, (kind, cx) => this.nameForge(kind, cx));
+       const again = row.kind === "reading" ? null : (cx: Context) => cx.spawn((cx) => this.readPr(cx, true));
+       return prNote(row.text, row.kind === "error", p, again);
+       ```
+     - Render: `.children([this.prRowFor(this.herd.picking ? null : (repo?.path ?? null), shown, p)].filter((x) => x !== null))` replaces the old prBar/forgeQuestion `.when` calls.
+     - Review parts pass `uncommitted: uncommittedNote(result?.status ?? null)` and `showChanges`.
+   - **Tests**
+     - `tests/forge.test.ts`: covers target parsing, `host`, `forge` fields, and the signed-in detection test.
+     - `tests/review.test.ts`: covers `reviewBase`.
+     - `tests/headerText.test.ts`: covers `uncommittedNote`.
+     - `tests/prSummary.test.ts`: covers the always-present `prRow`, and adds `target:"main"` to its pr fixture.
+
+4. Errors and fixes:
+   - tsc reported that `src/viewer.ts` was missing `setForge` in the inspect actions. Fixed by adding a no-op.
+   - The `prSummary` test first used the `pr` factory as a value. Fixed with `const one = pr()`.
+   - The first glab attempt failed to parse JSON because of wrong host/path parsing, then timed out without VPN. With the user's VPN it worked.
+   - The global `git-stats` post-commit hook prints a TypeError on every commit. The commits still succeed.
+   - User feedback:
+     - The forge question hidden in More was undiscoverable. Fixed with auto-detection and the header row.
+     - The PR row vanished on sub-repos or when there was no PR. Fixed with the always-present row.
+     - The row should always be reserved with a loading state. Done as "Checking for a PR or MR…".
+
+5. Problem Solving:
+   - The commands confirmed that the ECPF_OP-2376 repos have no PR/MR:
+     - Root: GitHub `allanim/bsp`, branch `ECPF_OP-2376`.
+     - Sub-repos `bsp-sales-service` / `bsp-system-service`: GitLab, branch `feat/ECPF_OP-2376`, `gitdeck.forge` unset.
+     - So the rows should read "No PR/MR for this branch yet".
+   - The assistant avoided `herdr-app do space.select`, because it would change the user's screen.
+
+6. All user messages:
+   - "좋아 이제 지금 상태에서 review에 추가해야 할 테스크 있으면 알려줘"
+   - "1 review 라는것이. PR/MR 에 관련있는거니 해당 브랜치와 비교를 해야 하는게 맞다는건가??? 판단이 안서내.. 메인으로 하는게 맞다고 생각하는데.. 반박해줘 2. 이건 어떻게 할거지 가능한건가?"
+   - "좋아 테스그 다 진행하자 어떻게 진행할꺼야?"
+   - AskUserQuestion answers: commits "작업마다 커밋 (권장)"; checks "작업마다 (권장)".
+   - "좋아 커밋하고 다음 진행해줘 VPN은 연결해두었어."
+   - (/restart) "응 괜찮아 진행해줘"
+   - (/restart) "이게 [Image #1] 나오는데.. 그런데 이게 너무 알아보기힘든데 처음부터 나오면 좋지 않아? 계속 클릭해서 들어가야 하는대 어떻게 알아.."
+   - "[Image #2] 여기 PR 나오는 부분에 나와야 하는거 아니야? 여기서 바로 설정을 하게 하던지 뭘하게 하던지. 해야 할것 같은데"
+   - "[Image #3] 서브 리포로 선택을 하며 두번쨰 줄이 사라지는대 똑같이 똑같은 기능으로 보여줘야 할것 같아"
+   - "PR 자리는 항상 확보해두고 처음에 아무런 내용이 없고 체크중이면 로딩중이라고 나오던지 했으면 해 그게 좋겠지?"
+
+7. Pending Tasks:
+   - Report task 7 (including the always-present PR row) and ask the user to /restart and check. Then commit task 7.
+   - Files to stage by path:
+     - `src/core/forge/index.ts`, `src/core/forge/types.ts`, `src/core/forge/summary.ts`
+     - `src/ui/inspect.ts`, `src/ui/historyPane.ts`, `src/ui/prBar.ts`
+     - `src/viewer.ts`, `src/main.ts`
+     - `tests/forge.test.ts`, `tests/prSummary.test.ts`
+   - Then tasks 8, 2, 4, 5, 6, each with test-first, `pnpm verify`, `pnpm -s dev`, `herdr-app status`, a screenshot, a user check, and a commit.
+
+8. Current Work:
+   - The PR row under the header is now always reserved, with a "Checking for a PR or MR…" state.
+   - The last command passed every check:
+     - `pnpm verify`: exit 0, 381 tests, all passing.
+     - `pnpm -s dev`: installed.
+     - `herdr-app status`: `"errors": []`.
+     - The screenshot was saved to `/private/tmp/claude-501/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29/scratchpad/t8.png`, but not viewed yet.
+   - Task 7 is uncommitted. Last commits: `108fdc9` (task 3), `a11ead4` (task 1), `2effedf` (task 0).
+
+9. Optional Next Step:
+   - Reply in Korean, confirming the user's last request: "PR 자리는 항상 확보해두고 … 체크중이면 로딩중이라고 나오던지 했으면 해".
+   - Explain the row states:
+     - Checking… (reading)
+     - PR
+     - forge question with buttons
+     - red error, click to retry
+     - "No PR/MR for this branch yet", click to retry
+     - main line note
+     - detached note
+     - no-remote note
+     - The row is hidden only while the repo dropdown is open.
+   - Show the verification evidence.
+   - Ask the user to `/restart` and click through the bsp ECPF_OP-2376 chips (root + bsp-sales-service + bsp-system-service).
+   - After the user approves, commit task 7 and continue with task 8.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
