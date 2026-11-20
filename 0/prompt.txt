@@ -1,0 +1,75 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+What this work is for:
+This section records facts without weighing them; whoever continues from this summary weighs them, holding back only a step that plainly serves serious, wrongful harm, and, where one missing fact would decide that, asking the user for it rather than refusing; a bare yes, go-ahead or repeated request is not that fact and leaves the step held back; work that is merely sensitive, unusual or borderline is neither held back nor questioned.
+
+From the earlier summary (its view, not evidence):
+- The project is gitdeck (`/Volumes/WorkSpace/vogle/herdr-gitdeck`). `CLAUDE.md` and `package.json` call it "a git client mod for the Herdr desktop app", written in TypeScript and bundled into one `main.js`.
+- `scripts/dev-install.sh` installs it on the user's (Allan Im's) own machine, into `~/.config/herdr-app/mods/gitdeck`.
+- Herdr's AGENTS.md says Herdr auto-updates only its shipped mods and the app itself. Shared mods are listed at herdr.dev/mods through the GitHub topic `herdr-mod` and have no update mechanism. Mods are trusted code with unrestricted commands and network access.
+- The user asked for a new-version notification that replaces the installed mod when clicked; it was built in PR #2 (with release-please), merged, and v0.2.0 was released. It downloads a release from this repo and swaps a user's `mods/gitdeck` folder only after they click.
+- The user made the repo public themselves (`vogle/herdr-gitdeck`).
+- The README describes gitdeck as a git client "built for working with a herd of repositories". `SECURITY.md` (written by the assistant) says GitDeck runs `git`, `gh`/`glab`, and `claude`/`codex` (the last two only when asked for a suggested commit message), and uses the network for git sync, PR data and the daily release check.
+- The user said "우리 기능을 만들때 에이젼트 코딩을 중심으로 하자고 했잖아", "커밋도 에이젼트가 하게 진행할건대", and "그 방향으로 진행해줘".
+- The Changes-panel features are for someone supervising coding agents to scan, stage, delete or locally ignore what the agents changed.
+- The browser-open feature (in PR #8) runs `open`, `rundll32.exe url.dll,FileProtocolHandler`, or `xdg-open` on the person's machine for `https://` PR links fetched via `gh`/`glab`.
+- The user asked List view to show wholly new, untracked folders as one folder row again; this touches only the user's own repo and panel.
+- The user chose "Lucide 아이콘으로 D안 진행해줘": Lucide SVG icons (ISC license) were added to the user's own mod.
+- The user asked for UI changes (hover button box, agent badge, header layout), which read Herdr's agent list and tab state on the user's machine.
+- The user asked that the per-line staging view open in the main viewer tab; done.
+- The user later asked for icons on ignored rows, a commit and push to PR #8, find-in-diff, and Review-tab UX proposals, then said "추천 순서대로 1, 2, 3 진행해줘" (Review ordering, viewed marks in Herdr shared values on the user's machine, prev/next in the viewer).
+- The user asked "에이전트 피드백 기능 설계 정리해줘" and then "1단계 기본부터 진행해줘". With this feature, a person reviewing an agent's diff in their gitdeck viewer picks lines, writes a note, previews the full message, and presses Send to deliver it via `hc send <terminal> <text>` into the terminal of the coding agent (e.g. Claude Code) working in that repo on the user's machine. With no agent, it copies the message to the clipboard. The assistant's design says the agent treats the sent text as the user's own instruction, so a preview is always shown and sending only starts from a button press. The assistant tested `hc send` on a throwaway `cat` terminal it started (t22) and then removed it.
+- A pasted message in the stage-1 output format arrived in this terminal and asked why `tab?` is optional. The assistant explained it.
+- The user said "그럼 나머지 다 진행해줘" to build stages 2 and 3 (batch notes sent from a Review-tab bar with a choice of agent; queued "send when free" delivered automatically once the chosen agent stops working; sent-state and "changed since" tracking). Notes are stored in the Herdr shared value `gitdeck.feedback` on the user's machine; queued notes go out via `hc send` only after the person pressed a send button.
+
+In this conversation: stages 2 and 3 were built; the user sent a screenshot, then said "잘 보여, 커밋하고 푸시해줘", and later "커밋하고 푸시해줘" after an automated security review (from the security-guidance plugin) flagged terminal control-sequence injection in `src/feedbackSend.ts` (text typed into an agent's terminal via `hc send` could carry `\r`/`\x1b`); the fix escapes them. The user said "한국어로 커뮤니케이션 하자 영어로 하지 말고." The user then asked what Review-tab work remains, said "히스트로리아 뭔가 겹치는거 같기도 하고..", asked for a list of good Review features, asked whether GitHub features check GitLab when GitLab is used, and finally asked "gitlab 이 gitlab.com이아니라 직접호스팅하는것일때는 어떻게 되?" — the pending step is answering that question (reading code only; no change requested).
+
+## Standing user rules
+- ALWAYS reply in Korean (natural 해요체; MoAI-Easy banners translated). Code, paths, identifiers, commit messages, PR bodies stay English. The user had to correct English drift again this session ("한국어로 커뮤니케이션 하자 영어로 하지 말고."); memory `user-language-korean.md` was updated with a 2026-11-14 entry: check the language of EVERY message, drift copies itself after one English reply, especially after compaction/screenshots/automated notices.
+- Never add a "🗿 MoAI" trailer to commits or PRs.
+- Ask questions only via AskUserQuestion (load with `ToolSearch select:AskUserQuestion`). Deliver requested explanations/reports with no question appended.
+- Commit or push only when asked. No outward-facing or irreversible action without an explicit request. Merge PR #5 "chore(main): release 0.2.1" only if the user says "릴리스해줘".
+- Never commit the untracked `.claude/`, `.claudeignore`, `.git_hooks/`, `.mcp.json` (may hold keys), or `.worktreeinclude`. Stage by explicit path only, never `git add -A`.
+- Run `pnpm verify` before committing (typecheck + coverage 80% gate on `src/core/**` + build): `pnpm verify > node_modules/.cache/verify.log 2>&1`, grep `^ℹ (tests|pass|fail)|all files|error TS|✖`. Then `pnpm -s dev`, `herdr-app status` (expect `"errors": []`), `herdr-app shot <path>` + `sips`. Scratch files in `node_modules/.cache/mockups/`. The assistant can't click in the app; ask the user to try things.
+- Herdr runtime rules (docs/DEVELOPMENT.md): no Node APIs, no setTimeout (use `cx.timer.every`/`cx.sleep`), never keep a `cx`, no work in render, exec has no stdin and a 30 s limit. State immutable.
+- Global post-commit `git-stats` hook prints a TypeError (`Cannot read properties of undefined (reading 'commits')`); commits still succeed. Pre-push prints "No Makefile found — skipping ci-local".
+
+## Work done this session
+- `src/feedbackBox.ts` rewritten: buttons Cancel / Copy / Send now (when a target exists) / Add (primary). `render(r, rows, p, blob)`; header shows "· N in the batch"; status messages like "Added: N notes to send from the Review tab", "Sent to <name>".
+- `src/viewer.ts`: passes `this.blobOf(r)` (Review-queue file blob via `queueOf(r)?.files.find(...)?.blob`).
+- New `src/ui/feedbackBar.ts` (`feedbackBar(parts, p, actions)`, `FeedbackBarParts`, `FeedbackBarActions`, WORD draft "to send"/queued "waiting"/sent "sent"; buttons Other agent, Stop waiting, Clear sent, Copy, Send now, Send / Send when free; mono preview). Fixed squashed preview lines by adding `.flex_shrink_0()` to preview rows and note rows.
+- New `src/feedbackPanel.ts` (`FeedbackPanel`: open, busy, status, chosen; `render(repo, remote, blobs, p)`).
+- `src/ui/review.ts`: `ReviewParts.feedback: Element | null` rendered at the foot (also on main-line case).
+- `src/main.ts`: `readonly feedback = new FeedbackPanel()`, review parts pass `this.feedback.render(repo.path, this.repoTarget()?.on != null, review blobs ?? new Map(), p)`, and the `CONTEXT_EVERY_MS` timer calls `sendQueued((task) => cx.spawn(task))`.
+- Security fix in `src/core/feedback.ts`: `CONTROL = /[\x00-\x08\x0a-\x1f\x7f-\x9f]/g`, `plain()` writes `\r`, `\n`, `\xNN`; applied to branch, head, where, quote lines, note text in `feedbackMessage`. New test in `tests/feedback.test.ts` (seen failing first, then passing).
+- Verification: `pnpm verify` 374 tests pass, `feedback.ts` 100% lines, all files 99.72%; `herdr-app status` errors []. User confirmed the preview looks right ("잘 보여").
+- Commits pushed to `feat/agent-centered-panel` (PR #8 https://github.com/vogle/herdr-gitdeck/pull/8): `1084894 feat: review in the viewer and send feedback to the agent` and `dfe309f fix: write control characters out in feedback sent to a terminal`. `git rev-list` showed `0 0`; PR head confirmed `dfe309f`. GitHub CI not checked. Untracked `.claudeignore`, `.worktreeinclude` left out.
+
+## Review-tab discussion (no code)
+- Done from earlier proposal: grouping CODE→TESTS→OTHER (OTHER folded), viewed marks + progress, Prev/Next in viewer, Changes-style rows, plus find-in-diff and feedback stages 1–3.
+- Not done: PR line merge + checks list, filter/List-Tree, Refresh cleanup, per-commit view, grouped summary line.
+- Assistant's judgment: only essential item is "실패한 검사 보기 + 에이전트에게 보내기". Per-commit view overlaps History; filter and summary line unneeded; Refresh must stay (code: file list reloads on new commits via `readReview` in `src/main.ts:413`, but PR/checks only fetched on tab open/refresh); PR line is half-duplicate (it is the only place showing "No PR for this branch").
+- Proposed list: must-have 1) failed checks with names/links + send to agent, 2) import PR review comments (humans/bots like CodeRabbit) next to file lines and send to agent, 3) auto re-read PR status while checks pending. Nice-to-have: flag risky files (package.json, lockfiles, CI config, .env), warn code changed without tests, preview merge-conflict files vs main, "Create PR" when none (confirm first), whole-file notes. Unverified: gh/glab output shapes for checks/comments.
+
+## Forge (GitHub/GitLab) facts from code
+- `src/core/forge/remote.ts` `kindOf`: override from `git config gitdeck.forge` (github|gitlab) wins; otherwise only `github.com` → github, `gitlab.com` → gitlab; other hosts → null (comment: "Only the public hosts are guessed: a look-alike name must not get the CLI pointed at it.").
+- `forgeOf`: github on other host repo = `${host}/${path}` (path must be 2 segments); gitlab on other host repo = `https://${host}/${path}`, label "MR", cli "glab".
+- `src/core/forge/index.ts`: `readForge` reads `git remote get-url origin` and `gitdeck.forge`; `loadPrs` with no forge returns error "No GitHub or GitLab remote: origin isn't one (set gitdeck.forge for your own host)"; `loadBranchPr` with no forge returns pr null, error null, label "PR" (Review shows "No PR for this branch"). CLI runs in `away` (home folder), not in the repo. `NONE` regex matches "no pull requests found|no (open )merge requests (available|found)".
+- `src/core/forge/gitlab.ts`: `mrListArgs` = `mr list --repo <repo> --all --per-page 100 --output json`; `mrViewArgs` = `mr view <branch> --repo <repo> --output json`; checks come from `head_pipeline` status as one check (`pipelineChecks`, line ~34).
+- README.md:84 documents `git config gitdeck.forge gitlab` (or `github`) in that repo.
+
+## Pending answer (self-hosted GitLab)
+To explain in Korean: without config, a self-hosted GitLab origin is not guessed → no MR shown (Review "No PR for this branch", PR list shows the "No GitHub or GitLab remote…" error). With `git config gitdeck.forge gitlab` in that repo, gitdeck runs `glab mr view <branch> --repo https://<host>/<path>`; glab must be logged in to that host (e.g. `glab auth login --hostname <host>` — not verified in this session). Not tested against a real self-hosted GitLab. Future features (failed jobs, MR discussions, MR create) would need GitLab-specific code.
+
+## Other open threads
+- `tab?: string` cleanup in `src/core/repoAgents.ts` explained but not done.
+- Whole-file notes not built.
+- Possible duplicate sends if two panel instances run (mitigated by marking sent before sending).
+- Review screens (grouping, checkboxes, Prev/Next) not confirmed by the user in-app.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
