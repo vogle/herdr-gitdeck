@@ -1,0 +1,184 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+1. Primary Request and Intent:
+   - Always reply in Korean, in MoAI-Easy colloquial style. The user once corrected me: "한글로 말하라고..".
+   - Earlier work, all done and uncommitted:
+     - Narrower gap between author and date.
+     - Saving the detected forge to `gitdeck.forge`.
+     - History reloads when the remote config changes.
+     - The avatar feature, enabled with `git config gitdeck.avatars true`. It is currently on in the herdr-gitdeck repo's local config.
+   - Latest request, in the user's words: "history 에서 커밋된걸 클릭하면, [Image #9] 이렇게 뜨는데. fork 처럼 UI를 바꿔줄래, [Image #10] 그리고 위에 매뉴가 많은대 이거 다 필요할까? 9개나 되는대".
+     - Image 10 is Fork's layout:
+       - Tabs: Commit / Changes / File Tree.
+       - An AUTHOR block with a large avatar, name, email and date.
+       - SHA and PARENTS rows, with parent links.
+       - The message, then the file list.
+   - The Fork-style redesign is done.
+   - For the 9 buttons, the user chose "오른쪽 클릭 메뉴로 (권장)":
+     - Remove the button bar above the commit details.
+     - Move the actions into a right-click menu on graph commit rows, like Fork.
+   - Commit rules:
+     - Ask with AskUserQuestion before any commit or push.
+     - Stage explicit paths only.
+     - Never commit `.claudeignore` or `.worktreeinclude`.
+     - No "🗿 MoAI" trailer.
+
+2. Key Technical Concepts:
+   - Herdr mods run in QuickJS: no Node APIs, and no `URL` global.
+   - gpui-kit elements, plus `h_flex`, `v_flex` and `v_virtual_list` from gpui-base.
+   - Virtual list rows can't hold handlers. Use the list-level handlers instead:
+     - `on_item_click(key, cx)`.
+     - `on_item_secondary_click(key, event: MouseButtonEvent, cx)`, which fires on a right-press over a row.
+     - The press then bubbles to the elements around the list. An element there gets its own `local_position` via `on_mouse_down("right", e => e.local_position)`.
+   - `MouseButtonEvent` has `{ button, click_count, position, local_position?, bounds?, modifiers }`.
+   - `MouseButton` is `"left" | "right" | "middle"`.
+   - `on_mouse_down_out(handler)` closes a surface you drew yourself when the user presses outside it.
+   - There is no built-in menu component, so the menu must be drawn by hand as an absolute overlay.
+   - Verification loop:
+     1. `pnpm verify` for typecheck, tests, coverage and build.
+     2. `pnpm -s dev` to install the mod.
+     3. `herdr-app status` for errors.
+     4. `herdr-app shot <file>` for a screenshot.
+     5. `herdr-app do gitdeck.tab:history` to switch tabs.
+   - Selecting a commit needs a click. Use `orca computer click --app dev.herdr.app --x <pt> --y <pt> --no-screenshot --json`.
+     - Window coordinates are in points: the window is 1920×1050 at (0,30).
+     - Screenshot pixels are 3840×2100, so a point is the original pixel divided by 2.
+     - In the History tab, the "fix: blame a deleted…" row is at about (1595,287).
+     - With a commit open, the parent link is at about (1521,329).
+   - Crop screenshots with `sips -c 1000 1000 --cropOffset 50 2840 in.png --out out.png`.
+   - Reinstalling with `pnpm dev` reloads the mod and resets it to the Changes tab.
+
+3. Files and Code Sections:
+   - **`src/ui/details.ts`** (modified, Fork-style detail view)
+     - Imports `authorBadge` from "../core/graph/rowText.ts".
+     - `DetailActions` gains `jump: (hash: string, cx: Context) => void;`. `HistoryActions` already had `jump`, so main.ts needed no change.
+     - `bar(p, ...buttons)` now holds the tab buttons. The old `line()` helper was removed.
+     - New helpers:
+       - `label(text, p)`: right-aligned, 64 wide, text size 10, dim colour.
+       - `face(name, picture, p)`: a 40×40 image with rounded(6), or an initials box in the lane colour.
+       - `person(role, name, email, time, picture, p)`: the avatar column, then the role, name with email, and `dateTime`.
+       - `divider(p)`: `div().h(1).mx(10).my(8).bg(p.border)`.
+     - `commitBody(view, p, actions, avatar)`:
+       - Builds the head: the AUTHOR person, plus a COMMITTER person if it differs.
+       - Then the SHA row in monoFont.
+       - Then the PARENT/PARENTS row. Each parent is a clickable `div().id(\`parent:${i}\`)`: mono, `p.info`, underlined, `on_click` calls `actions.jump(h)`, showing `h.slice(0,7)`.
+       - Then a divider, the message (subject `font_medium` with `pl(74)`), another divider, "N files changed", and the file rows.
+       - The body is unwrapped so the panel width wraps it:
+         ```ts
+         const body = rest.join("\n").trim().split(/\n{2,}/).map((par) => par.replace(/\n(?![-*•]|\d+[.)])/g, " ")).join("\n\n");
+         ```
+       - The body uses `text_xs`, `p.muted` and `pl(74)`, with a proportional font, not mono.
+     - `details(view, status, p, actions, avatar = () => null)`:
+       - Tabs for a commit: `textButton("details-commit","Commit",p,()=>{},true)`, `textButton("details-tree","File Tree",p,actions.browseTree)`, then a `div().flex_1()` spacer, then `textButton("details-close","← Back",...)`.
+       - Uncommitted changes show the label "Uncommitted changes" instead.
+   - **`src/ui/historyPane.ts`** (modified)
+     - Changed to `.child(details(view, parts.status, p, actions, parts.avatar) ?? div())`.
+     - `historyTab` puts `commitBar(parts.ops.parts, p, parts.ops.actions)` above `details` when a commit is open.
+     - In wide mode, the list and the detail sit side by side. In narrow mode, the detail replaces the list.
+   - **`src/ui/ops.ts`** (read, not yet modified)
+     - `commitBar` renders, in order:
+       - The rebase `planEditor`.
+       - `namingRow` for a new branch or tag.
+       - The reset mode row (soft, mixed, hard).
+       - Otherwise, a button row from `splitActions(actions, expanded)` with a `⋯ N more` toggle.
+     - `LABEL` maps every `ActionKind` to its text.
+     - `CONFIRM` lists the kinds that need a second click: rebase, delete-branch, stash-drop, stash-pop.
+     - Exports `actionKey(a)` (`${a.kind}:${a.ref ?? ""}`) and `needsConfirm(kind)`.
+     - `OpsActions.commitAction(action, cx)`, `toggleMore`, `reset(mode)` and `dismiss` already exist.
+   - **`src/core/opsView.ts`** (read)
+     - `commitActions(c: CommitFacts)` lists, in order:
+       - checkout-commit (if not HEAD), branch, tag, cherry-pick (if not HEAD), revert.
+       - merge, rebase and edit-after, if not HEAD and on a branch.
+       - reset.
+       - Then per ref: checkout-branch, merge, rebase or delete-branch for a branch; checkout-remote for a remote.
+       - A stash gives stash-apply, stash-pop and stash-drop instead.
+     - `splitActions` and the `COMMON` set decide what shows while More is closed.
+   - **`src/ops.ts`** (read)
+     - The commit list is built at line 81 from the selected commit.
+     - `parts()` returns `{view, ahead, behind, commit: this.commitList(), name, flow}`.
+     - `commitAction` is at line 140, and `actions()` at line 215.
+   - **`src/ui/graph.ts`** (read)
+     - `GraphActions { pick, more }`.
+     - `graphList(view, p, scroll, actions, avatar)` uses `v_virtual_list(GRAPH_LIST, …)`, keyed by hash or `MORE`, with `.on_item_click`. It is wrapped in `div().relative()` with a Scrollbar.
+   - **`src/main.ts`** (about 900 lines, over the 800-line guideline)
+     - Builds the history parts and actions. `jump: (hash, cx) => this.jump(hash, cx)` is at about line 687.
+
+4. Errors and fixes:
+   - After `pnpm dev` reinstalled the mod, my click landed on a Changes row, because the mod had reset to the Changes tab. I re-ran `herdr-app do gitdeck.tab:history` and clicked again. Nothing was harmed.
+   - Commit bodies broke awkwardly: the author's hard wraps at about 72 columns combined with the panel's own wrapping. I fixed it by unwrapping single newlines within paragraphs, while keeping list lines.
+
+5. Problem Solving:
+   - Fork redesign evidence:
+     - `pnpm verify` exited 0: 428 tests, 428 passed, 0 failed, 99.65% coverage.
+     - `herdr-app status` showed `"errors": []`.
+     - Screenshots cd5c and cd6c showed the avatar, AUTHOR block, SHA, PARENT link and unwrapped body.
+     - Clicking parent `d3a055c` jumped to that commit ("fix: read the PR when the Review tab shows another repo").
+   - Not done:
+     - Fork's "Changes" tab, a whole-commit diff, was left out.
+     - The two-parent merge display was not checked.
+   - Design question for the menu: right-clicking must not open the commit details. In narrow mode, opening the details replaces the list, so the menu would vanish. The menu therefore needs actions for the right-clicked hash without selecting it, or a deliberate selection-keeping approach. Today `commitList` is computed only from the selected commit.
+
+6. All user messages:
+   - Earlier messages are listed in the previous summary:
+     - Spacing.
+     - "한글로 말하라고..".
+     - GitLab icon.
+     - "설정만 안내".
+     - Forge setting.
+     - "gh glab 어느쪽인지 판별을 한다면 판별후에 git config gitdeck.forge 을 지정해주면 좋을것 같은데".
+     - Icon not updating.
+     - "유저 사진 보여주는거 코스트가 많이 들까?".
+     - "모드 폴더에 파일 저장되는지 먼저 시험해봐".
+     - "그럼 유저 사진 보여주는 거 구현해줘".
+   - "history 에서 커밋된걸 클릭하면, [Image #9] 이렇게 뜨는데. fork 처럼 UI를 바꿔줄래, [Image #10] 그리고 위에 매뉴가 많은대 이거 다 필요할까? 9개나 되는대"
+   - The AskUserQuestion answer: "오른쪽 클릭 메뉴로 (권장)".
+
+7. Pending Tasks:
+   - Implement the right-click context menu for commit actions and remove the action button bar from the commit detail view.
+   - Keep `commitBar` only for the modes that need inline UI:
+     - Naming a new branch or tag.
+     - The reset mode picker.
+     - The rebase plan editor.
+     - Possibly confirm states.
+   - Then verify:
+     1. `pnpm verify`.
+     2. `pnpm -s dev`.
+     3. `herdr-app status`.
+     4. A screenshot after an orca right-click: `--mouse-button right` at the commit row point.
+     5. Report in Korean.
+   - Nothing is committed yet. Ask before committing.
+
+8. Current Work:
+   I had just started the right-click menu. The last command was a grep showing:
+   - `src/ops.ts:81` returns `commitActions({...})` for the selected commit.
+   - `src/ops.ts:95` builds `parts()` with `commit: this.commitList()`.
+   - `src/ops.ts:140` is `commitAction(a, cx)`.
+   - `src/ops.ts:215` is `commitAction: (a, cx) => this.commitAction(a, cx)`.
+   - `MouseButton = "left" | "right" | "middle"`.
+
+   The plan I had worked out:
+   - In `graphList`, add `.on_item_secondary_click((key, e, cx) => key !== MORE && actions.menu?.(key, cx))`.
+   - On the list's container in `historyTab`, add `on_mouse_down("right", e => actions.menuAt(e.local_position, cx))` to get the position within the pane.
+   - Store `menu: {hash, x, y} | null` in main.ts or ops.ts.
+   - Draw an absolute-positioned menu inside the relative list container:
+     - One row per action, using the `LABEL` texts.
+     - A second click for kinds in `CONFIRM`.
+     - Close it with `on_mouse_down_out` and after an action runs.
+   - Compute the actions for the right-clicked hash without opening the details, so `ops.ts` needs a `commitList` that takes a hash.
+   - Make `commitBar` return null in the plain button state.
+   - The `splitActions`/More toggle may become unused. Decide whether to remove it, and its tests.
+
+9. Optional Next Step:
+   Continue building the right-click menu the user picked ("오른쪽 클릭 메뉴로 (권장)"). Its option description was: "Fork처럼 상세 화면 위의 버튼 줄을 없애요. 9개는 그래프에서 커밋을 오른쪽 클릭하면 나오는 메뉴로 옮겨요."
+   1. Read `src/ops.ts`, lines 70–100 and 140–225, to see how `commitList` derives `CommitFacts` from the selection.
+   2. Make the action list computable for any hash.
+   3. Add `on_item_secondary_click` in `graph.ts` and the menu state and overlay.
+   4. Strip the plain button row from `commitBar`.
+   5. Then verify with tests and a screenshot after an orca right-click on a commit row.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
