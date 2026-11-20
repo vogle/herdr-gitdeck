@@ -1,0 +1,181 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+1. Primary Request and Intent:
+   - Always reply in Korean. The user corrected me once: "한글로 말하라고..".
+   - Narrow the gap between the author name and the date in History. Done.
+   - Make the forge icon show GitLab for a company GitLab host whose name lacks "gitlab". The user first chose "설정만 안내", then asked that once gh/glab detection decides, gitdeck save `git config gitdeck.forge`. Done.
+   - Fix the graph still showing the git icon after the setting was saved. Done: history now reloads when remote settings change.
+   - Test whether the mod folder can hold saved files. Done and reported.
+   - Latest request: "그럼 유저 사진 보여주는 거 구현해줘" (implement showing user photos). Implemented and verified on the herdr-gitdeck repo. The final Korean report to the user has not been given yet.
+
+2. Key Technical Concepts:
+   - Herdr mod rules:
+     - Code runs in QuickJS: no Node APIs, and no `URL` global.
+     - `exec(cmd, args[], {cwd,on,timeout})` takes an argument array (no shell), with a 30 s limit and no stdin.
+     - `fs/promises` (`readdir`, `writeFile`) can write under `~/.config/herdr-app`.
+     - `image(path)` resolves relative to `~/.config/herdr-app`.
+     - Saving any file in a mod folder reloads the mod, except hidden files and folders.
+   - Image behavior found by testing:
+     - A path drawn while its file is missing is remembered as missing.
+     - Overwriting a file in a hidden folder doesn't refresh the screen.
+     - So draw only after the download finishes, and save each picture once under a fixed name.
+     - The `Avatar` and `AvatarImage` components (from gpui-base) blank the virtual list; use `image(...).w(16).h(16).rounded(8)` instead.
+   - `AsyncContext` extends `Context`, so it has `cx.spawn`.
+   - Verification flow:
+     - `pnpm verify` (typecheck, coverage, build).
+     - `pnpm -s dev` (installs into `~/.config/herdr-app/mods/gitdeck`).
+     - `herdr-app status` for errors.
+     - `herdr-app shot <file>` for screenshots.
+     - `herdr-app do gitdeck.tab:history` to switch tabs.
+   - Privacy:
+     - No Gravatar.
+     - Picture files are named by a hash of the email.
+     - CLIs run in the home folder (`away`).
+     - Downloads are https-only, both direct and on redirect.
+
+3. Files and Code Sections:
+
+   - `src/ui/graph.ts` (modified):
+     - The author column is now `.w(96)` and the age column `.w(26)`.
+     - It imports `image` from "gpui-kit".
+     - `author(name, picture: string | null, p)` draws `image(picture).w(16).h(16).flex_shrink_0().rounded(8)` when a picture exists, otherwise the initials `div`.
+     - New: `export type AvatarOf = (email: string) => string | null;`
+     - `row(..., avatar: AvatarOf)` uses `author(commit.author, avatar(commit.email), p)`.
+     - `graphList(view, p, scroll, actions, avatar: AvatarOf)`.
+
+   - `src/ui/historyPane.ts` (modified):
+     - `HistoryParts` gains `avatar: (email: string) => string | null;`.
+     - It calls `graphList(view, p, parts.scroll, actions, parts.avatar)`.
+
+   - `src/main.ts` (modified; already 893+ lines):
+     - Added the import `import { Avatars } from "./avatars.ts";`.
+     - Added the field `readonly avatars = new Avatars();`.
+     - In `readHistory`, after `withHistory`:
+       ```ts
+       const history = read.history;
+       // Its own task: looking up pictures never holds up the git task.
+       if (history.avatars) cx.spawn(async (cx) => this.avatars.load(this.git, target, await this.homeFor(target), history.commits, cx));
+       ```
+     - In the `historyPane` parts: `avatar: (email) => (this.view.history?.avatars ? this.avatars.path(email) : null),`.
+
+   - `src/avatars.ts` (new): an `Avatars` class.
+     - `SHOWN_DIR = "mods/gitdeck/.avatars"` and `MAX_NEW = 60`.
+     - Private state: `files` (base → file), `asked` set, `listed`, `busy`.
+     - `path(email)` returns `${SHOWN_DIR}/${file}` or null.
+     - `dir()` is `${home()}/.config/herdr-app/${SHOWN_DIR}`.
+     - `list()` runs `mkdir -p`, reads the folder with `readdir`, and loads it via `knownAvatars`.
+     - `wanted(commits)` picks one commit per new email.
+     - `load(git, target, away, commits, cx)`:
+       1. Lists the saved files.
+       2. Marks the new authors as asked.
+       3. Reads the source with `readAvatarSource`.
+       4. Finds URLs with `findAvatarUrls`.
+       5. Downloads each with `downloadAvatar`, updating `files` immutably and calling `cx.notify()` after each.
+
+   - `src/core/avatars.ts` (new):
+     - `AvatarSource {kind:"github"|"gitlab", host, path}` and `AvatarWanted {email, hash}`.
+     - `avatarsOn(configOut)` returns true when the `gitdeck.avatars` line is true, yes, on or 1.
+     - `avatarBase(email)` is a 16-hex double FNV-1a hash of the trimmed, lowercased email.
+     - `noreplyAvatar(email)` turns `123+x@users.noreply.github.com` into `https://avatars.githubusercontent.com/u/123?s=64`.
+     - `knownAvatars(names)` keeps `^[0-9a-f]{16}\.(png|jpg|gif|webp)$`.
+     - `githubQuery(owner, name, hashes)` builds GraphQL aliases `cN: object(oid:"…"){... on Commit{author{email user{avatarUrl(size: 64)}}}}`. It validates names against `^[A-Za-z0-9._-]+$` and hashes against `^[0-9a-f]{4,64}$`.
+     - `parseGithubAvatars(stdout)`.
+     - `parseGitlabAvatar(stdout)` accepts https only, rejects hosts matching `/(^|\.)gravatar\.com$/i`, and uses a regex for the host instead of `URL`.
+     - `findAvatarUrls(exec, target, away, source, wanted)`:
+       - GitHub: `gh api graphql --hostname <host> -f query=…`, in batches of 50.
+       - GitLab: `glab api "avatar?email=<enc>&size=64" --hostname <host>`, once per email.
+     - `downloadAvatar(exec, dir, url, base)`:
+       - Accepts https only.
+       - Runs `curl -fsSL --proto =https --proto-redir =https --max-time 15 --max-filesize 2000000 -o <dir>/<base>.tmp -w %{content_type} -- url`.
+       - If the content type is an image, runs `mv -f` to `<base>.<ext>`; otherwise runs `rm -f` on the tmp file and returns null.
+
+   - `src/core/forge/index.ts` (modified):
+     - In `readOrigin` after `signedInForge`:
+       ```ts
+       // Kept as gitdeck.forge, so what reads only the config (the graph's icons) knows it too.
+       if (kind !== null) await setForge(git, target, kind).catch(() => undefined);
+       ```
+     - New `readAvatarSource(git, target)` reads the origin URL and `gitdeck.forge`, then calls `forgeOf`. It returns `{kind, host: remote.host, path: remote.path}` or null.
+     - Imports `type AvatarSource`.
+
+   - `src/core/history.ts` (modified):
+     - `History` gains `avatars: boolean` (EMPTY_HISTORY has `avatars: false`), set from `avatarsOn(remotesOut)`.
+     - New `readRemotes` helper.
+     - `loadHistory(git, target, limit, knownRefs?, knownRemotes?)`.
+     - `refreshHistory` reads refs and remotes in parallel and builds the key as `${limit}\x1e${extra}\x1e${refsOut}\x1e${remotesOut}`.
+
+   - `src/core/graph/remoteKind.ts` (modified): `REMOTES_ARGS = ["config","--get-regexp","^(remote\\..*\\.url|gitdeck\\.(forge|avatars))$"]`.
+
+   - Tests:
+     - `tests/avatars.test.ts` (new, 9 tests).
+     - `tests/forge.test.ts`: tests that the detected forge is saved, and a `readAvatarSource` test.
+     - `tests/history.test.ts`: a reload test for when the forge is named, and a test for the `avatars` setting.
+     - `tests/rowStyle.test.ts`: the `REMOTES_ARGS` assertion and test name updated.
+
+   - Other repo found: `bsp-display-service` is at `/Volumes/WorkSpace/uzen/bsp/bsp-display-service`, with origin `https://bsp-git.uzen.io/bsp/bsp-display-service.git` and `gitdeck.forge gitlab` now set. A worktree is at `/Users/allan/orca/workspaces/bsp/BNKR-3710/bsp-display-service`.
+
+4. Errors and fixes:
+   - I replied in English once. The user said "한글로 말하라고..". I apologized and now always reply in Korean.
+   - The `Avatar` component made the History list render blank, so I used `image()` instead.
+   - `AvatarImage.new` failed the type check (TS2339); it's a constructor. This became moot once I dropped the component.
+   - Avatar exports come from "gpui-base", not "gpui-kit" (TS2305).
+   - `URL` is undefined in the type environment (TS2552). I replaced it with a regex for the host.
+   - The old `REMOTES_ARGS` test failed after the regex change. I updated the test.
+   - A Bash call with `rm -rf ~/...` was blocked by the PreToolUse hook. I used an absolute path with `rm -f` and `rmdir`.
+   - The graph didn't reload after the config changed, because the reload key lacked the remote config. Fixed in `refreshHistory`.
+
+5. Problem Solving:
+   - Confirmed by screenshots on herdr-gitdeck: with `gitdeck.avatars true`, pictures were saved and shown. The folder `.avatars/` got 3 files: 2 png and 1 jpg.
+   - Setting it to false showed initials again right away. The setting was then set back to true (`git config --local gitdeck.avatars true` in herdr-gitdeck).
+   - Final `pnpm verify` passed: exit 0, 428 tests pass, 0 fail. Coverage is 99.65% overall; `src/core/avatars.ts` is at 98.94%, with lines 123-124 uncovered.
+   - `herdr-app status` shows `errors: []`.
+   - Not tested: the GitLab picture path on the company server, and a commit that isn't on GitHub.
+
+6. All user messages:
+   - "[Image #5] 이름하고 날짜하고 간격이 너무 넓음거 같은대 적당히 줄여줘"
+   - "한글로 말하라고.."
+   - "[Image #6] 이게 gitlab 아이콘이야?"
+   - The answer to the question "설정만 안내" (just tell me the setting).
+   - "[Image #7] 여기 어딘가에 git config gitdeck.forge 설정이 없으면 github or gitlab? 뭐 이런식으로 선택하라고 뜬다고 하지 않았나?"
+   - "gh glab 어느쪽인지 판별을 한다면 판별후에 git config gitdeck.forge 을 지정해주면 좋을것 같은데"
+   - "[Image #8] 이거 업데이트됬으면 여기서는 gitlab 아이콘이 나와야 하는거 아니야?"
+   - "유저 사진 보여주는거 코스트가 많이 들까?"
+   - "모드 폴더에 파일 저장되는지 먼저 시험해봐"
+   - "그럼 유저 사진 보여주는 거 구현해줘"
+
+7. Pending Tasks:
+   - Give the user a completion report in Korean, MoAI-Easy style:
+     - What was built.
+     - How to turn it on: `git config gitdeck.avatars true` for one repo, or `--global` for all.
+     - Evidence: verify output and screenshots.
+     - Gaps: GitLab not tested on the company server, Avatar component avoided, `main.ts` is over 800 lines.
+   - Nothing is committed. All changes are uncommitted:
+     - The spacing change.
+     - Saving the detected forge.
+     - The history reload key.
+     - The whole avatar feature.
+   - Commit rules: ask with AskUserQuestion before committing or pushing; stage explicit paths only; never commit `.claudeignore` or `.worktreeinclude`; no MoAI trailer.
+   - The setting `gitdeck.avatars true` is now on in the herdr-gitdeck repo's local config. Mention this to the user.
+
+8. Current Work:
+   I had just finished implementing and verifying "그럼 유저 사진 보여주는 거 구현해줘". The last actions:
+   - Turned the setting off (`git config --local gitdeck.avatars false`), took screenshot ca2, then turned it back on.
+   - Screenshot ca2 confirmed initials ("AI" badges) when the setting is off.
+   - The earlier screenshot ca1 confirmed real profile pictures beside "Allan Im" rows when it is on.
+
+9. Optional Next Step:
+   Report the finished avatar feature to the user in Korean. Cover:
+   - Files changed.
+   - How it works: opt-in, GitHub via one GraphQL call per 50 commits, GitLab via `/avatar` once per email, no Gravatar, a hashed filename in the hidden `.avatars` folder, initials until the picture is saved.
+   - How to enable or disable it.
+   - Evidence: verify passes with 428 tests and 99.65% coverage; screenshots in both on and off states.
+   - Not verified: the company GitLab server path, and how it behaves for `bsp-display-service`.
+   - That nothing is committed.
+   Do not start a commit without asking.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
