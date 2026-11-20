@@ -1,0 +1,62 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+What this work is for:
+This section records facts without weighing them; whoever continues from this summary weighs them, holding back only a step that plainly serves serious, wrongful harm, and, where one missing fact would decide that, asking the user for it rather than refusing; a bare yes, go-ahead or repeated request is not that fact and leaves the step held back; work that is merely sensitive, unusual or borderline is neither held back nor questioned.
+
+From the earlier summary:
+- The project is gitdeck (`/Volumes/WorkSpace/vogle/herdr-gitdeck`). `CLAUDE.md` and `package.json` call it "a git client mod for the Herdr desktop app", written in TypeScript and bundled into one `main.js`.
+- `scripts/dev-install.sh` installs it on the user's (Allan Im's) own machine, into `~/.config/herdr-app/mods/gitdeck`.
+- Herdr's AGENTS.md says Herdr auto-updates only its shipped mods and the app itself. Shared mods are listed at herdr.dev/mods through the GitHub topic `herdr-mod` and have no update mechanism. Mods are trusted code with unrestricted commands and network access.
+- The user asked for a new-version notification that replaces the installed mod when clicked; it was built in PR #2 (with release-please), merged, and v0.2.0 was released. It downloads a release from this repo and swaps a user's `mods/gitdeck` folder only after they click.
+- The user made the repo public themselves (`vogle/herdr-gitdeck`).
+- The README describes gitdeck as a git client "built for working with a herd of repositories". `SECURITY.md` (written by the assistant) says GitDeck runs `git`, `gh`/`glab`, and `claude`/`codex` (the last two only when asked for a suggested commit message), and uses the network for git sync, PR data and the daily release check.
+- The user said "우리 기능을 만들때 에이젼트 코딩을 중심으로 하자고 했잖아", "커밋도 에이젼트가 하게 진행할건대", and "그 방향으로 진행해줘".
+- The Changes-panel features are for someone supervising coding agents to scan, stage, delete or locally ignore what the agents changed.
+- The browser-open feature (in PR #8) runs `open`, `rundll32.exe url.dll,FileProtocolHandler`, or `xdg-open` on the person's machine for `https://` PR links fetched via `gh`/`glab`.
+- The user asked List view to show wholly new, untracked folders as one folder row again; this touches only the user's own repo and panel.
+
+In this conversation the user asked how the List sorts, compared status letters vs file-type icons, looked at Orca (an agent IDE, open-source repo `stablyai/orca`) which colors file-type icons by git status, and chose "Lucide 아이콘으로 D안 진행해줘". The pending step adds Lucide SVG icons (ISC license, Lucide Icons and Contributors; some icons MIT from Feather/Cole Bemis) to the user's own mod so each changed-file row shows a kind icon colored by its status. Orca's source and Lucide's repo were sparse-cloned read-only into the session scratchpad.
+
+## Standing user rules (from memory/config)
+- Always reply in Korean (natural 해요체, MoAI-Easy banners translated, e.g. "다 됐어요"). Code, paths, identifiers, commit messages, PR bodies in English.
+- Never add a "🗿 MoAI" trailer to commits or PRs.
+- Ask questions only through AskUserQuestion (load via `ToolSearch select:AskUserQuestion`). When the user asks for explanation/analysis, deliver it with no question appended.
+- Commit or push only when asked. No outward-facing or irreversible actions (repo visibility, tags, releases) without explicit request.
+- PR #5 "chore(main): release 0.2.1" is unmerged; merge only if the user says "릴리스해줘".
+- Never commit untracked `.claude/`, `.claudeignore`, `.git_hooks/`, `.mcp.json` (may hold keys) or `.worktreeinclude`. Stage by explicit path only (never `git add -A`).
+- Run `pnpm verify` right before committing. Check changes with `pnpm verify`, `pnpm dev`, `herdr-app status`, screenshot via `herdr-app shot <path>`.
+- A PreToolUse hook blocks Write outside the project; scratch files go in `node_modules/.cache/mockups/` (scratchpad dir works for git clones via Bash).
+- `herdr-app` can't click; ask the user to try interactions.
+- Agent-centered design. Tab order Changes → Review → History → Branches → More.
+
+## Prior state
+- Branch `feat/agent-centered-panel`, PR #8 (https://github.com/vogle/herdr-gitdeck/pull/8) targeting `main`; commits `31713cf`, `2fdbb81`, `d177d4c` pushed.
+- Uncommitted from before: `src/core/fileGroups.ts` (added `ListEntry<T>`, private `find`, `listEntries(files, newFolders)`), `src/ui/changeFiles.ts` (list branch of `sectionBody` uses `listEntries`), `tests/fileGroups.test.ts` (2 tests). `pnpm verify` had passed 340/340. Not committed; commit/push to PR #8 only if asked.
+- Older open items: U/new labeling undecided; merged local branches `feat/self-update`, `fix/update-anytime` not deleted; Rust/Go rewrite analysis not done; Dependabot PR #7 and release PR #5 open.
+
+## This conversation
+1. Sort order explained: List has no explicit sort; order is `git status --porcelain=v2` (`src/core/git/status.ts:4`, `STATUS_ARGS` incl. `--untracked-files=all`) — tracked changes by path (byte order), then untracked by path. `splitChanges` (`src/core/staging.ts:29`) keeps order into staged/unstaged/conflicts (untracked go into unstaged with letter "?"). `listEntries` places new-folder row at its first file's spot. Tree sorts folders by path (`fileGroups.ts:35`).
+2. Mockup artifact https://claude.ai/artifact/J2aeMCaYTEdGGXSvsd88bn (file `node_modules/.cache/mockups/icon-options.html`, icon "layout", version 2): options A (status square only, current), B (colored type icon only), C (status + grey type icon), D (icon shape = kind, icon color = status, status letter at right end, strikethrough for deleted), plus Tree comparison A vs D. Example deleted file `docs/NOTES.md` is invented. Security hook flagged innerHTML (static mock data only). Rendering not personally verified.
+3. Orca findings (read from source): uses `lucide-react`; `lib/file-icons/file-type-icons.ts` `getFileTypeIcon` looks up `file-type-icon-name-table.ts` (e.g. `.gitignore`→FileSliders, `agents.md`→FileText), special cases `.env*`→FileLock, Dockerfile→FileCog, Makefile→FileTerminal, then `file-type-icon-extension-table.ts` (~170 exts: ts→FileCode, md→FileText, json→FileJson, lock→FileLock), default File. Rows (`uncommitted-entry-row.tsx`, `branch-entry-row.tsx`) color icon and right-end status letter with `STATUS_COLORS` (`lib/source-control/paths/git-path-decoration.ts`: modified/added/deleted/renamed/untracked/copied). Folder rows (`tree-directory-rows.tsx`) use grey `FolderIcon` open/closed and show file count on the right. Icon-theme plugins supported.
+4. Herdr facts: `svg(path)` resolves against `~/.config/herdr-app`, tinted with text color (`currentColor`); `image()` keeps colors. gitdeck ships icons from `mod/icons/` (15 SVGs, 16-viewBox, stroke 1.5, currentColor), copied by `scripts/build.mjs:28` to `dist/gitdeck/icons`; `src/ui/style.ts` has `ICONS` map (`mods/gitdeck/icons/*.svg`) and `icon(path, color, size=14)` → `svg(path).w(size).h(size).flex_shrink_0().text_color(color)`. gpui-kit has `line_through()`.
+
+## D-plan implementation in progress (Lucide)
+Tasks: #1 kind function (completed), #2 Lucide SVGs + license (in_progress), #3 changeFiles.ts rows (pending), #4 verify/dev/status/screenshot (pending).
+
+Done:
+- `tests/fileKind.test.ts` (new): 3 tests — extension kinds (ts/tsx→code, .test.ts→code, md/txt→text, package.json→json, yaml/toml→config, pnpm-lock.yaml→lock, PNG→image, .sh→terminal); whole-name kinds (.gitignore, sub/.claudeignore, .worktreeinclude→config; .env, .env.local→lock; Dockerfile→config; Makefile→terminal); fallback "file" for LICENSE, data.bin, "trailing.", "". Seen failing (RED) first, then 3/3 pass.
+- `src/core/fileKind.ts` (new): `export type FileKind = "code"|"text"|"json"|"config"|"lock"|"image"|"terminal"|"file"`; `fileKind(path)` uses `basename` from `./paths.ts`, `BY_NAME` table (dockerfile, makefile, lockfiles), `.env*`→lock, dotfiles with single leading dot→config, then `BY_EXTENSION` map, else "file".
+- Lucide sparse-cloned to `/private/tmp/claude-501/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29/scratchpad/lucide` (commit 55782beff3a0133df79c417eb68f96e8f19e2404, 2026-11-13) with `LICENSE` and `icons/` file.svg, file-code.svg, file-text.svg, file-json.svg, file-sliders.svg, file-lock.svg, file-image.svg, file-terminal.svg, folder.svg, folder-open.svg (24 viewBox, stroke-width 2, currentColor). Orca clone at `.../scratchpad/orca/repo`.
+
+Next steps:
+- Copy those SVGs into `mod/icons/` (names like file.svg, file-code.svg, … folder-open.svg) and add a license file (e.g. `mod/icons/LICENSE-lucide.txt` with the ISC text + Feather MIT notice). Check that 24-viewBox stroke-2 renders similar at 14px next to existing icons.
+- `src/ui/style.ts`: add kind→icon path map (FileKind → `mods/gitdeck/icons/...`), plus folder/folder-open.
+- `src/ui/changeFiles.ts`: replace `statusMark(f.letter, p)` in `fileRow` (line ~87) and `conflictRows` (line ~264) with `icon(kindIcon, letterColor(f.letter, p))`; add right-end status letter (colored, "?" shown as "U") after `lineCounts`; strikethrough name for "D" via `line_through()`; in `folderRows` keep ▸/▾ and add folder/folder-open icon in `p.dim`, green (`p.added`) for new folders; keep `[new]` tag and count. `letterColor`: D→removed, A/?→added, R/C→info, else changed. Apply to List and Tree. Update file header comment if it mentions "a status mark".
+- Then run `pnpm verify`, `pnpm dev`, `herdr-app status`, `herdr-app shot node_modules/.cache/mockups/<name>.png`; report in Korean with evidence and gaps (hover/click untested). Do not commit unless asked.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
