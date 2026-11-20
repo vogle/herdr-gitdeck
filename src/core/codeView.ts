@@ -30,33 +30,17 @@ export function isMarkdown(path: string): boolean {
   return ext !== null && MARKDOWN.has(ext);
 }
 
-const FENCE = /^\s{0,3}(`{3,}|~{3,})/;
-/** `![alt](url)` or `![alt][ref]`, not after a backslash. */
-const MD_IMAGE = /(^|[^\\])!\[([^\]]*)\](?=[([])/g;
-const HTML_IMAGE = /<img\b[^>]*>/gi;
-
-function htmlImageLink(tag: string): string {
-  const attr = (name: string): string => new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i").exec(tag)?.slice(1).find((v) => v !== undefined) ?? "";
-  return `[${attr("alt") || "image"}](${attr("src")})`;
-}
+const ZWSP = "\u200b";
+/** HTML elements that can load something from a URL; any other tag (p, b, br, a, details) stays HTML. */
+const FETCHING_TAG = /<(\/?)(?=(?:img|image|picture|source|video|audio|track|svg|use|math|iframe|frame|frameset|object|embed|link|style|script|input|meta|base)\b)/gi;
 
 /**
- * Markdown with its pictures drawn as links: a file from the repo may point at
- * any server, and opening it to read must not fetch from there. Code blocks
- * are left as written.
+ * Markdown that opening fetches nothing from: a file from the repo may point at
+ * any server. `![` becomes `!` + a zero-width space + `[`, so a picture is drawn
+ * as a link (opened only on a click), and a tag that could load a URL loses its
+ * `<`, so it shows as text. Nothing is rebuilt from the file's own text, and
+ * where the space lands inside code it can't be seen.
  */
 export function markdownWithoutImages(markdown: string): string {
-  let fence: string | null = null;
-  return markdown
-    .split("\n")
-    .map((line) => {
-      const mark = FENCE.exec(line)?.[1];
-      if (mark && (fence === null || (mark[0] === fence[0] && mark.length >= fence.length))) {
-        fence = fence === null ? mark : null;
-        return line;
-      }
-      if (fence !== null) return line;
-      return line.replace(MD_IMAGE, (_m, before: string, alt: string) => `${before}[${alt || "image"}]`).replace(HTML_IMAGE, htmlImageLink);
-    })
-    .join("\n");
+  return markdown.replace(/!\[/g, `!${ZWSP}[`).replace(FETCHING_TAG, `<$1${ZWSP}`);
 }
