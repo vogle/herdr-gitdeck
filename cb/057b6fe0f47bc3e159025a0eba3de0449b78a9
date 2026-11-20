@@ -1,0 +1,39 @@
+tests/inspect.integration.test.ts
+  s_7cdf9208076a99::t_3badff1b93cc52 27,99,122
+README.md
+  s_7cdf9208076a99::t_24a0d7d8d27b84 12-14,34,68,134,137-138
+src/core/historyView.ts
+  s_7cdf9208076a99::t_1dcea7ea6865fa 41,58,100
+src/core/opsView.ts
+  s_7cdf9208076a99::t_25cde7ba5b44a6 8-9
+src/core/panel.ts
+  s_7cdf9208076a99::t_64c88c01a90cf0 2,11,13-16,21,93
+src/ops.ts
+  s_7cdf9208076a99::t_908cbae687b887 103,242
+src/ui/historyPane.ts
+  s_7cdf9208076a99::t_80ac2fbb19cbf3 64
+src/ui/ops.ts
+  s_7cdf9208076a99::t_5535aecdb1ba5d 124
+src/viewer.ts
+  s_7cdf9208076a99::t_fadbe928e1ea88 305-307
+tests/historyView.test.ts
+  s_7cdf9208076a99::t_947a0ad1cfa1cb 5,81
+tests/panel.test.ts
+  s_7cdf9208076a99::t_58f7a0f9e16c29 41-44,143,149-150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "cb057b6fe0f47bc3e159025a0eba3de0449b78a9",
+  "prompts": {},
+  "sessions": {
+    "s_7cdf9208076a99": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c36cb7dc-d64c-445a-9a8d-ccb9a1219a29",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Allan Im <allan@vogle.com>"
+    }
+  }
+}
