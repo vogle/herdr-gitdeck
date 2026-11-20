@@ -1,0 +1,3 @@
+<task-notification>
+<summary>Commit security review found 2 issues: Injection in sanitizer output (remote resource fetch) in src/core/codeView.ts; Parser differential / security control bypass (remote resource fetch) in src/core/codeView.ts</summary>
+</task-notification>
