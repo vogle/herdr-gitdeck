@@ -1,0 +1,1 @@
+~/.claude/projects/<폴더>/*.jsonl 이걸 같이 커밋해서 연결한다는건가?
