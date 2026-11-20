@@ -9,6 +9,8 @@ import { allChosen, type Choice } from "../core/conflict.ts";
 import type { AgentNote } from "../core/repoAgents.ts";
 import type { ChangeCounts } from "../core/lineCounts.ts";
 import type { ChangeFile, Changes } from "../core/staging.ts";
+import type { Stash } from "../core/git/log.ts";
+import { STASH_PUSH, stashEntryLabel, stashKey, stashPrompt, type StashVerb } from "../core/stashes.ts";
 import { monoFont, textButton, type Palette } from "./style.ts";
 import { fileLists, filesBar } from "./changeFiles.ts";
 
@@ -55,6 +57,12 @@ export interface ChangesActions {
   discardFolder: (folder: string, isNew: boolean, files: readonly ChangeFile[], cx: Context) => void;
   /** Lists a wholly new folder in .git/info/exclude so it stops showing. */
   ignoreFolder: (folder: string, cx: Context) => void;
+  /** Puts every change aside, untracked files too; asks first. */
+  stash: (cx: Context) => void;
+  /** Applies, pops or drops one stash entry; popping and dropping ask first. */
+  stashEntry: (verb: StashVerb, name: string, cx: Context) => void;
+  /** Opens or folds the stash list. */
+  toggleStashes: (cx: Context) => void;
 }
 
 export interface ChangesParts {
@@ -89,6 +97,12 @@ export interface ChangesParts {
   closed: ReadonlySet<string>;
   /** Lines each file adds and removes, per side. */
   counts: ChangeCounts;
+  /** The repo's stash entries, newest first. */
+  stashes: readonly Stash[];
+  /** The stash list is open. */
+  stashesOpen: boolean;
+  /** Changed files, staged or not (the Stash button's count). */
+  changeCount: number;
 }
 
 /**
@@ -129,6 +143,10 @@ function commitBox(parts: ChangesParts, p: Palette, a: ChangesActions): Element 
     .child(textButton("compose", parts.composing ? "▾ Commit manually" : "▸ Commit manually…", p, a.toggleCompose))
     .child(div().flex_1())
     .when(!parts.composing && staged > 0, (el) => el.child(div().text_xs().text_color(p.dim).child(`${staged} staged`)))
+    .when(parts.changeCount > 0 && !view.busy, (el) => {
+      const asking = view.confirm === STASH_PUSH;
+      return el.child(textButton("stash", asking ? stashPrompt(parts.changeCount) : "Stash", p, a.stash, asking));
+    })
     .when(parts.undoable && !view.busy, (el) => el.child(textButton("undo-commit", "↶ Undo commit", p, a.undo)));
   const box = v_flex().flex_shrink_0().px(4).pb(4).border_t_1().border_color(p.border).child(bar);
   if (!parts.composing) return box;
@@ -159,6 +177,45 @@ function side(label: string, lines: readonly string[], color: Palette["added"], 
     .child(div().text_color(p.dim).child(label))
     .children(lines.slice(0, 40).map((l) => div().truncate().text_color(color).child(l === "" ? " " : l)))
     .when(lines.length > 40, (el) => el.child(div().text_color(p.dim).child(`… ${lines.length - 40} more lines`)));
+}
+
+/** The stash entries, folded to one line until opened; each row asks in place before Pop and Drop. */
+function stashList(parts: ChangesParts, p: Palette, a: ChangesActions): Element {
+  const n = parts.stashes.length;
+  const head = h_flex()
+    .id("stash-head")
+    .h(24)
+    .px(8)
+    .gap(4)
+    .items_center()
+    .cursor_pointer()
+    .text_xs()
+    .text_color(p.muted)
+    .hover((el) => el.bg(p.hover))
+    .on_click((_e, cx) => a.toggleStashes(cx))
+    .child(div().w(14).flex_shrink_0().text_color(p.dim).child(parts.stashesOpen ? "▾" : "▸"))
+    .child(`Stashes ${n}`);
+  const verb = (s: Stash, v: StashVerb) => {
+    const asking = parts.view.confirm === stashKey(v, s.name);
+    return textButton(`st-${v}:${s.name}`, stashEntryLabel(v, asking), p, (cx) => a.stashEntry(v, s.name, cx), asking, !parts.view.busy);
+  };
+  const rows = parts.stashesOpen
+    ? parts.stashes.map((s) =>
+        h_flex()
+          .h(24)
+          .pl(26)
+          .pr(4)
+          .gap(4)
+          .items_center()
+          .text_xs()
+          .child(div().flex_shrink_0().text_color(p.dim).child(s.name))
+          .child(div().flex_1().min_w_0().truncate().child(s.subject))
+          .child(verb(s, "apply"))
+          .child(verb(s, "pop"))
+          .child(verb(s, "drop")),
+      )
+    : [];
+  return v_flex().flex_shrink_0().border_t_1().border_color(p.border).child(head).children(rows);
 }
 
 /** Each conflict side by side, with Ours / Theirs / Both. */
@@ -224,5 +281,6 @@ export function changesPane(parts: ChangesParts, p: Palette, a: ChangesActions):
             .child(filesBar(parts, p, a))
             .child(v_flex().id("changes-files").flex_1().min_h_0().overflow_y_scrollbar().pb(6).children(fileLists(parts, p, a))),
     )
+    .when(parts.stashes.length > 0 && !view.resolving, (el) => el.child(stashList(parts, p, a)))
     .child(commitBox(parts, p, a));
 }

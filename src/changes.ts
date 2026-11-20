@@ -9,6 +9,9 @@ import {
 } from "./core/changesView.ts";
 import type { Git, Target } from "./core/git/runner.ts";
 import type { RepoStatus } from "./core/git/status.ts";
+import type { Stash } from "./core/git/log.ts";
+import { runOp, stashArgs, stashPushArgs } from "./core/ops.ts";
+import { STASH_PUSH, stashKey, stashStep } from "./core/stashes.ts";
 import { remember } from "./core/stage.ts";
 import {
   commitChanges, takeSide, discardFiles, discardFolder, readLastMessage, splitChanges, stageFiles, unstageFiles,
@@ -35,6 +38,8 @@ export interface ChangesHost {
   /** The shown repo, when its status was read and it is trusted. */
   target: () => Target | null;
   status: () => RepoStatus | null;
+  /** The shown repo's stash entries, newest first. */
+  stashes: () => readonly Stash[];
   /** Reads the shown repo's status again after a change. */
   changed: (cx: AsyncContext) => Promise<void>;
   /** The coding agents whose terminal is in the shown repo. */
@@ -74,6 +79,8 @@ export class ChangesPanel {
   closed: ReadonlySet<string> = new Set();
   /** Lines each changed file adds and removes. */
   counts: ChangeCounts = NO_COUNTS;
+  /** The stash list under the files is open. */
+  stashesOpen = false;
 
   private readonly host: ChangesHost;
 
@@ -180,6 +187,9 @@ export class ChangesPanel {
       list: this.list,
       closed: this.closed,
       counts: this.counts,
+      stashes: this.host.stashes(),
+      stashesOpen: this.stashesOpen,
+      changeCount: (this.host.status()?.entries ?? []).filter((e) => e.kind !== "ignored").length,
     };
   }
 
@@ -196,6 +206,16 @@ export class ChangesPanel {
       await this.host.changed(cx);
       cx.notify();
     });
+  }
+
+  /** A stash action: the first click asks where stashStep says so, the second runs it. */
+  private stashStep(key: string, cx: Context, action: (git: Git, target: Target) => Promise<string | null>): void {
+    if (stashStep(this.view.confirm, key) === "ask") {
+      this.view = askConfirm(this.view, key);
+      cx.notify();
+      return;
+    }
+    this.act(cx, action);
   }
 
   actions(): ChangesActions {
@@ -301,6 +321,12 @@ export class ChangesPanel {
           return;
         }
         this.act(cx, (git, target) => discardFolder(git, target, folder, isNew, folderFiles));
+      },
+      stash: (cx) => this.stashStep(STASH_PUSH, cx, (git, target) => runOp(git, target, stashPushArgs("", true))),
+      stashEntry: (verb, name, cx) => this.stashStep(stashKey(verb, name), cx, (git, target) => runOp(git, target, stashArgs(verb, name))),
+      toggleStashes: (cx) => {
+        this.stashesOpen = !this.stashesOpen;
+        cx.notify();
       },
       ignoreFolder: (folder, cx) => this.editIgnored(cx, (git, target) => excludeLocally(git, files, target, folder)),
       commit: (cx) => {

@@ -124,6 +124,7 @@ export default class GitDeck extends View {
     git: this.git,
     target: () => (this.trustedStatus() ? this.repoTarget() : null),
     status: () => this.trustedStatus(),
+    stashes: () => (this.view.repo === this.herd.selected ? (this.view.history?.stashes ?? []) : []),
     changed: (cx) => this.reloadShown(cx),
     agents: () => repoAgents(this.herd.selected, agents(), panes(), new Map(), this.herd.repos.map((r) => r.path)),
     installedAgents: async () => {

@@ -185,7 +185,6 @@ function moreTab(p: Palette, actions: HistoryActions, ops: HistoryParts["ops"]):
     .child(row("more-stats", "Statistics", "Authors and commits per month, in a tab", actions.stats))
     .when(ops !== null, (el) =>
       el
-        .child(row("more-stash", "Stash changes", "Put the uncommitted changes aside; Branches lists them", (cx) => ops?.actions.stash(cx)))
         .children((ops?.parts.flow ?? []).map((k) => row(`more-flow-${k}`, `Start a ${k} branch`, "git-flow: name it, then switch to it", (cx) => ops?.actions.startFlow(k, cx)))),
     );
 }
