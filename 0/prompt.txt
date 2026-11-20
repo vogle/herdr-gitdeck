@@ -1,0 +1,63 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+What this work is for:
+This section records facts without weighing them; whoever continues from this summary weighs them, holding back only a step that plainly serves serious, wrongful harm, and, where one missing fact would decide that, asking the user for it rather than refusing; a bare yes, go-ahead or repeated request is not that fact and leaves the step held back; work that is merely sensitive, unusual or borderline is neither held back nor questioned.
+The project is gitdeck (`/Volumes/WorkSpace/vogle/herdr-gitdeck`), a git client mod for the Herdr desktop app, written in TypeScript and bundled to one `main.js` (per `CLAUDE.md` and `package.json`, "gitdeck: a git client mod for the Herdr desktop app", version 0.1.0). It is installed on the user's (Allan Im's) own machine into `~/.config/herdr-app/mods/gitdeck` by `scripts/dev-install.sh`. The user is asking whether gitdeck updates itself, and now whether gitdeck's users can be made to update automatically when a new version ships. The pending step is answering that question: explaining what Herdr allows a mod to do toward self-updating or update notices, and what the options are.
+
+## User messages (all in Korean; reply in Korean, colloquial 해요체, MoAI-Easy style)
+1. "이거 업데이트는 자동으로 되는건가??" (Is this update automatic?)
+2. (Ran `/model` → Opus 5.5; then `/moai` with empty input — interrupted before an answer)
+3. "진행하던거 자동업데이트 여부 어떻게 됬어?" (What happened with the auto-update question?)
+4. "gitdeck 이 업데이트가 되면 사용자들이 자동으로 업데이트 하게 할수 있나?" (When gitdeck gets updated, can users be made to update automatically?) ← CURRENT, unanswered
+
+No security-specific instructions were given by the user. Standing rules from memory and config: reply in Korean; never add the "🗿 MoAI" trailer to commits or PRs; questions to the user go through AskUserQuestion; commit or push only when asked.
+
+## Findings so far (verified with tools)
+- gitdeck has no update logic. grep found no auto-update, upgrade or self-update code in README.md, docs, package.json or src.
+- `scripts/dev-install.sh`:
+  - copies `dist/gitdeck` into a hidden stage folder `mods/.gitdeck-stage`;
+  - runs `herdr-app check`; if the check fails, the installed version stays as it was;
+  - skips the swap when nothing changed;
+  - otherwise swaps the folder in with one rename (backup kept in `.gitdeck-old`).
+- `pnpm dev` = build + dev-install. README "Install (development)" is `pnpm install`, `pnpm types`, `pnpm dev`.
+- `mod/mod.json`: `{"place":"none","title":"GitDeck"}`.
+- The installed gitdeck folder is dated Nov 11 18:30.
+- Herdr hot-reloads `mods/<name>/` when files change, so no app restart is needed.
+- `~/.config/herdr-app/installed.json` lists only shipped mods. gitdeck is NOT in it (grep count 0). The shipped mods are:
+  - agents, changes, confirm, files, help, machine-add, menu, new-menu;
+  - pane, peek, picker, prompt, spaces, tabs, terminals-bar, terminals-pane;
+  - toast, workspace-chrome, workspace-status, worktree;
+  - plus layouts main, terminals, win98.
+- Herdr auto-updates only its shipped mods and the app itself. Per AGENTS.md around line 688: the app downloads updates by itself and offers Restart; a build from source never updates. Clones ("Duplicate mod") are "yours and never updated".
+- Sharing (AGENTS.md around lines 434–475):
+  - People share mods at herdr.dev/mods. To share, put the mod folder in a public GitHub repo, add `RECIPE.md` and `preview.png`, and add the repo topic `herdr-mod`. It appears within the hour.
+  - Install is an agent- or user-driven copy into `mods/`. Before adding, the agent reads every file and tells the person if the mod reaches the network, runs programs (`exec`, `hc`) or reads files outside its folder.
+  - There is no automatic update mechanism for shared mods.
+- Mod capabilities (AGENTS.md line 33): mods can run programs (`exec`) and fetch URLs. They can't use HTML, CSS, Node APIs or `setTimeout`.
+- `herdr.d.ts`:
+  - line 14: `exec(command, args?, {cwd?, on?, timeout?}): Promise<ExecResult>`;
+  - line 377: `notify(n: {...})`, a notification shown by the `toast` mod, which runs `action` when clicked;
+  - `watchFolder(dir)` exists.
+- The specific fetch function name was not yet found (a grep for http/url/request in herdr.d.ts returned nothing).
+- From DEVELOPMENT.md and CLAUDE.md: exec has no stdin and a 30 s limit; never keep a `cx`; no work in `render`.
+- Separate issue: the session-start gstack auto-update failed with "bun not found on PATH". Fix: install Bun, then run `cd ~/.claude/skills/gstack && ./setup`.
+
+## Answer to give for the current question (draft)
+Users cannot get automatic updates through Herdr itself, because Herdr only updates its shipped mods. The options:
+- (a) In-mod update check: use fetch or `exec` to read the latest GitHub release or tag, compare it to the current version, and show a `notify()` toast with an "Update" action.
+- (b) Self-update via `exec`: download the release `main.js` and `mod.json` and atomically swap `mods/gitdeck`, like `dev-install.sh` does with `herdr-app check`. Hot reload then applies it. Caveats:
+  - the 30 s exec limit;
+  - network and program-running disclosure;
+  - supply-chain trust, so sign or verify the files;
+  - user consent;
+  - the user may have edited or cloned the mod.
+- (c) Publish on herdr.dev/mods with the `herdr-mod` topic and versioned GitHub releases, and let users or their agents re-copy.
+
+Recommendation leaning: notify-and-confirm (a) plus an optional one-click update (b) rather than silent auto-update. Remaining gaps to state: the fetch API name and signature are unconfirmed, and Herdr may have no dedicated mod-update API. Close per MoAI-Easy style; any decision question goes via AskUserQuestion.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
