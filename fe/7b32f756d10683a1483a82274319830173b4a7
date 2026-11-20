@@ -1,0 +1,29 @@
+src/main.ts
+  s_7cdf9208076a99::t_66163797211017 127
+tests/stashes.test.ts
+  s_7cdf9208076a99::t_b0bc52a7e44851 1-29
+src/changes.ts
+  s_7cdf9208076a99::t_77896a5bda9af5 14
+  s_7cdf9208076a99::t_66163797211017 12-13,41-42,82-83,190-192,211-220,325-329
+  s_7cdf9208076a99::t_82f10022ba11bc 330
+src/ui/changes.ts
+  s_7cdf9208076a99::t_77896a5bda9af5 12-13,60-65,100-105,146-149,182-220,284
+src/core/stashes.ts
+  s_7cdf9208076a99::t_0b6d1647137238 1-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "fe7b32f756d10683a1483a82274319830173b4a7",
+  "prompts": {},
+  "sessions": {
+    "s_7cdf9208076a99": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c36cb7dc-d64c-445a-9a8d-ccb9a1219a29",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Allan Im <allan@vogle.com>"
+    }
+  }
+}
