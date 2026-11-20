@@ -1,0 +1,60 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+What this work is for:
+This section records facts without weighing them; whoever continues from this summary weighs them, holding back only a step that plainly serves serious, wrongful harm, and, where one missing fact would decide that, asking the user for it rather than refusing; a bare yes, go-ahead or repeated request is not that fact and leaves the step held back; work that is merely sensitive, unusual or borderline is neither held back nor questioned.
+
+From the earlier summary:
+- The project is gitdeck (`/Volumes/WorkSpace/vogle/herdr-gitdeck`). `CLAUDE.md` and `package.json` call it "a git client mod for the Herdr desktop app", written in TypeScript and bundled into one `main.js`.
+- `scripts/dev-install.sh` installs it on the user's (Allan Im's) own machine, into `~/.config/herdr-app/mods/gitdeck`.
+- Herdr's AGENTS.md says Herdr auto-updates only its shipped mods and the app itself. Shared mods are listed at herdr.dev/mods through the GitHub topic `herdr-mod` and have no update mechanism. Mods are trusted code with unrestricted commands and network access.
+- The user asked for a new-version notification that replaces the installed mod when clicked; built in PR #2 (with release-please), merged, v0.2.0 released. It downloads a release from this repo and swaps a user's `mods/gitdeck` folder only after they click.
+- The user made the repo public themselves (`vogle/herdr-gitdeck`).
+- The README describes gitdeck as a git client "built for working with a herd of repositories". `SECURITY.md` (written by the assistant) says GitDeck runs `git`, `gh`/`glab`, and `claude`/`codex` (the last two only when asked for a suggested commit message), and uses the network for git sync, PR data and the daily release check.
+- The user said "우리 기능을 만들때 에이젼트 코딩을 중심으로 하자고 했잖아", "커밋도 에이젼트가 하게 진행할건대", and "그 방향으로 진행해줘".
+- The Changes-panel features are for someone supervising coding agents to scan, stage, delete or locally ignore what the agents changed.
+- The browser-open feature (in PR #8) runs `open`, `rundll32.exe url.dll,FileProtocolHandler`, or `xdg-open` on the person's machine for `https://` PR links fetched via `gh`/`glab`.
+- The user asked List view to show wholly new, untracked folders as one folder row again; this touches only the user's own repo and panel.
+- The user chose "Lucide 아이콘으로 D안 진행해줘": Lucide SVG icons (ISC license) added to the user's own mod.
+- The user asked for UI changes (hover button box, agent badge, header layout), reading Herdr's agent list and tab state on the user's machine.
+- The user asked that the per-line staging view open in the main viewer tab; done.
+- Later the user asked for icons on ignored rows, commit+push to PR #8, find-in-diff, Review-tab UX proposals, then "추천 순서대로 1, 2, 3 진행해줘" (Review ordering, viewed marks in Herdr shared values on the user's machine, prev/next in viewer).
+- The user asked "에이전트 피드백 기능 설계 정리해줘" then "1단계 기본부터 진행해줘". The feature lets a person reviewing an agent's diff in their gitdeck viewer pick lines, write a note, preview the full message, and on pressing Send deliver it via `hc send <terminal> <text>` into the terminal of the coding agent (e.g. Claude Code) working in that repo on the user's machine; with no agent it copies to clipboard. The assistant's design states the sent text is treated by the agent as the user's own instruction, so a preview is always shown and sending only starts from a button press. The assistant tested `hc send` on a throwaway `cat` terminal it started (t22) and then removed it.
+
+In this conversation: the latest user turn is a pasted block (no words of the user's own) that is a feedback message in exactly the format gitdeck's stage-1 feature produces — "Review feedback on feat/agent-centered-panel (at 1a31598): 1. src/core/repoAgents.ts:22 > +   tab?: string; 왜 ? 있는건지 설명해줘" — i.e. it apparently arrived in this Claude Code terminal through the new Send button, asking why `tab` is optional. The pending step is answering that question (explanation only, in Korean).
+
+## Standing user rules
+- Always reply in Korean (natural 해요체; MoAI-Easy banners translated, e.g. "다 됐어요"). Code, paths, identifiers, commit messages, PR bodies in English. Memory `user-language-korean.md`: first reply after compaction tends to slip into English — check first sentence.
+- Never add a "🗿 MoAI" trailer to commits or PRs.
+- Questions only via AskUserQuestion (load with `ToolSearch select:AskUserQuestion`). Explanations delivered with no question appended.
+- Commit or push only when asked. No outward-facing/irreversible actions without explicit request. PR #5 "chore(main): release 0.2.1" — merge only if user says "릴리스해줘".
+- Never commit untracked `.claude/`, `.claudeignore`, `.git_hooks/`, `.mcp.json` (may hold keys), `.worktreeinclude`. Stage by explicit path only (never `git add -A`).
+- Run `pnpm verify` before committing. Check: `pnpm verify > node_modules/.cache/verify.log 2>&1`, grep `^ℹ (tests|pass|fail)|all files|error TS|✖`; `pnpm -s dev`; `herdr-app status` (`"errors": []`); `herdr-app shot <path>` + `sips`. Scratch files in `node_modules/.cache/mockups/`. Can't click in the app — ask user to try.
+- Global post-commit `git-stats` hook prints a TypeError; commits still succeed.
+- Tab order Changes → Review → History → Branches → More. Agent-centered design.
+
+## State of work (all uncommitted; branch `feat/agent-centered-panel`, PR #8 head `1a31598`)
+Done earlier: Review items 1–3 (CODE/TESTS/OTHER groups, viewed marks, prev/next in viewer), removed `← Terminal` from viewer bar, Review rows match Changes format. Stage 1 agent feedback built and reported to user:
+- `src/core/feedback.ts`: `RowRange`, `FeedbackNote`, `FeedbackContext`, `FeedbackTarget`, `pickRange`, `noteFor`, `feedbackMessage`, `feedbackTarget(repo, agents, panes)` (own `AgentLike` with `address, pane, status, program{name}`; picks non-working agent first).
+- `tests/feedback.test.ts` (5 tests).
+- `src/feedbackBox.ts` class `FeedbackBox` (note Textarea, preview, Cancel/Copy/Send, `hc(["send", address, text])`, "Couldn't send: …").
+- `src/ui/details.ts`: `diffRow(..., picked)` left border `p.changed`; `DiffFind.picked?`/`pick?`; `on_item_click`.
+- `src/viewer.ts`: `feedback` field, init/reset, render under diff.
+- Verified: 364 tests pass, 99.71% coverage, errors []. UI not seen by assistant. The pasted message suggests the user's Send reached this terminal.
+
+## Investigation for the current question (`tab?: string` in `src/core/repoAgents.ts:22`)
+- `src/core/repoAgents.ts` `interface AgentLike { pane: string; tab?: string; status: AgentStatus; program: { name: string; key: string } }`. `tab` is used only in `repoAgents(repo, agents, panes, changedAt = new Map())`: `since: a.tab === undefined ? null : (changedAt.get(a.tab) ?? null)` — the tab id looks up Herdr's tab `changed_at` for "how long ago".
+- Herdr's `AgentInfo` in `~/.config/herdr-app/herdr.d.ts` has `tab: string` (required), plus address, pane, space, tab_index, tab_name, status, app, program, title, seq, pinned, focused. So real data always has a tab.
+- `git log -S"tab?: string"` → added in `b62a8b1 feat: header shows who works here first, counts move to the tab` (the commit that added `since`).
+- Callers: `src/main.ts:79` `repoAgents(repo, agents(), panes(), tabChanges())`; `src/main.ts:123,141,233` `repoAgents(this.herd.selected, agents(), panes())`; `herdAgents(...)` at `src/main.ts:232,701`.
+- Tests: `tests/headerText.test.ts:27-33` builds agents with `tab: "t1"/"t2"`; `tests/herdAgents.test.ts:5` `const agent = (pane, status, name) => ({ pane, status, program: {...} })` — no `tab`; `tests/agentReview.test.ts:110` similar helper (no tab shown). `herdAgents` shares the same `AgentLike` type.
+- Conclusion to give the user: the `?` exists only so older test helpers (`tests/herdAgents.test.ts`, `tests/agentReview.test.ts`) that build agents without a `tab` still type-check after `b62a8b1` added `since`; Herdr always supplies `tab`, so in the real app the `a.tab === undefined` branch never runs. Option to offer (no edit unless asked): make it `tab: string` and add `tab` to those test helpers, removing the dead branch — a small cleanup.
+
+## Next steps
+- Reply in Korean (MoAI-Easy style, plain words) explaining the above; also note the feedback message evidently arrived via the Send button (stage-1 path works end to end). Do not commit; do not change code unless the user asks.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
