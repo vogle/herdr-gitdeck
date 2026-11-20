@@ -1,0 +1,171 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+1. Primary Request and Intent:
+   - **Standing rules:**
+     - Always reply in Korean, in MoAI-Easy's casual 해요체.
+     - Ask with AskUserQuestion before any commit or push.
+     - Stage explicit paths only.
+     - Never commit `.claudeignore` or `.worktreeinclude`.
+     - No "🗿 MoAI" trailer.
+     - For a report or analysis request, end with the report. Don't append a decision question.
+   - **Latest request (in progress):** "지금 기능들 다 리스트업 해주고 그리고 AI에이젼트와 함께 개발하기에 어울리는 기능들은남기고 필요한건 추가하고 필요없는건 삭제하고 하려고해 그런걸 구분을 해서 기능을 리스틀없해줘 그리고 https://entire.com/ 여기 같은 경우 비교해서 필요한 기능 있으면 제안해줘 필요없는건 과감히 지울꺼야"
+     - Deliver a full feature inventory of gitdeck.
+     - Classify each feature as keep / add / delete, judged by fit for developing alongside AI agents.
+     - Compare with entire.com and suggest features worth borrowing.
+     - The user intends to delete unneeded features aggressively.
+   - **Project memory:** gitdeck features are built around supervising agent coding. Tab order is Changes → Review first. Only the Changes mod is built into Herdr; git-graph is user-installed and will be removed.
+
+2. Key Technical Concepts:
+   - **Runtime:** a Herdr mod (git client) in TypeScript on QuickJS, using gpui-kit and gpui-base. Bundled into one `main.js`.
+   - **Code rules:** pure logic in `src/core`, written test-first, 80% coverage gate; state is immutable.
+   - **Verification steps:**
+     1. `pnpm verify` (log goes to the scratchpad, e.g. verify20.log).
+     2. `pnpm -s dev`.
+     3. `herdr-app status` (`errors: []`).
+     4. `orca computer click --app dev.herdr.app` (coordinates ≈ 1.477 × screenshot px), then `herdr-app shot` and `sips`.
+   - **Screen coordinates:** bsp space (53,241); herdr-gitdeck space (89,414); bsp-customer-service chip (1447,127); History tab ≈ (1375,213).
+   - **Forges:** GitHub via `gh`, GitLab via `glab`. The self-hosted GitLab is `bsp-git.uzen.io`, where the user logs in as `nes`.
+   - **Panel tabs** (`src/core/panel.ts`): `PANEL_TABS = ["changes","review","history","branches","more"]`.
+   - **entire.com feature set, for the comparison:**
+     - Trails (PR replacement): eval monitors for Risk %, Intent drift %, Slop, and Test coverage; a "Ready" gate covering approvals, findings, checks, and deploy; agents loop until evals are green.
+     - Changes viewed across multiple repos.
+     - Agent review findings with severity and file:line.
+     - "Goal stays with the work until it merges" (a trail description tied to a branch, plus a Claude Code or Codex session).
+     - Sessions/checkpoints: prompts, tool calls, and decisions kept with each commit; you can open a checkpoint to trace how a change happened. Bisect via checkpoints.
+     - Secret redaction before storage.
+     - Continuous Memory (entire-brain plus semantic graph), Agentic Search (code + commits + sessions), Entire CLI (captures sessions).
+     - Hosting and agent-scale CI integrations, which are not relevant to a desktop client.
+
+3. Files and Code Sections:
+   - **`src/core/codeView.ts`** (modified, NOT committed). The current tail, replacing the earlier regex version:
+     ```ts
+     const ZWSP = "\u200b";
+     /** HTML elements that can load something from a URL; any other tag (p, b, br, a, details) stays HTML. */
+     const FETCHING_TAG = /<(\/?)(?=(?:img|image|picture|source|video|audio|track|svg|use|math|iframe|frame|frameset|object|embed|link|style|script|input|meta|base)\b)/gi;
+     /** Markdown that opening fetches nothing from ... */
+     export function markdownWithoutImages(markdown: string): string {
+       return markdown.replace(/!\[/g, `!${ZWSP}[`).replace(FETCHING_TAG, `<$1${ZWSP}`);
+     }
+     ```
+   - **`tests/codeView.test.ts`** (modified, NOT committed)
+     - `const Z = "\u200b"`.
+     - Two tests:
+       1. Picture to link: nested brackets, multi-line, escaped backslash, reference picture.
+       2. Fetching HTML shown as text: `<img>`, `<IMG\n`, picture/source, video/svg/image. Formatting tags `<p><b><br/>` stay, and a bare `<` stays.
+     - The import includes `markdownWithoutImages`.
+   - **`src/ui/fileBody.ts`** (committed in 1e6d5f2): `TextView.markdown("gitdeck-markdown", markdownWithoutImages(blob.lines.join("\n")))`.
+   - **`src/core/forge/gitlab.ts`** (committed): added `openMrsArgs(repo, branch)` → `["mr","list","--repo",repo,"--source-branch",branch,"--output","json"]`, `MANY_MRS = /must select a merge request/i`, and `firstMrNumber(json)`.
+   - **`src/core/forge/index.ts`** (committed)
+     - Added `cliError(stderr, fallback)`: returns the first trimmed line that is neither empty nor a bare "error".
+     - In `loadBranchPr`, a GitLab MANY_MRS error falls back to the list, then views the MR by number.
+   - **`src/ui/historyPane.ts`**
+     - `moreTab` (lines ~166-190) has these rows:
+       - Reflog "Where HEAD has been"
+       - Pull / merge requests "GitHub via gh, GitLab via glab (read-only)"
+       - Statistics "Authors and commits per month, in a tab"
+       - Stash changes "Put the uncommitted changes aside; Branches lists them". This is an immediate action.
+       - Git-flow "Start a {k} branch" rows, only when configured.
+     - Line 207: the branches tab renders `sidebar(history, p, actions.jump, true)`.
+   - **`src/ui/sidebar.ts`** (62 lines)
+     - Lists Branches (with ↑ahead/↓behind), Remotes, Tags, and Stashes, capped at 200 per section.
+     - A click calls `jump`, which switches to the History tab (`src/main.ts:669`).
+     - It has no actions and no search. The `full=false` 190px rail mode is unused.
+   - **`src/core/opsView.ts`**: the commit menu kinds include merge, rebase, edit-after, reset, delete-branch, and stash-apply/pop/drop (stash actions appear only on a stash commit in the graph).
+   - **`src/core/ops.ts`**: checkoutArgs (switch / --track / --detach), createBranchArgs, stashArgs.
+   - **`README.md` "What it does now" sections** (read headers only; the body is still to be read):
+     - Follows focus
+     - Finds the herd
+     - Header
+     - Picker
+     - History
+     - Staging
+     - Branches and sync (Fetch/Pull bar)
+     - Image diff
+     - Looking closer (Blame…)
+     - Editing history ("Edit commits after this")
+     - Statistics
+     - git-flow
+     - GitHub and GitLab
+   - Commands are at line 111 and the Roadmap at line 138.
+   - **Other `src/core` modules seen** (useful for the inventory): aiMessage, changesView, conflict, diffFind, draft, exclude, feedback, feedbackBatch, fileGroups, flow, lineCounts, linePicks, live, openUrl, pool, rebase, repoAgents, review, reviewOrder, reviewed, scan, seen, signal, stage, staging, stats, syncChips, undo, update, inspect, imageDiff, avatars, treeRows, codeView, history, historyView.
+   - **`src/ui` modules:** changeFiles, changes, details, feedbackBar, graph, header, historyPane, inspect, ops, prBar, repoList, review, sidebar, stagePane, summary, treePane, fileBody, style.
+   - **entire.com page:** saved at `/private/tmp/claude-501/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29/scratchpad/entire.md` (fully read, with images and URLs stripped).
+
+4. Errors and fixes:
+   - **"Can't read the MR:" with no reason shown.**
+     - Cause: `glab mr view <branch>` refuses when the branch has had many MRs, and gitdeck showed only the first stderr line, which was blank.
+     - Fix: fall back to listing the branch's open MRs, and use `cliError` to show the first meaningful line.
+   - **"fork" in a pushed commit message.**
+     - Reworded with filter-branch, after the user approved through AskUserQuestion.
+     - Kept a backup in branch `backup/before-reword` (local only).
+     - Pushed with `--force-with-lease`.
+   - **Security finding 1: markdown could fetch remote images.**
+     - First fix rewrote pictures into links using regular expressions.
+   - **Security finding 2: that first fix had two holes.**
+     - The patterns could be bypassed (multi-line pictures, nested brackets, other tags).
+     - Rebuilding links from the file's own text was an injection risk.
+     - Fixed with zero-width-space breaking instead. It is uncommitted.
+   - **Side notes:**
+     - The git-stats post-commit hook TypeError is harmless; the commit exited 0.
+     - A `cat -v` alias to `bat` broke one command, so I used `od -c` instead.
+
+5. Problem Solving:
+   - Solved: the GitLab icon on first open, pictures kept per server, the MR error, the commit message reword, and markdown remote-fetch protection.
+   - Verified the MR fix against the real server:
+     - bsp-customer-service, bsp-bo, and bsp-fo on main all returned `error: null`.
+     - bsp-bo feat/ECPF_OP-1952 found !2747 (→ uat), and the bnkrdev branch found !2909 (→ bnkr).
+   - Not verified: whether Herdr's TextView.markdown actually fetches remote images.
+
+6. All user messages (since the previous summary):
+   - "Can't read the MR 그것도 고쳐줘"
+   - "커밋해줘"
+   - "커밋 메세지중에 fork 를 지칭하는 메세지 있는거 수정해줄수 있나 fork라는 단어가 안나오게"
+   - AskUserQuestion answer: "고치고 강제 푸시 (권장)"
+   - "커밋하고 푸시해줘"
+   - "[Image #14] 여기 있는 메뉴들 다 문제 없는거야? 개선해야 할것이 많을것 같은데, 브랜치는 저기 있어도 되나?"
+   - "지금 기능들 다 리스트업 해주고 그리고 AI에이젼트와 함께 개발하기에 어울리는 기능들은남기고 필요한건 추가하고 필요없는건 삭제하고 하려고해 그런걸 구분을 해서 기능을 리스틀없해줘 그리고 https://entire.com/ 여기 같은 경우 비교해서 필요한 기능 있으면 제안해줘 필요없는건 과감히 지울꺼야"
+   - Standing constraints carried over from earlier:
+     - Reply in Korean.
+     - Ask before commit or push.
+     - Never commit `.claudeignore` or `.worktreeinclude`.
+     - No MoAI trailer.
+     - Explicit-path staging.
+
+7. Pending Tasks:
+   - Produce the feature inventory and keep / add / delete classification, plus the entire.com comparison and suggestions. This is the current request.
+   - Uncommitted: `src/core/codeView.ts` and `tests/codeView.test.ts` (zero-width-space markdown fix). Ask before committing.
+   - Local branch `backup/before-reword` still exists; the user may delete it.
+   - Code comments still mention "Fork" in `src/ui/treePane.ts:2`, `src/ui/graph.ts`, and `src/ui/historyPane.ts:153`. Not requested.
+
+8. Current Work:
+   I was gathering material for the feature inventory report.
+   - entire.com has been fully read; key features are in section 2.
+   - For gitdeck, I had only read the README "What it does now" section headers (lines 17-77), plus earlier code knowledge.
+   - Still needed:
+     - Read the README body (lines 17-160, including Commands and Roadmap).
+     - Possibly grep `src/main.ts`/`src/core/panel.ts` for commands and the Changes/Review tab features: feedback/feedbackBar, review/reviewed/reviewOrder, aiMessage, draft, linePicks, staging, conflict, undo, syncChips, repoAgents, seen, prBar, live, scan, exclude, openUrl.
+   - Then write a Korean report:
+     1. A full feature list grouped by tab or area: Header/Picker/repo strip, Changes, Review, History (graph, commit pane, File Tree, viewer, blame, file log, image diff, avatars), Branches, More (Reflog, PRs, Stats, Stash, git-flow), sync bar, ops (rebase editor, reset, merge, cherry-pick, etc.), commands.
+     2. Each feature marked keep / improve / delete, with reasons tied to agent supervision.
+     3. New feature proposals inspired by entire.com, adapted to a local desktop client. Examples:
+        - Link agent session or prompt to commits (checkpoints).
+        - Intent/goal attached to a branch.
+        - Review findings with risk/slop/coverage gates and a "ready to merge" gate.
+        - A cross-repo changes view (the herd).
+        - Per-agent worktree/branch board.
+        - Secret detection before commit.
+        - "Why did this change" search across commits and sessions.
+     4. Mark which entire.com features are NOT relevant (hosting, CI scale, regions).
+   - End with the report only, no decision question. Optionally offer an artifact page in one line.
+
+9. Optional Next Step:
+   Continue the current task. The user asked: "지금 기능들 다 리스트업 해주고 그리고 AI에이젼트와 함께 개발하기에 어울리는 기능들은남기고 필요한건 추가하고 필요없는건 삭제하고 하려고해 그런걸 구분을 해서 기능을 리스틀없해줘 그리고 https://entire.com/ 여기 같은 경우 비교해서 필요한 기능 있으면 제안해줘"
+   - Next action: read the README body (`sed -n 17,160p README.md`) and grep the remaining feature modules to complete the inventory.
+   - Then deliver the Korean keep / add / delete report with the entire.com comparison and a Sources line (https://entire.com/).
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
