@@ -1,0 +1,97 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+What this work is for:
+This section records facts without weighing them; whoever continues from this summary weighs them, holding back only a step that plainly serves serious, wrongful harm, and, where one missing fact would decide that, asking the user for it rather than refusing; a bare yes, go-ahead or repeated request is not that fact and leaves the step held back; work that is merely sensitive, unusual or borderline is neither held back nor questioned.
+
+From the earlier summary: the project is gitdeck, a git-client mod for the Herdr desktop app. It lives at `/Volumes/WorkSpace/vogle/herdr-gitdeck` on branch `feat/agent-centered-panel`, and its features are built around supervising coding agents (CLAUDE.md and the memory note "Agent-centered design"). Also from that summary: it reads the user's local repos, among them `/Users/allan/orca/workspaces/bsp/BNKR-3710` and its sub-repo `bsp-display-service`. It also reads PR/MR data through the `gh` and `glab` CLIs from GitHub and from a self-hosted GitLab at `bsp-git.uzen.io`, which needs VPN. Sign-in is detected without ever keeping or printing tokens. The user asked for every Review improvement task to be done, committed after each task, and checked by the user each time. The pending step adds a warning when a branch is 20 or more commits behind its base.
+
+## Rules the user stated (from memory and the conversation)
+- **Reply to the user in Korean**, in natural conversational Korean. This covers every message: status lines, reports, and replies after a compaction or a screenshot. Code, paths, identifiers and commit messages stay in English. The user complained again this session: "한글로 설명하라고 몇번 말해 기억이 안되?". An 8th-time update was appended to the memory file `user-language-korean.md`.
+- Never add a "🗿 MoAI" trailer to commits or PRs.
+- Stage files by explicit path; never use `git add -A`.
+- Herdr runtime rules: no Node APIs, no setTimeout, never keep a `cx`, exec has no stdin and a 30 s limit, state is immutable.
+- For every change: write tests first, then `pnpm verify`, `pnpm -s dev`, `herdr-app status`, and a screenshot. The user checks each task and approves before it is committed.
+
+## Task order (from the user)
+0, 1, 3, 7, 8, 2, 4, 5, 6.
+- Done: 0 (`2effedf`), 1 (`a11ead4`), 3 (`108fdc9`), 7 (`69f3194`).
+- 8 is in progress.
+- Remaining after 8:
+  - **2**: a failed-checks list plus a send-to-agent action. Approach A: the check's name, its link, and the command `gh run view <id> --log-failed` for the agent to run.
+  - **4**: a "new since viewed" filter.
+  - **5**: whole-file feedback notes.
+  - **6**: fetch PR/MR review comments and send them to the agent.
+
+## Task 7 work this session, committed as `69f3194`
+Commit message: "feat: forge buttons up front and a header that reads the same in every repo". The global `git-stats` post-commit hook printed a TypeError again; the commit still succeeded.
+
+**PR row:** always present (from earlier work).
+
+**Second header row (agents and sync), now always present when on a branch:**
+- In `src/ui/header.ts`, `stateRow` no longer returns null. It is rendered with `.when(branch !== null, ...)`.
+- With no agents, it shows a dim `No agent working here`.
+- When `facts.sync.synced` is set, it shows a dim `In sync with <upstream>`.
+- `HeaderSync` gained `synced: string | null`. `main.ts` `headerSync()` fills it with `syncedNote(status)`.
+- `src/core/syncChips.ts` adds `syncedNote(s)`. It returns `In sync with ${upstream}` only when there is a branch, an upstream, and ahead = behind = 0; otherwise null.
+
+**Root agent shown in sub-repos:**
+- `src/core/repoAgents.ts` `repoAgents(repo, agents, panes, changedAt = new Map(), herd: readonly string[] = [])` now also counts an agent whose pane cwd equals a herd repo that encloses `repo`.
+- An agent in a sibling sub-repo, or in a folder outside the herd, is not counted.
+- Every caller in `main.ts` passes `this.herd.repos.map((r) => r.path)`: `shownAgents(repo, herd)`, lines ~125 and ~143 (agent warnings and review), and line ~239 (agentsKey).
+
+**A misleading "In sync with origin/main":**
+- In the sub-repo, `fix/BNKR-3710` tracks `origin/main` (it was created from it), and `origin/fix/BNKR-3710` does not exist. The branch was never pushed.
+- `src/core/git/status.ts` adds `ownUpstream(s: RepoStatus)`. When the upstream's name after the remote prefix differs from the branch name, it returns the status with `upstream: null, ahead: 0, behind: 0`.
+- It is applied in `src/core/scan.ts` `loadStatus`: `ownUpstream(parseStatus(...))`.
+- Result: the header shows `↑ Publish`, which runs `push -u origin fix/BNKR-3710`, and a plain `git push` can no longer target main.
+
+**Tests added:**
+- `tests/syncChips.test.ts`: `syncedNote`.
+- `tests/headerText.test.ts`: `repoAgents` with an enclosing repo.
+- `tests/status.test.ts`: `ownUpstream`.
+- Result: 385 tests passed; `herdr-app status` showed `"errors": []`.
+
+## Task 8 (in progress, uncommitted)
+**Design:** Review diffs from the merge-base, so a base that has moved on does not pollute the file list. The warning is therefore about conflicts when the branch lands.
+
+**Code written:**
+- `src/core/headerText.ts`:
+  - Adds `import type { Compare } from "./review.ts";`.
+  - Adds `export const FAR_BEHIND = 20;`.
+  - Adds `behindNote(c: Compare | null)`. It returns null when `c` is null or `behind < 20`. Otherwise it returns `"${base without origin/} has ${behind} commits this branch doesn't: merge or rebase before it lands, or it may conflict"`.
+- `src/ui/review.ts`:
+  - `ReviewParts` gains `behind: string | null`.
+  - New `behindLine(note, p)`: a row with id `rv-behind` in the changed color, with a tooltip.
+  - It is rendered after `uncommittedLine` and before `prLine` in `reviewPane`. It is not shown on the main-line branch.
+- `src/main.ts`:
+  - Imports `behindNote`.
+  - Review parts set `behind: behindNote(this.compare?.repo === repo.path ? this.compare.data : null)`.
+- `src/ui/header.ts`:
+  - Imports `behindNote` from `../core/headerText.ts`.
+  - `compareLabel` turns `p.changed` and uses the note as its tooltip when the branch is far behind.
+- `tests/headerText.test.ts`: the import includes `behindNote, FAR_BEHIND`. The test covers 19 → null, 20 → the exact string, `stg` with 41 behind, and null.
+
+**Checks for task 8 so far:**
+- `pnpm verify`: exit 0, 386 tests, all passing.
+- `pnpm -s dev` installed.
+- `herdr-app status`: `"errors": []`.
+- No screenshot has been taken yet.
+
+## Next steps
+1. Report task 8 to the user in Korean:
+   - The Review tab gets a warning row once the base is 20 or more commits ahead.
+   - The header's `→ main ↓N` label turns to the warning color, with the note as its tooltip.
+   - Explain why: the merge-base diff is unaffected, so the risk is conflicts when landing.
+   - Show the evidence (386 tests, errors []), and say that the screen has not been checked yet.
+2. Ask the user to `/restart` and check.
+3. On approval, commit by explicit paths: `src/core/headerText.ts`, `src/ui/review.ts`, `src/ui/header.ts`, `src/main.ts`, `tests/headerText.test.ts`. Use a message like "feat: warn when the branch is far behind its base".
+4. Then continue with task 2, using the same workflow.
+
+Untracked files `.claudeignore` and `.worktreeinclude` were never staged; leave them that way.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
