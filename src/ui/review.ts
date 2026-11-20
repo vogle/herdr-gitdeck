@@ -52,6 +52,8 @@ export interface ReviewActions {
   /** Reads the open PR/MR's unresolved review comments into the feedback batch. */
   addComments: (cx: Context) => void;
   showChanges: (cx: Context) => void;
+  /** Lists the repo's open pull / merge requests in place of the review. */
+  prs: (cx: Context) => void;
 }
 
 const GROUP_TITLE: Readonly<Record<ReviewGroup, string>> = { code: "Code", tests: "Tests", other: "Other" };
@@ -292,6 +294,7 @@ export function reviewPane(parts: ReviewParts, p: Palette, a: ReviewActions): El
         .border_b_1()
         .border_color(p.border)
         .child(div().flex_1().min_w_0().truncate().text_xs().text_color(r?.error ? p.removed : p.muted).child(title))
+        .child(textButton("review-prs", "All pull requests", p, a.prs))
         .child(textButton("review-hide-viewed", parts.hideViewed ? "Show all" : "Hide viewed", p, a.toggleHideViewed, parts.hideViewed))
         .child(textButton("review-refresh", "Refresh", p, a.refresh)),
     )

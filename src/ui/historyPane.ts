@@ -35,6 +35,8 @@ export interface HistoryActions extends GraphActions, DetailActions {
   /** Opens or folds a folder of the File Tree tab. */
   toggleTreeFolder: (folder: string, cx: Context) => void;
   setForge: (kind: ForgeChoice, cx: Context) => void;
+  /** Opens or closes the History tab's ⋯ menu. */
+  toggleMenu: (cx: Context) => void;
 }
 
 export interface HistoryParts {
@@ -53,6 +55,8 @@ export interface HistoryParts {
   /** The reflog, pull requests or a commit's files, in place of the tab's list. */
   inspect: InspectView | null;
   tab: PanelTab;
+  /** The History tab's ⋯ menu is open. */
+  menuOpen: boolean;
   /** What is new since the person last looked; null before the first look. */
   news: { files: number; commits: number | null } | null;
   /** The branch against main, for the Review tab. */
@@ -91,7 +95,7 @@ function note(text: string, p: Palette): Element {
   return v_flex().flex_1().p(14).text_color(p.dim).child(text);
 }
 
-function searchRow(parts: HistoryParts, p: Palette): Element {
+function searchRow(parts: HistoryParts, p: Palette, actions: HistoryActions): Element {
   const { view } = parts;
   const count = view.searching ? `${view.rows.length} found` : `${view.history?.commits.length ?? 0}${view.history?.limited ? "+" : ""}`;
   return h_flex()
@@ -114,7 +118,22 @@ function searchRow(parts: HistoryParts, p: Palette): Element {
         .bg(p.chrome)
         .child(Input.new(parts.search).size_full().text_xs().text_color(p.foreground)),
     )
-    .child(div().flex_shrink_0().text_xs().text_color(p.dim).child(count));
+    .child(div().flex_shrink_0().text_xs().text_color(p.dim).child(count))
+    .child(textButton("history-menu", "⋯", p, actions.toggleMenu, parts.menuOpen));
+}
+
+/** The ⋯ menu's items, in a line under the search row. */
+function historyMenu(p: Palette, actions: HistoryActions): Element {
+  return h_flex()
+    .h(28)
+    .px(8)
+    .gap(4)
+    .items_center()
+    .flex_shrink_0()
+    .border_b_1()
+    .border_color(p.border)
+    .bg(p.raised)
+    .child(textButton("history-reflog", "Find lost commits (reflog)", p, actions.reflog));
 }
 
 const SPLIT = "gitdeck-history-split";
@@ -145,7 +164,8 @@ function historyTab(parts: HistoryParts, p: Palette, actions: HistoryActions): E
     .flex_1()
     .min_w_0()
     .min_h_0()
-    .child(searchRow(parts, p))
+    .child(searchRow(parts, p, actions))
+    .when(parts.menuOpen, (el) => el.child(historyMenu(p, actions)))
     .child(graphList(view, p, parts.scroll, actions, parts.avatar, ops ? ops.actions.openMenu : undefined))
     // After the row's own handler: the press, as this pane sees it, places the menu.
     .when(ops !== null, (el) => el.on_mouse_down("right", (e, cx) => ops?.actions.placeMenu(e, cx)))
@@ -180,8 +200,6 @@ function moreTab(p: Palette, actions: HistoryActions, ops: HistoryParts["ops"]):
   return v_flex()
     .flex_1()
     .min_h_0()
-    .child(row("more-reflog", "Reflog", "Where HEAD has been", actions.reflog))
-    .child(row("more-prs", "Pull / merge requests", "GitHub via gh, GitLab via glab (read-only)", actions.prs))
     .child(row("more-stats", "Statistics", "Authors and commits per month, in a tab", actions.stats))
     .when(ops !== null, (el) =>
       el

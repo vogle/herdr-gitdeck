@@ -162,6 +162,8 @@ export default class GitDeck extends View {
   reviewFolded: ReadonlySet<ReviewGroup> = new Set(["other"]);
   /** The Review tab lists only the files still to read. */
   reviewHideViewed = false;
+  /** The History tab's ⋯ menu is open. */
+  historyMenu = false;
   /** The shown branch's PR or MR (over the network), for the PR bar and the Review tab. */
   pr: { repo: string; branch: string | null; state: BranchPrState } | null = null;
   /** Takes the keyboard so Esc goes back one level. */
@@ -693,7 +695,12 @@ export default class GitDeck extends View {
       close: (cx) => this.back(cx),
       selectTab: (tab, cx) => this.selectTab(tab, cx),
       jump: (hash, cx) => this.jump(hash, cx),
+      toggleMenu: (cx) => {
+        this.historyMenu = !this.historyMenu;
+        cx.notify();
+      },
       reflog: (cx) => {
+        this.historyMenu = false;
         if (this.inspect?.view.kind === "reflog") {
           this.inspect = null;
           return cx.notify();
@@ -812,6 +819,7 @@ export default class GitDeck extends View {
               inspect: this.inspect?.repo === repo.path ? this.inspect.view : null,
               ops: this.trustedStatus() ? { parts: this.opsPanel.parts(), actions: this.opsPanel.actions() } : null,
               tab: this.tab,
+              menuOpen: this.historyMenu,
               review: {
                 parts: {
                   base: this.compare?.repo === repo.path ? this.compare.base : null,
@@ -834,6 +842,7 @@ export default class GitDeck extends View {
                 actions: {
                   openFile: (path) => this.openReviewFile(path),
                   showChanges: (cx) => this.selectTab("changes", cx),
+                  prs: (cx) => this.historyActions().prs(cx),
                   toggleViewed: (path, cx) => {
                     const r = this.review?.repo === repo.path ? this.review.data : null;
                     const seen = seenFor(shared(REVIEWED_KEY), repo.path);
