@@ -1,0 +1,14 @@
+<pasted_content id="f912">
+/Volumes/WorkSpace/vogle/herdr-gitdeck 은 Herdr 데스크톱 앱용 git 클라이언트 mod(gitdeck)이고, 지금 TypeScript로 작성해 main.js 하나로 번들하고 있어.
+코드는 고치지 말고 분석 보고서만 써 줘.
+
+알고 싶은 것:
+1. Herdr mod를 Rust나 Go 같은 다른 언어로 만들 수 있는지. Herdr가 mod를 어떻게 불러오는지(JS 런타임? WASM? 네이티브 바이너리?)부터 확인해 줘.
+   근거: ~/.config/herdr-app/AGENTS.md, herdr.d.ts, gpui-kit.d.ts, 이 저장소의 docs/DEVELOPMENT.md
+2. 다른 사람들이 만든 Herdr mod는 무슨 언어로 만드는지. GitHub 토픽 herdr-mod와 herdr.dev/mods에서 몇 개를 실제로 확인해서, Rust로 만든 mod가 정말 많은지, 그렇다면 UI는 어떻게 그리는지(Rust로 별도 프로세스를 두고 JS가 감싸는 구조인지 등) 알려 줘.
+3. 바꿀 수 있다면 Rust, Go, TypeScript(그대로) 중 무엇이 gitdeck에 가장 좋은지 비교해 줘.
+   비교할 점: 성능(git 명령 호출이 대부분이라는 점 고려), 배포·설치 방법(OS마다 빌드가 필요한지), 자동 업데이트 기능과의 호환, 테스트(지금 326개, 커버리지 99%), 옮기는 데 드는 작업량, 보안(mod는 신뢰된 코드로 실행됨)
+4. 결론: 추천 하나와 그 이유, 바꾸지 않는 게 낫다면 그것도 그대로 말해 줘.
+
+확인한 사실과 추측은 나눠서 적고, 웹에서 본 내용은 출처 링크를 달아 줘. 답은 한국어로 해 줘.
+</pasted_content id="f912">
