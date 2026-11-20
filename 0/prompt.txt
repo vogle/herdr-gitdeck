@@ -1,0 +1,62 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+What this work is for:
+This section records facts without weighing them; whoever continues from this summary weighs them, holding back only a step that plainly serves serious, wrongful harm, and, where one missing fact would decide that, asking the user for it rather than refusing; a bare yes, go-ahead or repeated request is not that fact and leaves the step held back; work that is merely sensitive, unusual or borderline is neither held back nor questioned.
+
+From the earlier summary (its view, not evidence):
+- The project is gitdeck (`/Volumes/WorkSpace/vogle/herdr-gitdeck`). `CLAUDE.md` and `package.json` call it "a git client mod for the Herdr desktop app", written in TypeScript and bundled into one `main.js`.
+- `scripts/dev-install.sh` installs it on the user's (Allan Im's) own machine, into `~/.config/herdr-app/mods/gitdeck`.
+- Herdr's AGENTS.md says Herdr auto-updates only its shipped mods and the app itself. Shared mods are listed at herdr.dev/mods through the GitHub topic `herdr-mod` and have no update mechanism. Mods are trusted code with unrestricted commands and network access.
+- The user asked for a new-version notification that replaces the installed mod when clicked; it was built in PR #2 (with release-please), merged, and v0.2.0 was released. It downloads a release from this repo and swaps a user's `mods/gitdeck` folder only after they click.
+- The user made the repo public themselves (`vogle/herdr-gitdeck`).
+- The README describes gitdeck as a git client "built for working with a herd of repositories". `SECURITY.md` (written by the assistant) says GitDeck runs `git`, `gh`/`glab`, and `claude`/`codex` (the last two only when asked for a suggested commit message), and uses the network for git sync, PR data and the daily release check.
+- The user said "우리 기능을 만들때 에이젼트 코딩을 중심으로 하자고 했잖아", "커밋도 에이젼트가 하게 진행할건대", and "그 방향으로 진행해줘".
+- The Changes-panel features are for someone supervising coding agents to scan, stage, delete or locally ignore what the agents changed.
+- The browser-open feature (in PR #8) runs `open`, `rundll32.exe url.dll,FileProtocolHandler`, or `xdg-open` on the person's machine for `https://` PR links fetched via `gh`/`glab`.
+- The user asked List view to show wholly new, untracked folders as one folder row again; this touches only the user's own repo and panel.
+- The user chose "Lucide 아이콘으로 D안 진행해줘": Lucide SVG icons (ISC license) were added to the user's own mod.
+- The user asked for UI changes (hover button box, agent badge, header layout), which read Herdr's agent list and tab state on the user's machine.
+- The user asked that the per-line staging view open in the main viewer tab; done.
+- The user later asked for icons on ignored rows, a commit and push to PR #8, find-in-diff, and Review-tab UX proposals, then said "추천 순서대로 1, 2, 3 진행해줘" (Review ordering, viewed marks in Herdr shared values on the user's machine, prev/next in the viewer).
+- The user asked "에이전트 피드백 기능 설계 정리해줘" and then "1단계 기본부터 진행해줘". With this feature, a person reviewing an agent's diff in their gitdeck viewer picks lines, writes a note, previews the full message, and presses Send to deliver it via `hc send <terminal> <text>` into the terminal of the coding agent (e.g. Claude Code) working in that repo on the user's machine. With no agent, it copies the message to the clipboard. The assistant's design says the agent treats the sent text as the user's own instruction, so a preview is always shown and sending only starts from a button press. The assistant tested `hc send` on a throwaway `cat` terminal it started (t22) and then removed it.
+- A pasted message in the stage-1 output format ("Review feedback on feat/agent-centered-panel (at 1a31598): 1. src/core/repoAgents.ts:22 …") arrived in this terminal and asked why `tab?` is optional. The assistant explained it.
+
+In this conversation: the user asked "에이젼트 피드백 기능은 다만들어진거지?" and was told only stage 1 of 3 was built. The user then said "그럼 나머지 다 진행해줘", i.e. build stage 2 (a batch of notes across files, sent together from a bar in the Review tab, with a choice of agent) and stage 3 (a queued "send when free" that goes out automatically once the chosen agent stops working, plus sent-state tracking and "changed since" display). The pending step continues that build. The new code stores notes in a Herdr shared value on the user's machine. Queued notes are delivered with `hc send` to an agent terminal only after the person pressed a send button. The panel's timer then lets them go once that agent's status is not "working".
+
+## Standing user rules
+- Always reply in Korean (natural 해요체; MoAI-Easy banners translated, e.g. "다 됐어요"). Code, paths, identifiers, commit messages, and PR bodies stay in English. Memory `user-language-korean.md`.
+- Never add a "🗿 MoAI" trailer to commits or PRs.
+- Ask questions only via AskUserQuestion (load it with `ToolSearch select:AskUserQuestion`). Deliver explanations with no question appended.
+- Commit or push only when asked. Take no outward-facing or irreversible action without an explicit request. Merge PR #5 "chore(main): release 0.2.1" only if the user says "릴리스해줘".
+- Never commit the untracked `.claude/`, `.claudeignore`, `.git_hooks/`, `.mcp.json` (may hold keys), or `.worktreeinclude`. Stage by explicit path only, never `git add -A`.
+- Run `pnpm verify` before committing (typecheck + coverage with an 80% gate on `src/core/**` + build). Check with `pnpm verify > node_modules/.cache/verify.log 2>&1` and grep `^ℹ (tests|pass|fail)|all files|error TS|✖`. Then run `pnpm -s dev`, `herdr-app status` (expect `"errors": []`), and `herdr-app shot <path>` + `sips`. Put scratch files in `node_modules/.cache/mockups/`. The assistant can't click in the app, so ask the user to try it.
+- Herdr runtime rules (docs/DEVELOPMENT.md): no Node APIs, no setTimeout (use `cx.timer.every`/`cx.sleep`), never keep a `cx`, no work in render, exec has no stdin and a 30 s limit. State is immutable.
+- The global post-commit `git-stats` hook prints a TypeError; commits still succeed.
+
+## Branch / state
+Branch `feat/agent-centered-panel`, PR #8 head `1a31598`. Everything below is uncommitted. Earlier uncommitted work: Review items 1–3, stage-1 feedback (`src/core/feedback.ts`, `tests/feedback.test.ts`, `src/feedbackBox.ts`, `src/ui/details.ts` diffRow picked/on_item_click, `src/viewer.ts` feedback field). The `tab?: string` cleanup in `src/core/repoAgents.ts` was explained but NOT done.
+
+## Design recap (from the assistant's earlier design reply)
+Sections covered the flow (pick lines → note → Add to batch → Review tab bar "💬 Feedback 3 · Send to Claude Code ▸" → preview → Send) and the message format with ", N notes". Target: the repo's agents; if several, choose next to the button, defaulting to the most recent; if none, Copy. Send timing: idle/needs you → send now; working → default "send when free" plus a "Send now" option; terminal gone → keep the note, show why. Tracking: `draft → queued → sent`, "Sent 2 · 1 file changed since", clear sent. Open questions left in §10: batch vs immediate default; Changes-tab diffs (same viewer, so included); whole-file notes (not planned now).
+
+## Work done this turn
+1. `tests/feedbackBatch.test.ts` (new, 8 tests) for `src/core/feedbackBatch.ts`. The tests were written before the module but not run while it was missing, so there was no observed RED.
+2. `src/core/feedbackBatch.ts` (new): `FEEDBACK_KEY = "gitdeck.feedback"` (repo path → BatchNote[]), `NoteState`, `BatchNote extends FeedbackNote {id, path, head, blob, state, to, sentAt, error}`, `newNote(id, note, {path, head, blob})`, `notesFor(all, repo)` (validates and drops malformed entries), `withNotes(all, repo, notes)` (drops an empty repo), `queueFor(notes, to)`, `sentNow(notes, ids, to, at)`, `toDraft(notes, ids, error=null)`, `withoutNote`, `withoutSent`, `Due {to, ids}`, `dueNotes(notes, agents{address,status}) → {send, gone}` (gone only if error is null), `changedSince(notes, blobs)`, `batchHead(notes)`.
+3. `src/core/feedback.ts` changes: `feedbackMessage` adds `, N notes` when there are more than 1 (the single-note format is unchanged); `AgentLike` gains optional `seq`; new `feedbackTargets(repo, agents, panes)` sorts non-working first, then higher seq; `feedbackTarget` now returns `feedbackTargets(...)[0] ?? null`.
+4. `tests/feedback.test.ts` gained a 2-note message assertion ("Review feedback on feat/x, 2 notes:", ends with "2. b.ts\n   add a test") and a `feedbackTargets` ordering test (expects ["t4","t2","t1"]).
+5. Ran `node --test tests/feedback.test.ts tests/feedbackBatch.test.ts`: 14 tests, all pass.
+6. `src/feedbackSend.ts` (new, not yet typechecked): `readNotes`, `saveNotes`, `noteId()` (Date.now base36 + Math.random), `batchMessage(repo, notes)` (branch from panes cwd===repo, head from batchHead), private `deliver(address, text)` via `hc(["send", …])`, `sendNotes(repo, ids, to)` (marks notes sent first, then sends; on failure reverts to draft with the error), and `sendQueued(spawn)` (for every repo in the shared value: notes whose agent is gone get error "Its terminal is gone: send to another agent, or copy"; due notes are sent via the spawn callback). A security hook flagged `noteId` for non-cryptographic randomness (medium). The id is only a local note key, so it could switch to `crypto`-free alternatives or stay as is; the hook just noted it.
+
+## Remaining plan (next steps)
+- `src/feedbackBox.ts`: change buttons to Cancel / Copy / **Add** (primary; saves a draft via `saveNotes(repo, [...readNotes(repo), newNote(noteId(), note, {path, head, blob})])`, status "Added: N notes waiting · send them from the Review tab") / **Send now** (when a target exists: add the note, then `sendNotes(repo,[id],address)`). Remove the old private `send`. Add a `blob` param from the viewer: `queueOf(r)?.files.find(f=>f.path===r.source.path)?.blob ?? null`, with head from the commit source hash. Optionally show the batch count in the header.
+- New `src/ui/feedbackBar.ts` plus a controller (e.g. `src/feedbackPanel.ts`, holding open/chosen target/busy/status): a collapsed line with counts (to send / waiting / sent, with changed-since from `changedSince(notes, review.blobs)`); open view lists notes (state tag, where, text, error, × remove), a drafts preview in mono, "To <name>" with a cycle button if there are several `feedbackTargets`, and buttons Copy, Send (or "Send when free" + "Send now" when the target is working → `queueFor` + save), Cancel waiting (`toDraft` on queued), Clear sent (`withoutSent`). Remote repo (`repoTarget().on !== null`) → Copy only.
+- `src/ui/review.ts`: add an optional `feedback` element to `ReviewParts`, rendered at the bottom of `reviewPane`, including the "On the main line" case. Wire it in `src/main.ts` review parts (around lines 720–745).
+- `src/main.ts` panel-only `CONTEXT_EVERY_MS` (2 s) timer: call `sendQueued((task) => cx.spawn(task))` with an in-memory guard against duplicate sends; notify on changes. The viewer copy returns early in init, so the dispatcher runs only in the panel.
+- Run `pnpm verify` (tests, coverage, typecheck), `pnpm -s dev`, `herdr-app status`, and a screenshot. Then report to the user in Korean with evidence, listing what wasn't seen in the UI (ask them to try Add, the Review bar, Send when free). Do not commit unless asked. Mention the unaddressed items: whole-file notes, the `tab?` cleanup, and the possibility of duplicate sends if two panel instances run.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
