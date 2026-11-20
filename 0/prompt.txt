@@ -1,0 +1,1 @@
+<bash-input> git config --global gitdeck.avatars true</bash-input>
