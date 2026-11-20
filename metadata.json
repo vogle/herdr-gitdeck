@@ -1,0 +1,41 @@
+{
+  "cli_version": "0.13.4",
+  "checkpoint_id": "01M7VSC216TVCAD437M9CT0Y2F",
+  "strategy": "manual-commit",
+  "branch": "feat/agent-centered-panel",
+  "checkpoints_count": 8,
+  "files_touched": [
+    "src/core/stashes.ts",
+    "tests/stashes.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 50,
+    "cache_creation_tokens": 664798,
+    "cache_read_tokens": 8059436,
+    "output_tokens": 14129,
+    "api_call_count": 25
+  },
+  "redaction": {
+    "replacements": 27,
+    "layers": {
+      "betterleaks": 3,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 3,
+      "credentialed_uri": 0,
+      "entropy": 24,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  }
+}
