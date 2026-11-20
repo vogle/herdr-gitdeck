@@ -1,0 +1,7 @@
+<pasted_content id="450e">
+Review feedback on feat/agent-centered-panel (at 1a31598):
+
+1. src/core/repoAgents.ts:22
+   > +   tab?: string;
+   왜 ? 있는건지 설명해줘
+</pasted_content id="450e">
