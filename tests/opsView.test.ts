@@ -35,7 +35,7 @@ test("another repo starts over, and the operation under way is kept", () => {
 
 test("commitActions offers what fits the commit and the refs on it", () => {
   const plain = commitActions({ hash: H, parents: 1, refs: [], stash: null, head: "b".repeat(40), branch: "main" });
-  assert.deepEqual(plain.map((a) => a.kind), ["checkout-commit", "branch", "tag", "cherry-pick", "revert", "merge", "rebase", "edit-after", "reset"]);
+  assert.deepEqual(plain.map((a) => a.kind), ["checkout-commit", "branch", "tag", "cherry-pick", "revert", "merge", "rebase", "squash-later", "reset"]);
   const onHead = commitActions({ hash: H, parents: 1, refs: [ref("branch", "main", true)], stash: null, head: H, branch: "main" });
   assert.deepEqual(onHead.map((a) => a.kind), ["branch", "tag", "revert", "reset"], "HEAD itself: no checkout, pick, merge or rebase");
   const withRefs = commitActions({ hash: H, parents: 2, refs: [ref("branch", "dev"), ref("remote", "origin/x"), ref("tag", "v1")], stash: null, head: "b".repeat(40), branch: "main" });

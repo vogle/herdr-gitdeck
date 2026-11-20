@@ -20,7 +20,7 @@ export interface OpsView {
   /** A new branch or tag being named, at this commit. */
   naming: { kind: NameKind; at: string } | null;
   operation: Operation | null;
-  /** An interactive rebase being edited before it runs. */
+  /** A squash of later commits, loaded and waiting to be confirmed. */
   plan: RebasePlan | null;
   /** Why the clicked action waits: an agent is working in the repo. */
   held: string | null;
@@ -69,7 +69,7 @@ export const withOperation = (v: OpsView, operation: Operation | null): OpsView 
 
 export type ActionKind =
   | "checkout-commit" | "checkout-branch" | "checkout-remote" | "branch" | "tag" | "cherry-pick" | "revert"
-  | "merge" | "rebase" | "edit-after" | "reset" | "delete-branch" | "stash-apply" | "stash-pop" | "stash-drop";
+  | "merge" | "rebase" | "squash-later" | "reset" | "delete-branch" | "stash-apply" | "stash-pop" | "stash-drop";
 
 export interface CommitAction {
   kind: ActionKind;
@@ -99,7 +99,7 @@ export function commitActions(c: CommitFacts): CommitAction[] {
     { kind: "tag" },
     ...(isHead ? [] : [{ kind: "cherry-pick" as const }]),
     { kind: "revert" },
-    ...(!isHead && onBranch ? [{ kind: "merge" as const }, { kind: "rebase" as const }, { kind: "edit-after" as const }] : []),
+    ...(!isHead && onBranch ? [{ kind: "merge" as const }, { kind: "rebase" as const }, { kind: "squash-later" as const }] : []),
     { kind: "reset" },
   ];
   const byRef = c.refs.flatMap((r): CommitAction[] => {

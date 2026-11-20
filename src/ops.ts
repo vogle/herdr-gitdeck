@@ -19,7 +19,7 @@ import {
 import { files } from "./changes.ts";
 import { agentHold, type RepoAgent } from "./core/repoAgents.ts";
 import { FLOW_KINDS, flowBase, flowBranch, flowKinds } from "./core/flow.ts";
-import { cycleStep, loadPlan, moveStep, runPlan, type RebasePlan } from "./core/rebase.ts";
+import { loadPlan, runPlan, squashBase, squashPlan } from "./core/rebase.ts";
 import { actionKey, MENU_ITEM, MENU_PAD, MENU_WIDTH, needsConfirm, type OpsActions, type OpsParts } from "./ui/ops.ts";
 
 export interface OpsHost {
@@ -138,14 +138,14 @@ export class OpsPanel {
     this.run(cx, label, done, (target) => runOp(net ? this.host.net : this.host.git, target, args), safe);
   }
 
-  /** Reads the commits after `base` into the rebase editor. */
-  openPlan(base: string, cx: Context): void {
+  /** Reads the chosen commit and every later one, to squash them into it once confirmed. */
+  openSquash(sel: { hash: string; parents: number }, cx: Context): void {
     const target = this.host.target();
     if (!target) return;
     cx.spawn(async (cx) => {
-      const loaded = await loadPlan(this.host.git, target, base);
+      const loaded = await loadPlan(this.host.git, target, squashBase(sel.hash, sel.parents));
       if (this.view.repo !== target.cwd) return;
-      this.view = loaded.plan ? withPlan(this.view, loaded.plan) : finished(this.view, loaded.error, null);
+      this.view = loaded.plan ? withPlan(this.view, squashPlan(loaded.plan)) : finished(this.view, loaded.error, null);
       cx.notify();
     });
   }
@@ -184,8 +184,8 @@ export class OpsPanel {
         return this.git(cx, "Merging", `Merged ${short}`, mergeArgs(at));
       case "rebase":
         return this.git(cx, "Rebasing", `Rebased onto ${short}`, rebaseArgs(at));
-      case "edit-after":
-        return this.openPlan(sel.hash, cx);
+      case "squash-later":
+        return this.openSquash(sel, cx);
       case "reset":
         this.view = confirmOps(this.view, "reset");
         return cx.notify();
@@ -198,12 +198,6 @@ export class OpsPanel {
       case "stash-drop":
         return this.git(cx, "Dropping", `Dropped ${stash}`, stashArgs("drop", stash));
     }
-  }
-
-  editPlan(change: (plan: RebasePlan) => RebasePlan | null, cx: Context): void {
-    if (!this.view.plan || this.view.busy !== null) return;
-    this.view = withPlan(this.view, change(this.view.plan));
-    cx.notify();
   }
 
   actions(): OpsActions {
@@ -257,13 +251,16 @@ export class OpsPanel {
         this.view = stopNaming(this.view);
         cx.notify();
       },
-      cycleStep: (i, cx) => this.editPlan((plan) => cycleStep(plan, i), cx),
-      moveStep: (i, by, cx) => this.editPlan((plan) => moveStep(plan, i, by), cx),
-      cancelPlan: (cx) => this.editPlan(() => null, cx),
+      cancelPlan: (cx) => {
+        if (!this.view.plan || this.view.busy !== null) return;
+        this.view = withPlan(this.view, null);
+        cx.notify();
+      },
       runPlan: (cx) => {
         const plan = this.view.plan;
         if (!plan) return;
-        this.run(cx, "Rebasing", `Rewrote ${plan.steps.length} commits`, (target) => runPlan(this.host.git, files, target, plan));
+        const into = plan.steps[0]?.hash.slice(0, 7) ?? "";
+        this.run(cx, "Squashing", `Squashed ${plan.steps.length - 1} commits into ${into}`, (target) => runPlan(this.host.git, files, target, plan));
         this.view = withPlan(this.view, null);
         cx.notify();
       },

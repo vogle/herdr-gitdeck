@@ -33,9 +33,7 @@ export interface OpsActions {
   runHeld: (cx: Context) => void;
   /** Starts naming a git-flow branch. */
   startFlow: (kind: FlowKind, cx: Context) => void;
-  /** The interactive rebase editor. */
-  cycleStep: (index: number, cx: Context) => void;
-  moveStep: (index: number, by: -1 | 1, cx: Context) => void;
+  /** The squash waiting for its confirmation. */
   runPlan: (cx: Context) => void;
   cancelPlan: (cx: Context) => void;
 }
@@ -69,7 +67,7 @@ const LABEL: Record<ActionKind, string> = {
   revert: "Revert",
   merge: "Merge",
   rebase: "Rebase onto",
-  "edit-after": "Edit commits after this",
+  "squash-later": "Squash later commits into this",
   reset: "Reset to here",
   "delete-branch": "Delete",
   "stash-apply": "Apply",
@@ -148,45 +146,27 @@ function namingRow(parts: OpsParts, p: Palette, a: OpsActions): Element {
     .child(textButton("name-cancel", "Cancel", p, a.cancelName));
 }
 
-const STEP_COLOR = { pick: "foreground", squash: "info", fixup: "info", drop: "removed" } as const;
-
-/** The steps of an interactive rebase, oldest first: click an action to change it. */
-function planEditor(plan: RebasePlan, p: Palette, a: OpsActions, busy: boolean): Element {
+/** "Squash N commits into <hash>?" above the list, with the reason when it can't run. */
+function squashRow(plan: RebasePlan, p: Palette, a: OpsActions, busy: boolean): Element {
   const problem = planProblem(plan);
-  const rows = plan.steps.map((s, i) =>
-    h_flex()
-      .h(22)
-      .px(8)
-      .gap(6)
-      .items_center()
-      .whitespace_nowrap()
-      .child(div().w(58).flex_shrink_0().child(textButton(`rs:${i}`, s.action, p, (cx) => a.cycleStep(i, cx))))
-      .child(div().w(60).flex_shrink_0().text_color(p.dim).child(s.hash.slice(0, 7)))
-      .child(div().flex_1().min_w_0().truncate().text_color(p[STEP_COLOR[s.action]]).when(s.action === "drop", (el) => el.line_through()).child(s.subject))
-      .child(textButton(`ru:${i}`, "↑", p, (cx) => a.moveStep(i, -1, cx)))
-      .child(textButton(`rd:${i}`, "↓", p, (cx) => a.moveStep(i, 1, cx))),
-  );
-  return v_flex()
+  const into = plan.steps[0]?.hash.slice(0, 7) ?? "";
+  return h_flex()
+    .px(8)
+    .py(3)
+    .gap(4)
+    .items_center()
     .flex_shrink_0()
-    .border_t_1()
+    .border_b_1()
     .border_color(p.border)
     .text_xs()
-    .child(
-      h_flex()
-        .px(8)
-        .py(3)
-        .gap(6)
-        .items_center()
-        .child(div().flex_1().min_w_0().truncate().text_color(problem ? p.removed : p.muted).child(problem ?? `Rewrite ${plan.steps.length} commits, oldest first. squash/fixup join the one above; drop leaves it out.`))
-        .child(textButton("plan-run", busy ? "Rebasing…" : "Run", p, a.runPlan, problem === null))
-        .child(textButton("plan-cancel", "Cancel", p, a.cancelPlan)),
-    )
-    .child(v_flex().id("gitdeck-plan").max_h(220).overflow_y_scroll().children(rows));
+    .child(div().flex_1().min_w_0().truncate().text_color(problem ? p.removed : p.muted).child(problem ?? `Squash ${plan.steps.length - 1} commits into ${into}?`))
+    .child(textButton("plan-run", busy ? "Squashing…" : "Squash", p, a.runPlan, problem === null))
+    .child(textButton("plan-cancel", "Cancel", p, a.cancelPlan));
 }
 
-/** What an action from the menu still asks for, above the list: a name, a reset mode, or the rebase steps. */
+/** What an action from the menu still asks for, above the list: a name, a reset mode, or a squash to confirm. */
 export function commitBar(parts: OpsParts, p: Palette, a: OpsActions): Element | null {
-  if (parts.view.plan) return planEditor(parts.view.plan, p, a, parts.view.busy !== null);
+  if (parts.view.plan) return squashRow(parts.view.plan, p, a, parts.view.busy !== null);
   if (parts.view.naming?.kind === "branch" || parts.view.naming?.kind === "tag") return namingRow(parts, p, a);
   const confirm = parts.view.confirm;
   if (confirm !== "reset" && confirm !== "reset-hard") return null;

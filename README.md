@@ -63,11 +63,10 @@ one you're in, with its branch and where it stands.
   selected commit; click one to read it (raw, from git's objects). A Git LFS
   file shows its real size and object id; a submodule shows the commit it
   records and its URL (from that commit's `.gitmodules`, read as plain text).
-- **Editing history.** "Edit commits after this" opens the commits between
-  the selected one and HEAD, oldest first. Click a step to cycle pick →
-  squash → fixup → drop, move it with ↑ ↓, then Run. gitdeck writes git's todo
-  list itself (no editor opens) and a squash keeps both messages. Ranges with
-  a merge commit are refused. Repos on this machine only.
+- **Squashing history.** "Squash later commits into this" folds every commit
+  after the selected one into it, keeping its message, after one confirmation
+  (`Squash N commits into <hash>?`). gitdeck writes git's todo list itself (no
+  editor opens). Ranges with a merge commit are refused. Repos on this machine only.
 - **Statistics.** **Stats** in the toolbar: commits (no merges) on HEAD, files,
   authors by commit count, and commits per month, each with a bar.
 - **git-flow.** In a repo with a `develop` branch, **+ feature** and
@@ -91,7 +90,7 @@ Only the buttons you click write: `git add`, `git restore`, `git rm --cached`,
 lines, from a patch file gitdeck writes into the repo's `.git` folder) and
 `git commit`, and the branch and sync buttons run `git switch`, `branch`,
 `tag`, `merge`, `rebase`, `cherry-pick`, `revert`, `reset`, `stash`, `fetch`,
-`pull` and `push`, and Edit commits runs `git rebase -i` with its todo list
+`pull` and `push`, and Squash runs `git rebase -i` with its todo list
 copied in by `cp` (`sequence.editor`). These run your repo's own hooks and signing program, as git
 always does, so use them only in repos whose `.git` folder you trust. Network
 commands never ask for a password (`GIT_TERMINAL_PROMPT=0`): use an SSH key or
