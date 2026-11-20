@@ -1,0 +1,195 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+1. Primary Request and Intent:
+   - **Standing rules:**
+     - Always reply in Korean, in MoAI-Easy's casual 해요체. The user corrected me once ("한글로 말하라고..") and again mid-turn: "한글로 알려줘".
+     - Ask with AskUserQuestion before any commit or push.
+     - Stage explicit paths only.
+     - Never commit `.claudeignore` or `.worktreeinclude`.
+     - No "🗿 MoAI" trailer.
+   - **Earlier work this session, all uncommitted:**
+     - Fork-style commit detail view.
+     - Right-click commit menu.
+     - Resizable commit pane.
+     - File Tree as a folder tree.
+     - Syntax colors for source files.
+     - Markdown shown rendered.
+     - Images and SVG drawn as pictures; SVG sized to the viewer.
+     - GitHub committer avatar (web-flow id 19864447).
+   - **UI review request:** "지금 이게 fork랑 너무 똑같은가?? UI 전체적으로 체크해주고 발전시킬부분 있으면 말해주고, 아 유저아이콘이 gitlab일 경우는 안나오내? 어떻게 하면 나오게 하지?"
+     - I reported 5 UI ideas:
+       1. Richer Branches tab.
+       2. A badge on agent-made commits.
+       3. A collapsible commit pane.
+       4. Quieter "changed since viewed" markers.
+       5. Bolder commit body text.
+     - I also suggested removing "Fork" from code comments.
+     - None of these are implemented yet.
+   - **"진행해줘":** implement option A, matching GitLab project members to commit authors. Done.
+   - **User ran** `git config --global gitdeck.avatars true`.
+   - **Next request:** "gitlab 에서 github 아이콘이 나오는대 이거 두개 나누어야 하지 않을까? 그리고 ... 항상 트루로 하게 할수 없나?"
+     - Made pictures on by default. Done.
+   - **Latest request:** "처음 열 때부터 GitLab 아이콘 나오게 해줘 그리고 지그 [Image #13] gitlab 에 github아이콘이 나오고 있는대 왜그래?"
+     - The image showed Allan Im's GitHub profile photo in a GitLab repo's history.
+
+2. Key Technical Concepts:
+   - **Runtime:** a Herdr mod on QuickJS, using gpui-kit and gpui-base.
+   - **Code rules:** pure logic lives in `src/core`, written test-first; state is immutable.
+   - **Verification steps:**
+     1. `pnpm verify` (log goes to the scratchpad).
+     2. `pnpm -s dev`.
+     3. `herdr-app status`.
+     4. `orca computer click --app dev.herdr.app`, with coordinates ≈ 1.477 × positions on the 1300px screenshot.
+     5. `herdr-app shot`, then `sips` to crop and shrink.
+   - **Screen coordinates:**
+     - bsp space in the sidebar: (53,241).
+     - herdr-gitdeck space: about (89,414).
+     - In the bsp space, the repo strip chips are: bsp-bo ≈ (1347,127), bsp-customer-service ≈ (1447,127).
+   - **Avatar cache:** `~/.config/herdr-app/mods/gitdeck/.avatars`. File names are a hash.
+   - **GitLab self-hosted server:** `bsp-git.uzen.io`, GitLab 17.4.2.
+     - `/avatar?email=` returns Gravatar unless the email matches the user's public email.
+     - GraphQL has no `Repository.commit` field.
+     - `projects/:id/users` lists members, with uploaded avatar URLs on the server's own host.
+   - **Forge detection:**
+     - `readOrigin` probes the signed-in CLIs (`glab config get token --host`, `gh auth token --hostname`).
+     - It then writes `gitdeck.forge` into the repo's local config.
+     - The graph reads remotes and forge from config (`REMOTES_ARGS`).
+     - `refreshHistory` re-reads when the remotes config output changes.
+   - **The bsp root repo is on GitHub** (github.com/allanim/bsp). Its sub-repos `bsp-*` are on the GitLab server.
+
+3. Files and Code Sections:
+   - **src/core/avatars.ts**
+     - Added `name?: string` to `AvatarWanted`.
+     - Added an exported `GitlabMember { username; name; avatar_url: string|null }`.
+     - Added constants `MEMBER_PAGES=5` and `PER_PAGE=100`.
+     - Added `plainName`.
+     - Added `export function memberAvatar(members, name, email)`:
+       - Matches a member whose name is the same (case-insensitive), or whose username is the email's local part.
+       - Uses the picture only when exactly one member matches.
+       - Refuses Gravatar by passing the URL through `parseGitlabAvatar`.
+     - Added `parseMembers` and `gitlabMembers`, which pages through `projects/${encodeURIComponent(path)}/users?per_page=100[&page=n]`.
+     - `gitlabUrls` now falls back to the member list for emails `/avatar` couldn't resolve. The members are read once.
+     - `avatarsOn` is now on unless the setting is false:
+       ```ts
+       return !/^(false|no|off|0)$/i.test(line?.slice("gitdeck.avatars ".length).trim() ?? "");
+       ```
+     - `avatarBase` takes the host:
+       ```ts
+       export function avatarBase(email: string, host = ""): string {
+         // The same person can have one picture on GitHub and another on a GitLab server.
+         const e = host === "" ? normal(email) : `${host.toLowerCase()}\n${normal(email)}`;
+         return fnv1a(e, 0x811c9dc5) + fnv1a(e, 0x050c5d1f);
+       }
+       ```
+   - **src/avatars.ts**
+     - The header comment now reads "(on unless `git config gitdeck.avatars false`)".
+     - `wanted` pushes `name: c.author` and takes the host: `wanted(commits, host)` uses `avatarBase(c.email, host)`.
+     - `path(email: string, host: string)` uses `avatarBase(email, host)`.
+     - `load()` now calls `readAvatarSource` first:
+       - If there is no source, nothing is wanted.
+       - The `asked` set and saved files are keyed with `avatarBase(email, source.host)`.
+   - **src/main.ts**
+     - The committer load passes `author: read.detail?.committer ?? ""`.
+     - Added `import { forgeNamedLate } from "./core/graph/remoteKind.ts";` at line 28.
+     - The avatar callback now passes the host:
+       ```ts
+       avatar: (email) => (this.view.history?.avatars && this.view.history.avatarHost ? this.avatars.path(email, this.view.history.avatarHost) : null),
+       ```
+     - In `readPr`, after `this.pr = {...}`:
+       ```ts
+       // Reading the PR is what names an unknown host's forge: draw the graph again with its icon.
+       if (this.historyFor === target.cwd && this.view.history && forgeNamedLate(this.view.history.remotes, state.forge)) await this.readHistory(cx);
+       ```
+     - The doc comment now reads "Authors' pictures, unless `gitdeck.avatars` is false."
+   - **src/core/history.ts**
+     - Imports `originHost`.
+     - `History` gains `avatarHost: string | null`, with the comment "origin's host: pictures are kept per server...".
+     - `EMPTY_HISTORY` has `avatarHost: null`.
+     - `loadHistory` computes `const avatarHost = originHost(remotesOut);` and includes it in all three return paths.
+     - The `avatars` comment was updated.
+   - **src/core/graph/remoteKind.ts** — two new functions:
+     ```ts
+     export function originHost(output: string): string | null {
+       const url = /^remote\.origin\.url\s+(.+)$/m.exec(output)?.[1];
+       return url ? (parseRemote(url)?.host.toLowerCase() ?? null) : null;
+     }
+     export function forgeNamedLate(kinds: Readonly<Record<string, RemoteKind>>, forge: "github" | "gitlab" | null): boolean {
+       return kinds.origin === "git" && forge !== null;
+     }
+     ```
+   - **Tests:**
+     - `tests/avatars.test.ts`:
+       - `memberAvatar` test, covering name match, username match, two "Lee" members, Gravatar, and no match.
+       - `findAvatarUrls` member-fallback test (members read once, path `projects/g%2Fapp/users?per_page=100`).
+       - Host-separation asserts for `avatarBase`.
+       - The existing GitLab test now counts only `avatar?` calls.
+     - `tests/history.test.ts`:
+       - Pictures are on unless turned off: unset is true, `no` is false.
+       - `on.avatarHost === "github.com"`.
+     - `tests/rowStyle.test.ts`: tests for `originHost` and `forgeNamedLate`.
+
+4. Errors and fixes:
+   - **Shell error.** A newline-separated `$E` loop put a control character into the glab URL. Fixed by using a `while read` loop inside `bash -c`.
+   - **The user's own picture appeared in a GitLab repo.** The cache was keyed by email only, so the GitHub picture for allan@vogle.com was reused there. Fixed by keying with server host + email. Old email-only cache files become harmless orphans.
+   - **The first open of an unknown-host GitLab repo showed the git (diamond) icon.** The forge is named during `readPr`, which runs after the history is read. Fixed by re-reading the history when `forgeNamedLate` is true.
+   - **The user asked for Korean replies mid-turn.** I kept every reply in Korean after that.
+
+5. Problem Solving:
+   - **GitLab member fallback:** a real-server run found pictures for 2 of 14 bsp-bo authors (kenny, zenith).
+   - **Uploaded pictures download without auth:** the server returned `200 image/png`.
+   - **Last full verify** (`pnpm verify`, exit 0):
+     - Tests: 445 passed, 0 failed.
+     - Coverage: 99.58%.
+   - **First-open icon check, in progress:**
+     - `pnpm -s dev` succeeded.
+     - bsp-customer-service had no forge before (exit 1).
+     - After opening it, `gitdeck.forge` is now `gitlab`.
+     - The screenshot at `/private/tmp/claude-501/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29/scratchpad/gl5s.png` has not been viewed yet.
+   - **Known side issue, not addressed:** bsp-bo showed "Can't read the MR:" with empty error text.
+
+6. All user messages:
+   - "지금 이게 fork랑 너무 똑같은가?? UI 전체적으로 체크해주고 발전시킬부분 있으면 말해주고, 아 유저아이콘이 gitlab일 경우는 안나오내? 어떻게 하면 나오게 하지?"
+   - "진행해줘"
+   - (bash) `git config --global gitdeck.avatars true`
+   - "gitlab 에서 github  아이콘이 나오는대 이거 두개 나누어야 하지 않을까? 그리고 git config --global gitdeck.avatars true 이렇게 해서 설정하는거 이거 항상 트루로 하게 할수 없나? 해도 상관없지 않나?"
+   - "한글로 알려줘" (sent mid-turn)
+   - "처음 열 때부터 GitLab 아이콘 나오게 해줘 그리고 지그 [Image #13] gitlab 에 github아이콘이 나오고 있는대 왜그래?"
+   - **Standing constraints, still in effect:**
+     - Reply in Korean.
+     - Ask before commit or push.
+     - Never commit `.claudeignore` or `.worktreeinclude`.
+     - No MoAI trailer.
+     - Stage explicit paths only.
+
+7. Pending Tasks:
+   - Finish checking the first-open GitLab icon in the app. View `gl5s.png`; History may need to be opened first.
+   - Return the Herdr view to the herdr-gitdeck space after testing.
+   - Report the result in Korean:
+     - Why the GitHub picture appeared: the cache was keyed by email only.
+     - The fix: pictures are kept per server.
+     - The first-open icon fix.
+     - Old cache files become orphans.
+     - Evidence: 445 tests passing, plus the screenshot.
+   - Everything is uncommitted. Ask through AskUserQuestion before any commit.
+
+8. Current Work:
+   I was verifying the latest fix in the app. The last command did these steps:
+   1. Reinstalled the mod.
+   2. Clicked the bsp space (53,241).
+   3. Clicked the bsp-customer-service chip (1447,127).
+   4. Waited 6s and took a screenshot (`gl5.png` → `gl5s.png`).
+   
+   It confirmed that `gitdeck.forge` was then set to `gitlab`. The next thing is to view the screenshot and check the graph labels (origin/main) show the GitLab icon instead of the diamond. The panel may be on a tab other than History. Also check that Allan Im no longer shows the GitHub photo in GitLab repos.
+
+9. Optional Next Step:
+   - View `/private/tmp/claude-501/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29/scratchpad/gl5s.png`.
+   - If needed, click the History tab and re-shoot, to confirm the GitLab icon on first open and that the GitHub photo is gone.
+   - Switch the view back to the herdr-gitdeck space.
+   - Report in Korean, per the user's request: "처음 열 때부터 GitLab 아이콘 나오게 해줘 그리고 ... gitlab 에 github아이콘이 나오고 있는대 왜그래?"
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
