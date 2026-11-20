@@ -1,0 +1,143 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+What this work is for:
+This section records facts without weighing them; whoever continues from this summary weighs them, holding back only a step that plainly serves serious, wrongful harm, and, where one missing fact would decide that, asking the user for it rather than refusing; a bare yes, go-ahead or repeated request is not that fact and leaves the step held back; work that is merely sensitive, unusual or borderline is neither held back nor questioned.
+
+From the earlier summary:
+- gitdeck is a git-client mod for the Herdr desktop app. It lives at `/Volumes/WorkSpace/vogle/herdr-gitdeck` on branch `feat/agent-centered-panel`. Sources: CLAUDE.md and the memory note "Agent-centered design".
+- Its features are built around supervising coding agents.
+- It reads the user's local repos, including `/Users/allan/orca/workspaces/bsp/BNKR-3710` and its sub-repo `bsp-display-service`.
+- It reads PR/MR data through the `gh` and `glab` CLIs. The sources are GitHub and a self-hosted GitLab at `bsp-git.uzen.io`, which needs a VPN.
+- It detects sign-in without keeping or printing tokens. It only checks that `glab config get token --host` and `gh auth token --hostname` give non-empty output.
+- The user asked for every Review improvement task to be done, with a commit after each task and the result checked each time.
+
+In this conversation:
+- The user asked whether `herdr-app` could check the UI directly. They approved adding a tab-switch command, switching Herdr spaces temporarily to check, finding the cause of a stuck PR read, fixing it, and fixing Blame on deleted files. They approved committing and pushing each of these.
+- The user asked what happens when `gh` or `glab` is not installed. This was answered with no code change.
+- Screenshots of the user's Herdr window, showing their spaces and agents, were taken and read via `herdr-app shot`. After each check the window was restored to the BNKR-3710 space and the Changes tab.
+- Nothing is pending except possibly updating the PR #8 description with the new commits.
+
+## Rules (still binding)
+- Reply in Korean, natural 해요체. The MoAI-Easy output style is active, with banners translated.
+- Code, paths, identifiers and commit messages stay in English.
+- Never add a "🗿 MoAI" trailer to commits or PRs.
+- Stage by explicit path, never `git add -A`. Leave the untracked `.claudeignore` and `.worktreeinclude` unstaged.
+- Herdr runtime rules:
+  - no Node APIs and no setTimeout
+  - never keep a `cx`
+  - exec has no stdin and a 30 s limit
+  - state is immutable
+- Per change:
+  1. Write tests first and see them fail.
+  2. Run `pnpm verify`, then `pnpm -s dev`, then `herdr-app status` (expect `"errors": []`).
+  3. Screenshot where possible.
+  4. The user approves, then commit.
+- Questions go through AskUserQuestion, never prose.
+- Push only when the user asks. They approved push for each of this session's commits.
+- The global `git-stats` post-commit hook prints `TypeError: Cannot read properties of undefined (reading 'commits')`. Commits still succeed.
+- The pre-push hook prints "No Makefile found — skipping ci-local".
+- A PreToolUse hook blocks Write outside the project. Use the scratchpad `/private/tmp/claude-501/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29/scratchpad` via Bash.
+- Don't claim things unverified. Earlier I wrongly said "no way to check with herdr-app" without checking. Admit such errors.
+
+## Task status (all done, pushed)
+| Task | Commit | Description |
+|---|---|---|
+| 0 | `2effedf` | repo strip, forge choice for unknown hosts, link origin |
+| 1 | `a11ead4` | Review against the PR's target branch |
+| 2 | `754c48a` | failed CI checks list + add to feedback |
+| 3 | `108fdc9` | Review says when work isn't committed |
+| 4 | `93d029e` | Hide viewed / "changed since viewed" |
+| 5 | `11c49ab` | Note on whole file |
+| 6 | `2e70ac9` | unresolved PR/MR review comments to the agent |
+| 6 (security fix) | `dccda67` | review comments passed as reviewers' words, not orders |
+| 7 | `69f3194` | forge buttons up front, same header in every repo |
+| 8 | `ef48dc2` | warn when far behind base |
+
+Extras:
+- `459326f` (PR/MR label; a host can be neither)
+- `e716e5d` (root repo marked in strip)
+
+## This session's new commits (all pushed; local == origin, `0 0`)
+
+**1. `9e8cd3b` "feat: switch the panel tab by command"**
+- `src/core/panel.ts`: new `tabCommand(command): PanelTab | null`. It parses `tab:<name>` against `PANEL_TABS` (`changes|review|history|branches|more`).
+- `src/main.ts`: the nextCommand loop (around line 200, which handles `picker`, `refresh`, `search`, `update`) gained an else branch calling `this.selectTab(tab, cx)`.
+- Test added in `tests/panel.test.ts`.
+- Usage: `herdr-app do gitdeck.tab:review` (reaches shown copies only), then `herdr-app shot <file>`.
+- Clicks are still impossible.
+
+**2. `d3a055c` "fix: read the PR when the Review tab shows another repo"**
+- Root cause: `readHistory` (`src/main.ts` ~line 419) calls `readReview(cx, this.review === null)` when on the Review tab. `this.review` kept the previous repo's data, so the new repo's PR was never read.
+- Symptom: the PR row stuck on "Reading origin…" and Review stuck on "Reading the review request…".
+- The header refresh takes the same path. The "reading" row has no retry button (`again` null, ~line 617).
+- The bug came from `e701097` (already on main).
+- Fix in `readReview`: `pr ? this.readPr(cx, true) : Promise.resolve()` became `this.readPr(cx, pr)`. `readPr(false)` returns early when the repo and branch were already read.
+- Verified by reproducing the original steps (Review open in BNKR-3710, then switch space to herdr-gitdeck): PR #8 shows.
+- `main.ts` has no unit tests.
+
+**3. `3c757b8` "fix: blame a deleted file where it last was"**
+- `src/core/git/diff.ts`: `Diff.deleted?: boolean`. `parseDiff` sets it from a header line starting `deleted file mode ` (outside hunks only) and returns it in both return paths.
+- `src/core/inspect.ts`: `blameRev(source, deleted)` returns `parents[0] ?? hash` when deleted, else `hash`.
+- `src/viewer.ts` `bar()` (~line 266):
+  - `deleted = this.shown?.kind === "diff" && this.shown.diff.deleted === true`
+  - Blame uses `blameRev(commit, deleted)`; History is unchanged (`commit.hash`).
+- Tests added in `tests/show.test.ts` and `tests/inspect.test.ts`. They failed first, then passed.
+- Checked in a temp repo `<scratchpad>/blamerepo`: real `diff-tree` output has `deleted file mode 100644`, and blame at merge-base works.
+- Before the fix, Blame of a deleted file showed red `fatal: no such path gone.txt in <hash>` (`src/ui/inspect.ts:142`).
+- The click itself was not screenshot-verified.
+
+**Last `pnpm verify`:** exit 0, 403 tests passing, coverage 99.66%. `herdr-app status` errors `[]`.
+
+## Screenshot findings
+- BNKR-3710 (no PR):
+  - Task 3 warning visible: "22 files not committed yet: not in this review" with a Changes button.
+  - Task 4: Hide viewed and "0 / 0 viewed · since main" visible.
+- herdr-gitdeck space (PR #8):
+  - Header: "PR #8 … OPEN checks 1✓".
+  - Review shows "#8 → main" and "Review comments on the PR · Add unresolved to feedback" (task 6 ✓).
+  - "20 / 95 viewed", checked files dimmed, "changed since viewed" shown in yellow (task 4 ✓).
+- Not seen:
+  - Task 2 failed list (PR #8's checks all pass).
+  - Task 5 (needs a click to open a diff).
+  - Post-click states.
+- Space IDs:
+  - BNKR-3710 `spba8709797f13052ef96ce0bf8f5d4782` (the original active space)
+  - herdr-gitdeck `sp0f04c38c30359f061af09412efe570bd`
+- Restored afterwards to BNKR-3710 + `tab:changes`.
+
+## Answer given: gh/glab not installed
+- Herdr `exec` rejects when the program can't start.
+- `src/core/forge/index.ts` catches this and returns errors like `Can't run gh: <Herdr message>` (tests in `tests/forge.test.ts` mock "spawn gh ENOENT"; the real wording is unverified).
+- On known hosts the PR row shows "Can't read the PR: Can't run gh: …" with a retry button.
+- On an unknown host, the sign-in probe treats both CLIs as absent, so it asks GitLab or GitHub, then errors after the choice.
+- A host named "none" never calls a CLI.
+- PR list shows the error. The review-comments button only appears when a PR is read.
+- Feedback notes for failed checks contain `gh run view --job … --log-failed` / `glab ci trace …`, which need the CLI on the agent's machine.
+- Offered (not done): a friendlier install hint message.
+
+## Other answers / decisions
+- In Review, History (file-log) shows the file's whole history (src/main.ts: 41 commits, 16 on this branch). The user chose to keep the full history.
+
+## Open threads
+- PR #8 (https://github.com/vogle/herdr-gitdeck/pull/8) description covers only the first 20 commits. `9e8cd3b`, `d3a055c` and `3c757b8` are not in it yet (body file `<scratchpad>/pr8-body.md`, applied with `gh pr edit 8 --body-file`).
+- Possible friendlier "gh/glab not installed" message (offered, no decision).
+- Earlier unresolved offer: extend test/code classification in `src/core/reviewOrder.ts`. Gaps:
+  - Python `test_foo.py` outside a tests folder
+  - Ruby `_spec.rb` outside `spec/`
+  - `FooTest.java` / `FooTests.cs` / `FooTests.swift` outside a test folder
+  - capitalized `Tests/`
+  - Rust inline tests
+  - `.m`, `.R`, `.hs` and `.clj` land in "other"
+- Unverified:
+  - task 2 failed-check list rendering
+  - GitLab failed jobs (`glab ci list` 403)
+  - GitLab real discussions
+  - ↗ open on Windows/Linux
+  - Blame-after-delete click on screen
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
