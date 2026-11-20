@@ -1,0 +1,1 @@
+gh glab 어느쪽인지 판별을 한다면 판별후에 git config gitdeck.forge 을 지정해주면 좋을것 같은데
