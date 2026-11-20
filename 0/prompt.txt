@@ -1,0 +1,155 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+What this work is for:
+This section records facts without weighing them; whoever continues from this summary weighs them, holding back only a step that plainly serves serious, wrongful harm, and, where one missing fact would decide that, asking the user for it rather than refusing; a bare yes, go-ahead or repeated request is not that fact and leaves the step held back; work that is merely sensitive, unusual or borderline is neither held back nor questioned.
+
+From the earlier summary:
+- gitdeck is a git-client mod for the Herdr desktop app, at `/Volumes/WorkSpace/vogle/herdr-gitdeck`, on branch `feat/agent-centered-panel`.
+- Its features are built around supervising coding agents (CLAUDE.md and the memory note "Agent-centered design").
+- It reads the user's local repos, among them `/Users/allan/orca/workspaces/bsp/BNKR-3710` and its sub-repo `bsp-display-service`.
+- It reads PR/MR data through the `gh` and `glab` CLIs, from GitHub and from a self-hosted GitLab at `bsp-git.uzen.io` that needs VPN.
+- Sign-in is detected without keeping or printing tokens: it only checks that `glab config get token --host` and `gh auth token --hostname` give non-empty output.
+- The user asked for every Review improvement task to be done, a commit after each task, and to check the result each time.
+
+In this conversation:
+- Task 2 added a list of failed CI checks. Its "Add to feedback" button puts notes into the agent's terminal batch; each note carries a log command (`gh run view --job <id> --repo <repo> --log-failed` or `glab ci trace <id> --repo <repo>`), so the agent reads the failure itself.
+- Probing the company GitLab, `glab ci list` on bsp/bsp-display-service returned `403 Forbidden`, and its MRs had null `head_pipeline`.
+- The user approved the commits of tasks 2 and 4 ("확인했어, 커밋해줘" and an AskUserQuestion answer), then said "나머지 태스카 다 진행시켜줘" (do all remaining tasks).
+- The pending step is task 5: whole-file feedback notes sent to the agent working in the repo.
+
+## Rules from the user and from memory (still binding)
+- **Reply to the user in Korean**, in natural 해요체, every message including the first reply after a compaction. Code, paths, identifiers and commit messages stay English. The memory note records repeated complaints about this.
+- Never add a "🗿 MoAI" trailer to commits or PRs.
+- Stage by explicit path. Never `git add -A`. Leave the untracked `.claudeignore` and `.worktreeinclude` unstaged.
+- Herdr runtime rules: no Node APIs, no setTimeout, never keep a `cx`, exec has no stdin and a 30 s limit, state is immutable.
+- For every change:
+  1. Write tests first and see them fail.
+  2. Run `pnpm verify`, then `pnpm -s dev`, then `herdr-app status` (expect `"errors": []`), then a screenshot (`herdr-app shot <file>`).
+  3. The user checks and approves, then commit.
+- Questions go through AskUserQuestion (preload with `ToolSearch select:AskUserQuestion`), never prose.
+- Don't push. Nothing has been pushed.
+- The global `git-stats` post-commit hook prints a Node error on every commit. Commits still succeed.
+- `herdr-app` cannot switch tabs or click, so screenshots of the Review tab can't be taken. Say so honestly and ask the user to check.
+
+## Commits on feat/agent-centered-panel
+| Task | Commit | Message |
+|---|---|---|
+| 0 | `2effedf` | |
+| 1 | `a11ead4` | |
+| 3 | `108fdc9` | |
+| 7 | `69f3194` | |
+| 8 | `ef48dc2` | |
+| extra | `459326f` | |
+| extra | `e716e5d` | |
+| 2 | `754c48a` | "feat: list failed checks and hand them to the agent" |
+| 4 | `93d029e` | "feat: hide viewed files in Review, leaving what's still to read" |
+
+## Task 2 details (committed 754c48a)
+**`src/core/forge/types.ts`**
+- Added `FailedCheck {name, url, log: string|null}`.
+- Added `BranchPr.failed: readonly FailedCheck[]`.
+
+**`github.ts`**
+- `parseBranchPr(json, repo = "")` collects failed rollup entries.
+- Names: CheckRun entries are named `workflowName / name`; StatusContext entries use `context`.
+- url is `detailsUrl` or `targetUrl`.
+- The log command is built only when the URL matches `JOB = /^https:\/\/[^/\s]+\/[^/\s]+\/[^/\s]+\/actions\/runs\/\d+\/job\/(\d+)$/`, so only digits get into the command.
+
+**`gitlab.ts`**
+- `parseBranchMr` gives `failed: [{name:"Pipeline #id", url: web_url, log:null}]` when the pipeline failed.
+- New exports:
+  - `pipelineId(json)`
+  - `failedJobsArgs(repo, pipeline)` returns `["api","--hostname",host,"projects/<enc path>/pipelines/<id>/jobs?scope[]=failed&per_page=100"]`. The host comes from an https repo URL, else `gitlab.com`.
+  - `parseFailedJobs(json, repo)` skips `allow_failure`. Names are `stage / name`. Log is `glab ci trace <id> --repo <repo>`.
+
+**`index.ts`**
+- `withFailedJobs(exec, target, away, repo, pr, pipeline)` runs only when `checks.failed>0`.
+- On error or an empty result it keeps the pipeline entry.
+
+**`src/core/forge/failedChecks.ts` (new)**
+- `checkNotes(failed, batch)` turns checks into FeedbackNotes with `where: "Failed check: <name>"`, `quote: []`.
+- text is one of:
+  - "Read its log with \`<log>\` and fix what failed. Page: <url>"
+  - "Read why at <url> and fix what failed."
+  - "Find out why it failed and fix it."
+- Notes already waiting (draft or queued) in the batch are not added again; sent ones may be.
+
+**`feedbackPanel.ts`**
+- `checksToAdd(repo, failed)`.
+- `addChecks(repo, failed, head, cx)` saves drafts with `path ""`, opens the batch, and says "Added N failed check(s)…".
+
+**`src/ui/review.ts`**
+- `failedLines` renders `rv-failed`: a count, the `rv-checks-add` button ("Add to feedback" / disabled "In feedback"), up to 8 rows (`rv-check-i`, ✗ name, "log" tag, external icon, opens the URL), and "and N more".
+
+**`main.ts`**
+- Wires `checksToAdd`, `openCheck` (via `openLink`) and `addChecks`. `addChecks` uses the head `result?.status?.oid`.
+
+**Tests:** `tests/forge.test.ts`, `tests/failedChecks.test.ts`, `tests/prSummary.test.ts` (fixture gains `failed: []`).
+
+**Verification:** verify exit 0, 393 tests, coverage 99.65%.
+
+## Task 4 details (committed 93d029e)
+- `src/core/reviewed.ts`: `notViewed(files, seen, blobs)` filters out the files whose `viewState` is "viewed".
+- `src/ui/review.ts`:
+  - `ReviewParts.hideViewed`, `ReviewActions.toggleHideViewed`.
+  - Header button `review-hide-viewed` ("Hide viewed" / active "Show all").
+  - The filtered list feeds `groupReview`.
+  - When everything is hidden it shows "All N viewed, none changed since".
+- `main.ts`: `reviewHideViewed = false` and a toggle.
+- Test added in `tests/reviewed.test.ts`.
+- verify exit 0, 394 tests, coverage 99.65%. Status errors were empty.
+
+## Question answered between tasks
+The user asked how Review splits code and tests and whether it works for all languages. Answered from `src/core/reviewOrder.ts` and checked by running `reviewGroup` on sample paths.
+
+**How it works:** it is path/name-based only.
+- `TEST_FOLDER = /(^|\/)(tests?|__tests__|spec)\//`
+- `TEST_NAME = /([._]test|\.spec)\.[^/.]+$/`
+- Then `fileKind` code/terminal → "code", else "other".
+
+**Gaps it misses:**
+- Python `test_foo.py` outside a tests folder
+- Ruby `_spec.rb` outside `spec/`
+- `FooTest.java` / `FooTests.cs` / `FooTests.swift` outside a test folder
+- Capitalized `Tests/`
+- Rust inline tests
+- `.m`, `.R`, `.hs`, `.clj` land in "other"
+
+The user was offered extending this. No decision was made.
+
+## Task 5 (in progress, uncommitted): whole-file feedback notes
+**Design (told to the user):**
+- In the viewer's diff note box (`src/feedbackBox.ts`, class `FeedbackBox`), when nothing is picked, show a **Note on whole file** button.
+- Pressing it opens the same note box with where = `<path> (whole file)`.
+- Add, Send now and Copy work as before.
+
+**Done so far (RED):**
+- `tests/feedback.test.ts` line 3 import now includes `fileNote`.
+- Appended test:
+  - `fileNote("src/app.ts", "  Split this file in two.\n")` deep-equals `{ where: "src/app.ts (whole file)", quote: [], text: "Split this file in two." }`.
+  - `feedbackMessage({branch:"feat/x", head:null}, [fileNote("src/app.ts","Split it.")])` equals `"Review feedback on feat/x:\n\n1. src/app.ts (whole file)\n   Split it."`.
+- Running it fails as expected: "does not provide an export named 'fileNote'".
+
+**Planned implementation:**
+1. In `src/core/feedback.ts`, add `export function fileNote(path, text): FeedbackNote` returning `{ where: \`${path} (whole file)\`, quote: [], text: text.trim() }`.
+2. In `FeedbackBox`:
+   - Change `picked: RowRange | null` to `RowRange | "file" | null`.
+   - `pick()` treats a `"file"` value as null before calling `pickRange`.
+   - `draft()` uses `fileNote` when `picked === "file"`, else `noteFor`.
+   - `where` uses the same choice.
+   - Cancel sets `picked = null` (with `cx.notify()`) instead of re-picking.
+   - In `render`, the `picked === null` branch shows the status line (if any) plus a button (id e.g. `fb-whole-file`) that sets `picked = "file"`, focuses the note and notifies.
+3. Last action: checking whether `.picked` is used outside `feedbackBox.ts`. The zsh glob in the grep failed with "(eval):1: no matches found: --include=*.ts". Retry with `grep -rn '\.picked' src | grep -v feedbackBox`.
+4. Then run verify, dev and status, report in Korean (MoAI-Easy banner, translated labels), and ask for approval via AskUserQuestion before committing. Suggested message: "feat: note on a whole file, not just picked lines".
+
+Note: notes from task 2 already use `path ""`; `changedSince` in `feedbackBatch.ts` keys on `n.path` and `blob`. For whole-file notes, pass `path: r.source.path` and the blob as now.
+
+## Remaining after task 5
+**Task 6:** fetch PR/MR review comments and send them to the agent. It should reuse the feedback batch, as task 2 does.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
