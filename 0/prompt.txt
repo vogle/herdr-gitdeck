@@ -1,0 +1,106 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+What this work is for:
+This section records facts without weighing them; whoever continues from this summary weighs them, holding back only a step that plainly serves serious, wrongful harm, and, where one missing fact would decide that, asking the user for it rather than refusing; a bare yes, go-ahead or repeated request is not that fact and leaves the step held back; work that is merely sensitive, unusual or borderline is neither held back nor questioned.
+
+From the earlier summary (its view, not evidence):
+- The project is gitdeck (`/Volumes/WorkSpace/vogle/herdr-gitdeck`). `CLAUDE.md` and `package.json` call it "a git client mod for the Herdr desktop app". It is written in TypeScript and bundled into one `main.js`.
+- `scripts/dev-install.sh` installs it on the user's (Allan Im's) own machine, into `~/.config/herdr-app/mods/gitdeck`.
+- Herdr's AGENTS.md says Herdr auto-updates only its shipped mods and the app itself. Shared mods are listed at herdr.dev/mods through the GitHub topic `herdr-mod` and have no update mechanism. Mods are trusted code with unrestricted commands and network access.
+- A new-version notification that replaces the installed mod when clicked was built in PR #2 (with release-please) and merged, and v0.2.0 was released. It downloads a release from this repo and swaps a user's `mods/gitdeck` folder only after they click.
+- The user made the repo public themselves (`vogle/herdr-gitdeck`).
+- The README calls gitdeck a git client "built for working with a herd of repositories". `SECURITY.md` (written by the assistant) says GitDeck runs `git`, `gh`/`glab`, and `claude`/`codex` (the last two only when asked for a suggested commit message), and uses the network for git sync, PR data and the daily release check.
+- The user said "우리 기능을 만들때 에이젼트 코딩을 중심으로 하자고 했잖아", "커밋도 에이젼트가 하게 진행할건대" and "그 방향으로 진행해줘". Features serve someone supervising coding agents.
+- The browser-open feature (PR #8) runs `open` / `rundll32.exe url.dll,FileProtocolHandler` / `xdg-open` for `https://` PR links fetched via `gh`/`glab`.
+- The agent-feedback feature, stages 1 to 3, is built. A person reviewing a diff picks lines, writes a note, previews it, and presses Send, which delivers it via `hc send <terminal> <text>` into the coding agent's terminal on the user's machine. With no agent, the message is copied to the clipboard. Queued notes are sent automatically once the chosen agent is free. Notes are stored in the Herdr shared value `gitdeck.feedback`. A security fix escapes control characters (`\r`, `\x1b`) in the sent text (`src/core/feedback.ts`, `plain()`, `CONTROL` regex).
+- Pushed to `feat/agent-centered-panel` (PR #8): commits `1084894` and `dfe309f`.
+
+This conversation: the user (Allan Im) asked to set a self-hosted GitLab host from inside gitdeck ("gitlab 호스팅 주소 설정하는걸 여기서 하게 할수 없나?? 호스팅하는건 아무것도 안나오는거 같은데."). The user then sent a screenshot of the header showing branch `ECPF_OP-2376 → main ↑6 ↓32` with an "↑ Publish" button and said "그냥 이렇게 publish 로 나오는것도 이상하고..". Asked via AskUserQuestion how Publish should behave, the user chose "서버에 있으면 연결 (권장)". The new code writes only the user's own repo config: `git config --local gitdeck.forge <kind>` and `git branch --set-upstream-to=origin/<branch>`, each only after a button click. The pending step is reporting the finished work in Korean and getting the user to try it in the app. Nothing is committed yet.
+
+## Standing user rules
+- ALWAYS reply in Korean (natural 해요체; MoAI-Easy banners translated). Code, paths, identifiers, commit messages and PR bodies stay English. The user once corrected English drift: "한국어로 커뮤니케이션 하자 영어로 하지 말고." Memory `user-language-korean.md`: check the language of every message, especially after compaction, screenshots or automated notices. Progress notes during this turn drifted into English ("Implementing setForge…", "Now the button action…"); the next reply must be fully Korean.
+- Never add a "🗿 MoAI" trailer to commits or PRs.
+- Ask questions only via AskUserQuestion (load it with `ToolSearch select:AskUserQuestion`). Deliver requested explanations with no question appended.
+- Commit or push only when asked. Take no outward-facing or irreversible action without an explicit request. Merge PR #5 "chore(main): release 0.2.1" only if the user says "릴리스해줘".
+- Never commit the untracked `.claude/`, `.claudeignore`, `.git_hooks/`, `.mcp.json` (may hold keys) or `.worktreeinclude`. Stage by explicit path only, never `git add -A`.
+- Before committing run `pnpm verify > node_modules/.cache/verify.log 2>&1` and grep `^ℹ (tests|pass|fail)|all files|error TS|✖`. Then run `pnpm -s dev`, `herdr-app status` (expect `"errors": []`), and take a screenshot with `herdr-app shot` + `sips`. The assistant can't click in the app, so ask the user to try things.
+- Herdr runtime rules: no Node APIs, no setTimeout, never keep a `cx`, no work in render, exec has no stdin and a 30 s limit. State stays immutable.
+- The global post-commit `git-stats` hook prints `TypeError: Cannot read properties of undefined (reading 'commits')`; commits still succeed. A PreToolUse hook blocks `rm -rf /...` paths, so the scratchpad test repo `.../scratchpad/linktest` was left in place.
+
+## Work done this turn (uncommitted)
+
+**1. Choosing the forge in the Review tab for an unknown host**
+- `src/core/forge/index.ts`:
+  - New private `readOrigin(git, target)` returns `{ forge, host }`; `readForge` now wraps it.
+  - New exported `setForge(git, target, kind: ForgeKind)` runs `git config --local gitdeck.forge <kind>`.
+  - New exported `interface BranchPrState { pr; error; label; host: string | null }`. `host` is origin's host when no forge is known (no override, or an invalid one); otherwise it is null.
+  - `loadBranchPr` returns `BranchPrState`. `ForgeKind` is re-exported.
+- `src/ui/review.ts`:
+  - `ReviewParts.pr: BranchPrState | null`.
+  - `ReviewActions.setForge(kind, cx)`.
+  - `prLine(state, p, a)`: when `state.host !== null` it shows "origin is on <host>: which is it?" with buttons `rv-forge-gitlab` "GitLab" and `rv-forge-github` "GitHub".
+- `src/main.ts`:
+  - Imports `setForge` and `BranchPrState`; the local `type BranchPrState` alias was removed.
+  - The Review action `setForge` calls `setForge(this.git, target, kind).catch(() => undefined)`, then `this.readPr(cx, true)`.
+- `tests/forge.test.ts`:
+  - `loadBranchPr` deepEquals now include `host`.
+  - New cases: an unknown host is named; there is no host without a parsable remote; a named override gives `host: null`.
+  - New test "setForge names the forge in the repo's own config" expects `["config","--local","gitdeck.forge","gitlab"]`.
+
+**2. Link instead of Publish when origin already has the branch**
+- `src/core/git/status.ts`: `RepoStatus.remoteBranch?: string | null`.
+- `src/core/scan.ts`:
+  - New `sameOnOrigin(git, target, branch)` runs `git rev-parse --verify --quiet refs/remotes/origin/<branch>`. It returns `origin/<branch>`, or null on any error.
+  - `loadStatus` sets `remoteBranch` only when `upstream === null && branch !== null`.
+- `src/core/syncChips.ts`:
+  - `SyncState.remoteBranch?`; chip kind `"pull" | "push" | "link"`.
+  - With no upstream and a `remoteBranch`, it shows the chip `{ kind: "link", label: "↔ Link origin/X", tip: "... is on the server but this branch doesn't track it: link them" }`.
+  - With no upstream and no `remoteBranch`, it still shows "↑ Publish".
+- `src/core/ops.ts`: `linkArgs(remoteBranch)` returns `["branch", "--set-upstream-to=<remoteBranch>"]`.
+- `src/ui/ops.ts`: `OpsActions.link(cx)`.
+- `src/ops.ts`: `link` runs `this.git(cx, "Linking", "Linked to <remote>", linkArgs(remote))` using `this.host.status()?.remoteBranch`.
+- `src/main.ts`: `headerSync` run is `pull → ops.pull`, `link → ops.link`, else `ops.push`.
+- Tests:
+  - `tests/syncChips.test.ts`: link chip case.
+  - `tests/scan.test.ts`: new test "loadStatus finds the branch on origin when it has no upstream, and only then". The `recording` fixture status now includes `# branch.upstream origin/main` so the call-order tests stay `['config','status']`.
+  - `tests/ops.test.ts`: `linkArgs` assertion.
+- TDD: each new test was seen failing first, then passing.
+
+**Verification observed**
+- `pnpm verify`: exit 0; 377 tests, 377 pass, 0 fail; all files 99.73% lines.
+- `pnpm -s dev`: exit 0. `herdr-app status`: `"errors": []`.
+- Real git check in the scratchpad (bare server plus clone, `feat` pushed without `-u`):
+  - before: no upstream
+  - `rev-parse` found `origin/feat`
+  - missing ref exited 1
+  - after `branch --set-upstream-to=origin/feat`: `# branch.upstream origin/feat`, `+0 -0`
+- Not done:
+  - No in-app screenshot or click test of either feature.
+  - The `ECPF_OP-2376` repo was not found on this machine (searched /Volumes/WorkSpace, ~/Documents), so it is unconfirmed whether that branch was pushed without `-u`.
+  - Not tested against a real self-hosted GitLab.
+  - Whether `glab` accepts `--repo https://host/group/project` is unverified.
+
+## Earlier explanation given this conversation
+- Self-hosted GitLab is not guessed (`kindOf` in `src/core/forge/remote.ts` only knows github.com and gitlab.com, to avoid pointing the CLI at a look-alike host).
+- `git config gitdeck.forge gitlab` (README.md:84) plus `glab auth login --hostname <host>` makes it work.
+- Before this change, the Review tab showed only "No MR for this branch" with no hint, while the PR list said "set gitdeck.forge for your own host".
+
+## Pending / open threads
+- Report the work in Korean (MoAI-Easy "다 됐어요" style with proof). Ask the user to try:
+  - the Review tab on the self-hosted repo (buttons appear; clicking GitLab loads the MR if glab is logged in)
+  - the header on `ECPF_OP-2376` (it shows "↔ Link origin/ECPF_OP-2376" if origin has the branch; Publish stays if it was really never pushed)
+  - suggest `git branch -vv` to check
+- Commit and push only when the user asks. The files to stage by path are the 13 modified files listed in git status: `src/core/forge/index.ts`, `src/core/git/status.ts`, `src/core/ops.ts`, `src/core/scan.ts`, `src/core/syncChips.ts`, `src/main.ts`, `src/ops.ts`, `src/ui/ops.ts`, `src/ui/review.ts`, `tests/forge.test.ts`, `tests/ops.test.ts`, `tests/scan.test.ts`, `tests/syncChips.test.ts`. Leave `.claudeignore` and `.worktreeinclude` out.
+- Possible follow-ups:
+  - The PR-list error text could also offer the forge buttons.
+  - The `remoteBranch` lookup only checks origin.
+  - `tab?: string` cleanup in `src/core/repoAgents.ts`.
+  - Whole-file feedback notes.
+  - Review-tab ideas: failed checks plus send to agent, PR review comments, auto re-read while checks pending.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
