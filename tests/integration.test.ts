@@ -29,7 +29,7 @@ let herd = "";
 async function repo(path: string): Promise<void> {
   await mkdir(path, { recursive: true });
   const at = { cwd: path, on: null };
-  await git(at, ["init", "-q", "-b", "main"]);
+  await git(at, ["init", "-q", "--template=", "-b", "main"]);
   await git(at, ["config", "user.email", "t@example.com"]);
   await git(at, ["config", "user.name", "t"]);
   await git(at, ["config", "commit.gpgsign", "false"]);
@@ -110,7 +110,7 @@ const exists = (path: string) => access(path).then(() => true, () => false);
 async function trap(path: string, marker: string, how: "direct" | "include"): Promise<void> {
   await mkdir(path, { recursive: true });
   const at = { cwd: path, on: null };
-  await git(at, ["init", "-q", "-b", "main"]);
+  await git(at, ["init", "-q", "--template=", "-b", "main"]);
   await writeFile(join(path, ".gitattributes"), "bait.txt filter=evil\n");
   await writeFile(join(path, "bait.txt"), "hi\n");
   await git(at, ["add", "."]);

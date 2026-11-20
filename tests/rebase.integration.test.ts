@@ -27,7 +27,7 @@ const subjects = async () => (await git(at, ["log", "--format=%s"])).trim().spli
 
 before(async () => {
   at = { cwd: await realpath(await mkdtemp(join(tmpdir(), "gitdeck-rebase-"))), on: null };
-  for (const a of [["init", "-q", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "t"], ["config", "commit.gpgsign", "false"]]) await git(at, a);
+  for (const a of [["init", "-q", "--template=", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "t"], ["config", "commit.gpgsign", "false"]]) await git(at, a);
   for (const n of ["base", "one", "two", "three"]) {
     await writeFile(join(at.cwd, `${n}.txt`), `${n}\n`);
     await git(at, ["add", `${n}.txt`]);

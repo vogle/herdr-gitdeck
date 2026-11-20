@@ -37,11 +37,11 @@ const commit = async (file: string, text: string, msg: string, t = at) => {
 
 before(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "gitdeck-ops-")));
-  await git({ cwd: root, on: null }, ["init", "-q", "--bare", "-b", "main", "remote.git"]);
+  await git({ cwd: root, on: null }, ["init", "-q", "--template=", "--bare", "-b", "main", "remote.git"]);
   for (const name of ["a", "b"]) {
     await mkdir(join(root, name));
     const t = { cwd: join(root, name), on: null };
-    for (const args of [["init", "-q", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "t"], ["config", "commit.gpgsign", "false"], ["remote", "add", "origin", join(root, "remote.git")]]) await git(t, args);
+    for (const args of [["init", "-q", "--template=", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "t"], ["config", "commit.gpgsign", "false"], ["remote", "add", "origin", join(root, "remote.git")]]) await git(t, args);
   }
   at = { cwd: join(root, "a"), on: null };
   other = { cwd: join(root, "b"), on: null };

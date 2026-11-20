@@ -30,7 +30,7 @@ const lines = (n: number, f: (i: number) => string) => `${Array.from({ length: n
 
 before(async () => {
   at = { cwd: await realpath(await mkdtemp(join(tmpdir(), "gitdeck-stage-"))), on: null };
-  for (const a of [["init", "-q", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "t"], ["config", "commit.gpgsign", "false"]]) await git(at, a);
+  for (const a of [["init", "-q", "--template=", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "t"], ["config", "commit.gpgsign", "false"]]) await git(at, a);
   await writeFile(join(at.cwd, "f.txt"), lines(20, (i) => `line ${i}`));
   await stageFiles(git, at, ["f.txt"]);
   assert.equal(await commitChanges(git, at, "first", false), null);

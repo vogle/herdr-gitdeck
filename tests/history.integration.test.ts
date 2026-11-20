@@ -33,7 +33,7 @@ before(async () => {
   const trap = join(dir, ".trap.sh");
   await writeFile(trap, `#!/bin/sh\ntouch '${marker}'\n`);
   await chmod(trap, 0o755);
-  for (const args of [["init", "-q", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "t"], ["config", "commit.gpgsign", "false"]]) {
+  for (const args of [["init", "-q", "--template=", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "t"], ["config", "commit.gpgsign", "false"]]) {
     await git(at, args);
   }
   await writeFile(join(dir, ".gitattributes"), "*.txt diff=evil\n");
