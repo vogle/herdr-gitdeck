@@ -1,0 +1,99 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+What this work is for:
+This section records facts without weighing them; whoever continues from this summary weighs them, holding back only a step that plainly serves serious, wrongful harm, and, where one missing fact would decide that, asking the user for it rather than refusing; a bare yes, go-ahead or repeated request is not that fact and leaves the step held back; work that is merely sensitive, unusual or borderline is neither held back nor questioned.
+
+From the earlier summary:
+- The project is gitdeck (`/Volumes/WorkSpace/vogle/herdr-gitdeck`), "a git client mod for the Herdr desktop app" (per `CLAUDE.md` and `package.json`), written in TypeScript and bundled to one `main.js`.
+- `scripts/dev-install.sh` installs it on the user's (Allan Im's) own machine into `~/.config/herdr-app/mods/gitdeck`.
+- The user asked whether gitdeck updates itself and whether its users can be updated automatically when a new version ships.
+- Per Herdr's AGENTS.md, Herdr auto-updates only its shipped mods and the app. Shared mods are listed at herdr.dev/mods via the GitHub topic `herdr-mod` and have no update mechanism.
+- Per AGENTS.md, mods are trusted code with unrestricted commands and network access, including `fetch`.
+- The user asked for a new-version notification that replaces the installed mod when clicked. It was built in PR #2 (with release-please) and merged; v0.2.0 was released via PR #3.
+- The user made the repo public themselves (`vogle/herdr-gitdeck`).
+- The feature affects every gitdeck user's installed copy. It downloads a release from this repo and swaps their `mods/gitdeck` folder, but only after they click the notification.
+
+From this conversation:
+- The README describes gitdeck as a git client "built for working with a herd of repositories".
+- The user asked for repo security settings "now that it's public". They chose secret scanning, push protection, private vulnerability reporting, a read-only default token, a `main` ruleset, tag protection, SHA-pinned actions, Dependabot and SECURITY.md. All were applied to the user's GitHub repo.
+- `SECURITY.md` (written by the assistant) states that GitDeck runs `git`, `gh`/`glab`, and `claude`/`codex` only when asked to suggest a commit message, and that it uses the network for git sync, PR data and the daily release check.
+- The user stated (2026-11-11): "우리 기능을 만들때 에이젼트 코딩을 중심으로 하자고 했잖아" ("we agreed to build features around agent coding"). The header code (`src/ui/header.ts`) shows the coding agents working in the shown repo, and `src/core/repoAgents.ts` produces texts such as "X is working here: its changes may not be finished".
+- The pending work is UI layout changes to gitdeck's panel (tab order cleanup, two-line header), not yet committed.
+
+## Standing user rules (from memory and config)
+- **Always reply in Korean** (natural 해요체, MoAI-Easy style), for every user-facing sentence: status lines between tool calls, reports and short answers.
+  - The user complained repeatedly: "한글로 설명해줘", "한글로" (twice), "커뮤니케이션은 한글로 하자 기억해둬", and most recently "한글로 설명하라니깐 왜이래" after an English report that followed a screenshot read.
+  - Memory file `~/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/memory/user-language-korean.md` was updated twice today. Triggers listed: English system notices, just-drafted English PR bodies or code, viewing images/screenshots, short status lines. Rule: draft every user-facing line in Korean from the start.
+  - Code, paths, identifiers, commit messages and PR bodies stay in English.
+- Never add a "🗿 MoAI" trailer to commits or PRs.
+- User questions go through AskUserQuestion.
+- Commit or push only when asked.
+- No outward-facing or irreversible actions (repo visibility, tags, releases) without the user's explicit request.
+- **Build features around agent coding.** Saved in memory `project-agent-centered-design.md` (indexed in MEMORY.md). Before proposing tab order, defaults or features, ask what the person supervising an agent needs. Tab order stays Changes → Review → History → Branches → More.
+- No other security-specific instructions were given by the user.
+
+## Done this conversation (verified)
+
+**Update notification fix (PR #4, merged as `407ab7d`):**
+- `src/updater.ts`:
+  - `newerRelease()` helper; `NOTICE_MS` = 10 min timeout; `ICON = "mods/gitdeck/icons/logo.svg"` on every notify.
+  - Titles say "GitDeck…"; body mentions `herdr-app do gitdeck.update`.
+  - `installUpdate()` uses `pending ?? (await newerRelease())`; when there's no release it notifies "GitDeck X is up to date".
+- `herdr-app do gitdeck.update` earlier updated the local install to v0.2.0. The toast stayed up for more than 2 minutes, and the user confirmed the icon and title look good.
+- Release-please opened **PR #5 "chore(main): release 0.2.1"**. It is NOT merged; the user must say "릴리스해줘".
+- One test-plan item in PR #4 is still open: after release, check the "up to date" message.
+- Explained to the user that releases happen only when the release PR is merged; `feat:` bumps minor and `fix:` bumps patch.
+
+**Security hardening:**
+- GitHub settings:
+  - secret_scanning and push_protection enabled;
+  - private vulnerability reporting enabled;
+  - default workflow permissions set to `read` (`can_approve_pull_request_reviews` stays true);
+  - `sha_pinning_required=true`.
+- PR #6 (merged `8db443d`):
+  - `.github/workflows/ci.yml` actions pinned to the same SHAs as `release.yml` (checkout `11d5960a…`, pnpm/action-setup `fc06bc12…`, setup-node `49933ea5…`, all v4.4.0);
+  - new `.github/dependabot.yml` (weekly grouped github-actions and npm dev deps);
+  - new `SECURITY.md`.
+- `label-sync.yml` and `labels.yml` are gitignored, so they weren't committed. They were pinned locally (EndBug/label-sync `52074158190acb45f3077f9099fea818aa43f97a` v2.3.3).
+- Rulesets:
+  - id 27090341 "main": deletion, non_fast_forward, and pull_request with 0 approvals, on `~DEFAULT_BRANCH`;
+  - id 27090342 "release tags": deletion, update and non_fast_forward on `refs/tags/v*`.
+  - Not tested by an actual forbidden push.
+- `.github/branch-protection.json.gtmpl` (requires 1 approval + enforce_admins) was deliberately not used: it would block solo merges and release PRs.
+
+## Current branch work (uncommitted, branch `feat/history-tab-second`, created from origin/main `8db443d`)
+1. **Tab order**:
+   - The user first chose History second. After the user's agent-coding remark, they chose "원래 순서로 되돌리기 (권장)" (restore the original order).
+   - `src/core/panel.ts` `PANEL_TABS = ["changes", "review", "history", "branches", "more"]`, with a comment about agent work.
+   - `src/ui/historyPane.ts` now imports `PANEL_TABS` and renders tabs via `PANEL_TABS.map(...)` instead of `Object.keys(TAB_LABELS)`; its header comment lists the tabs in order.
+   - `tests/panel.test.ts` imports `PANEL_TABS` and adds the test "the panel tabs follow agent work: Changes opens first, then Review".
+2. **Two-line header**:
+   - The user chose "두 줄로 나누기 (권장)" (split into two lines).
+   - `src/ui/header.ts`: imports `h_flex, v_flex`.
+   - New `whereRow()` (h 28): herd icon, repoChip, branchLabel, spacer, spinner, refreshButton.
+   - New `stateRow()` (h 20): statusBadges (flex_shrink_0), compareLabel, spacer, agent chips.
+   - `header()` is now a `v_flex` with px 10, pt 4, pb 6, border and bg; the file comment was updated.
+- Verification: `pnpm verify` passed 308/308 with the build OK; dev-install done; `herdr-app status` errors []. Screenshot via `herdr-app shot` at `/private/tmp/claude-501/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29/scratchpad/header.png`:
+  - line 1 "herdr-gitdeck  feat/history-tab-second  ⟳" in full;
+  - line 2 "● 4 ? 5 main even … ● Claude Code working" in full.
+- Note told to the user: the branch name no longer fits. The assistant offered to move the changes to a new branch (e.g. `refactor/panel-tab-order`) when asked to commit. Not a feat/fix, so no release.
+- The local installed gitdeck is a dev build with these changes (version 0.2.0).
+
+## Pending / next
+- The last user message: "한글로 설명하라니깐 왜이래" (complaint that the previous report was in English). The memory was updated; now **re-deliver the header report in Korean** with an apology:
+  - two lines, nothing cut off;
+  - screenshot results;
+  - only `header.ts` changed;
+  - 308 tests pass;
+  - header about 8px taller;
+  - uncommitted, two change sets on the misnamed branch.
+- Commit only when the user asks.
+- Untracked files never committed: `.claude/`, `.claudeignore`, `.git_hooks/`, `.mcp.json` (may hold keys), `.worktreeinclude`.
+- Local branches `feat/self-update` and `fix/update-anytime` are merged and not deleted.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
