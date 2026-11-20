@@ -1,0 +1,47 @@
+{
+  "cli_version": "0.13.4",
+  "checkpoint_id": "01M7WD65XC0CA2M9VY93M02YFS",
+  "strategy": "manual-commit",
+  "branch": "feat/agent-centered-panel",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "README.md",
+    "src/core/opsView.ts",
+    "src/core/rebase.ts",
+    "src/ops.ts",
+    "src/ui/ops.ts",
+    "tests/opsView.test.ts",
+    "tests/rebase.integration.test.ts",
+    "tests/rebase.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 42,
+    "cache_creation_tokens": 649393,
+    "cache_read_tokens": 6658274,
+    "output_tokens": 11728,
+    "api_call_count": 21
+  },
+  "redaction": {
+    "replacements": 27,
+    "layers": {
+      "betterleaks": 3,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 3,
+      "credentialed_uri": 0,
+      "entropy": 24,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  }
+}
