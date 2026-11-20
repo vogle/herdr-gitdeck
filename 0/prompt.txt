@@ -1,0 +1,68 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+What this work is for:
+This section records facts without weighing them; whoever continues from this summary weighs them, holding back only a step that plainly serves serious, wrongful harm, and, where one missing fact would decide that, asking the user for it rather than refusing; a bare yes, go-ahead or repeated request is not that fact and leaves the step held back; work that is merely sensitive, unusual or borderline is neither held back nor questioned.
+
+From the earlier summary:
+- The project is gitdeck (`/Volumes/WorkSpace/vogle/herdr-gitdeck`). `CLAUDE.md` and `package.json` call it "a git client mod for the Herdr desktop app", written in TypeScript and bundled into one `main.js`.
+- `scripts/dev-install.sh` installs it on the user's (Allan Im's) own machine, into `~/.config/herdr-app/mods/gitdeck`.
+- Herdr's AGENTS.md says Herdr auto-updates only its shipped mods and the app itself. Shared mods are listed at herdr.dev/mods through the GitHub topic `herdr-mod` and have no update mechanism. Mods are trusted code with unrestricted commands and network access.
+- The user asked for a new-version notification that replaces the installed mod when clicked; built in PR #2 (with release-please), merged, v0.2.0 released. It downloads a release from this repo and swaps a user's `mods/gitdeck` folder only after they click.
+- The user made the repo public themselves (`vogle/herdr-gitdeck`).
+- The README describes gitdeck as a git client "built for working with a herd of repositories". `SECURITY.md` (written by the assistant) says GitDeck runs `git`, `gh`/`glab`, and `claude`/`codex` (the last two only when asked for a suggested commit message), and uses the network for git sync, PR data and the daily release check.
+- The user said "우리 기능을 만들때 에이젼트 코딩을 중심으로 하자고 했잖아", "커밋도 에이젼트가 하게 진행할건대", and "그 방향으로 진행해줘".
+- The Changes-panel features are for someone supervising coding agents to scan, stage, delete or locally ignore what the agents changed.
+- The browser-open feature (in PR #8) runs `open`, `rundll32.exe url.dll,FileProtocolHandler`, or `xdg-open` on the person's machine for `https://` PR links fetched via `gh`/`glab`.
+- The user asked List view to show wholly new, untracked folders as one folder row again; this touches only the user's own repo and panel.
+- The user chose "Lucide 아이콘으로 D안 진행해줘": Lucide SVG icons (ISC license) added to the user's own mod, colored per status. Orca (`stablyai/orca`) and Lucide were sparse-cloned read-only into the session scratchpad.
+- The user asked for UI changes: Orca-style hover button box, agent status as colored badge, side-by-side header mockup, then "좋아 제안사항으로 변경해줘" to implement the header layout, reading Herdr's agent list and tab state on the user's machine.
+
+In this conversation, the header change was finished, and the user then wrote "라인 스테이지 클릭하면 그자리에서 창이 전이 되던대 메인 창에서 보여줄수 없나? 파일 클릭하면 메인에서 보이는데 같은곳에서..", asking that the per-line staging view (scissors button) open in the main viewer tab like file clicks do. Through AskUserQuestion the user chose "가위 버튼만 메인으로 (권장)": file click keeps opening a read-only diff in the main viewer; the scissors button opens a line-picking stage view in the same main viewer tab; the panel's in-panel line view is removed. The pending step moves staging of picked hunks/lines (git apply of a patch written to the repo's git folder, local repos only) from the panel into the viewer tab of the user's own mod on their own machine.
+
+## Standing user rules (from memory/config)
+- Always reply in Korean (natural 해요체, MoAI-Easy banners translated, e.g. "다 됐어요"). Code, paths, identifiers, commit messages, PR bodies in English.
+- Never add a "🗿 MoAI" trailer to commits or PRs.
+- Ask questions only through AskUserQuestion (load via `ToolSearch select:AskUserQuestion`). When the user asks for explanation/analysis, deliver it with no question appended.
+- Commit or push only when asked. No outward-facing or irreversible actions (repo visibility, tags, releases) without explicit request.
+- PR #5 "chore(main): release 0.2.1" unmerged; merge only if the user says "릴리스해줘".
+- Never commit untracked `.claude/`, `.claudeignore`, `.git_hooks/`, `.mcp.json` (may hold keys) or `.worktreeinclude`. Stage by explicit path only (never `git add -A`).
+- Run `pnpm verify` before committing. Check changes with `pnpm verify`, `pnpm dev`, `herdr-app status`, screenshot via `herdr-app shot <path>` (crop with `sips -c H W --cropOffset Y X`; used `-c 330 1100 --cropOffset 100 1900`). First screenshot after `pnpm dev` often shows pre-reload UI — retake.
+- PreToolUse hook blocks Write outside the project; scratch files in `node_modules/.cache/mockups/`.
+- `herdr-app` can't click/hover; ask the user to try interactions.
+- zsh: `grep --include=*.ts` fails (glob); use plain `grep -rn`.
+- Agent-centered design. Tab order Changes → Review → History → Branches → More.
+
+## Prior state
+- Branch `feat/agent-centered-panel`, PR #8 → `main`; commits `31713cf`, `2fdbb81`, `d177d4c` pushed. Everything below uncommitted.
+- Uncommitted earlier: fileGroups `listEntries`; Lucide D-plan (`src/core/fileKind.ts`, `tests/fileKind.test.ts`, `mod/icons/*.svg` + `LICENSE-lucide.txt`, `style.ts` ICONS/FILE_ICONS, `changeFiles.ts` kindIcon/statusLetter); hover overlay fix in `row(...)`; agent badge (`agentBadge` in style.ts, `agentChip` in header.ts).
+- Older open items: U/new labeling undecided; merged local branches `feat/self-update`, `fix/update-anytime` not deleted; Rust/Go rewrite analysis not done; Dependabot PR #7 and release PR #5 open. Hover overlay not confirmed visually.
+
+## Header change — DONE (reported to user, uncommitted)
+- `src/core/headerText.ts` (new): `changesTabLabel(status)` → "Changes", "Changes 3", "Changes 1 · 2 new", "Changes 1 new" (untracked counted apart, ignored excluded); `conflictWarning(status)` → "! 1 conflict"/"! N conflicts"/null. `tests/headerText.test.ts` (3 tests).
+- `src/core/repoAgents.ts`: `RepoAgent.since: number|null`, `AgentLike.tab?`, `repoAgents(repo, agents, panes, changedAt = new Map())` maps `since: a.tab === undefined ? null : (changedAt.get(a.tab) ?? null)`; `AgentChip.since`; `Named` has optional `since`.
+- `src/core/live.ts`: `agentsKey(agents: readonly Pick<RepoAgent,"key"|"name"|"status">[])`.
+- `src/ui/header.ts`: row 1 repo/branch/`compareLabel` ("→ main ↑3")/spinner/refresh; row 2 `stateRow` (null when no agents, conflicts, sync chips) with agent badge + "· 2m" via `ago()`, conflicts in p.removed, sync chips; `statusBadges` removed from header. `HeaderFacts` gained `conflicts`, `now`.
+- `src/ui/historyPane.ts`: tab label uses `changesTabLabel(parts.status)`.
+- `src/main.ts`: helpers `tabChanges()` (spaces().tabs id→changed_at) and `shownAgents(repo)`; header gets `conflicts: conflictWarning(...)`, `now: Date.now()`; 2s timer key appends `|${age}` of first agent.
+- Evidence: `pnpm verify` exit 0, 346/346 tests, headerText 100%, all files 99.69%; `herdr-app status` `"errors": []`; screenshot `node_modules/.cache/mockups/header-new-crop.png` showed `→ main ↑3`, "Claude Code working · 2m" badge, "Changes 10 · 407 new". Not seen: conflict warning, one-line header, needs-you badge.
+
+## In progress: move line staging to the viewer tab
+Done so far (uncommitted, not yet verified with full `pnpm verify`):
+1. `tests/linePicks.test.ts` (new, 3 tests) + `src/core/linePicks.ts` (new): `LinePicks {diff: StageDiff; picked}`, `startPicks(diff)`, `withFreshDiff(v, diff)` (same raw → same object; else reset), `togglePick` (only add/del rows), `picks(v): Pick[]`, `hunkPick(v,row)`.
+2. `src/core/panel.ts`: ViewerRequest adds `(Where & { view: "stage"; path: string; staged: boolean })`; `parseViewer` handles stage (path non-empty, staged boolean); `liveDiff` true for stage; `viewerTitle` → "Stage b.ts"/"Unstage b.ts". `tests/panel.test.ts` updated (parse accept/reject, title, liveDiff). linePicks+panel tests: 18 pass, 0 fail.
+3. `src/core/changesView.ts`: removed `OpenSide`, `open`, `diff`, `picked`, `NONE`, `openSide`, `closeSide`, `withStageDiff`, `togglePick`, `picks`, `hunkPick`; `withResult` no longer clears picks; `startResolving` = `({...v, resolving: r})`; header comment updated. `tests/changesView.test.ts`: removed picking tests and diff fixture; import now `emptyChanges, askConfirm, setAmend, setBusy, withResult, forRepoChanges, changeSource` (still uses chooseBlock/startResolving later in file — check imports still include them; the original import list didn't include chooseBlock/startResolving at the top, they may be imported elsewhere in the file at line ~25 via dynamic import).
+4. `src/ui/stagePane.ts` (new): `StageParts {picks, staged, local, busy, error}`, `StageActions {click(row,cx), apply(cx)}`, `diffRow`, `hintBar` (hint or error, "Stage N lines" button disabled when busy), `stagePane(parts,p,a)` (virtual list "gitdeck-stage-diff", empty → "Nothing left to stage in this file.").
+5. `src/ui/changes.ts`: removed diffRow/diffPane, LIST/ROW, DiffRow import, v_virtual_list/Scrollbar imports, `closeDiff`, `diffClick`, `applyPicked` from `ChangesActions`; `lines` doc now says viewer tab; `view.open ? diffPane` branch removed. `monoFont` still used by resolvePane. `ChangesParts.local` remains (used by changeFiles.ts).
+
+Remaining steps:
+- `src/changes.ts`: remove imports `closeSide, hunkPick, openSide, picks, togglePick, withStageDiff`, `loadStageDiff`, `applyPicks`, `Pick`, maybe `remember` stays; delete `readDiff`, `applyPicks` method, `closeDiff`, `diffClick`, `applyPicked` actions and `await this.readDiff(cx)` in `act`; change `lines` action to `const target = this.host.target(); if (target) this.host.openViewer({ view: "stage", repo: target.cwd, on: target.on, path: file.path, staged })`. Keep exported `files` (used by viewer).
+- `src/viewer.ts`: add Shown kind `{kind:"stage"; picks: LinePicks; busy; error}`; `read()` for stage → `loadStageDiff(this.git, target, r.path, r.staged)` (maybe trust check like work-tree diffs via loadStatus/untrusted); `refresh()` for stage uses `withFreshDiff` keeping picks; `render` uses `stagePane` with `local: r.on === null`; click: `hunkPick` → apply that hunk, else `togglePick` + notify; apply: `applyPicks(this.git, files, {cwd:r.repo,on:r.on}, picks.diff.raw, chosen, r.staged)` then re-read, set error. Import `files` from `./changes.ts`. bar(): stage view maybe "Reload" button too; `where` text for stage `${Staged/Unstaged}: path`.
+- Check main.ts for any references to removed actions (grep `closeDiff|diffClick|applyPicked|readDiff`).
+- Run `pnpm verify` (redirect to `node_modules/.cache/verify.log`, grep `^ℹ (tests|pass|fail)|all files|error TS|✖`), `pnpm -s dev`, `herdr-app status`, screenshot; ask user to click scissors to test (can't click). Report in Korean with "다 됐어요" banner, evidence and gaps. Don't commit unless asked; offer committing to PR #8.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
