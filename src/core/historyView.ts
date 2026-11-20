@@ -28,7 +28,6 @@ export interface HistoryView {
   /** The file whose diff is open. */
   file: string | null;
   diff: Diff | null;
-  sidebar: boolean;
   limit: number;
   /** A row to bring on screen once, then cleared. */
   scrollTo: number | null;
@@ -39,7 +38,7 @@ const NO_LANES: Lanes = { rows: [], width: 0 };
 export function emptyView(): HistoryView {
   return {
     repo: null, history: null, head: null, changes: 0, rows: [], lanes: NO_LANES, query: "", searching: false,
-    selected: null, commit: null, file: null, diff: null, sidebar: false, limit: PAGE, scrollTo: null,
+    selected: null, commit: null, file: null, diff: null, limit: PAGE, scrollTo: null,
   };
 }
 
@@ -56,7 +55,7 @@ function withRows(view: HistoryView): HistoryView {
 
 export function forRepo(view: HistoryView, repo: string | null): HistoryView {
   if (view.repo === repo) return view;
-  return { ...emptyView(), repo, sidebar: view.sidebar };
+  return { ...emptyView(), repo };
 }
 
 export function withHistory(view: HistoryView, repo: string, history: History): HistoryView {
@@ -94,15 +93,11 @@ export function closeFile(view: HistoryView): HistoryView {
   return { ...view, file: null, diff: null };
 }
 
-export function toggleSidebar(view: HistoryView): HistoryView {
-  return { ...view, sidebar: !view.sidebar };
-}
-
 export function showMore(view: HistoryView): HistoryView {
   return { ...view, limit: view.limit + PAGE };
 }
 
-/** Selects a commit from the sidebar and brings its row on screen. */
+/** Selects a commit (a ref label or a link to it) and brings its row on screen. */
 export function jumpTo(view: HistoryView, hash: string): HistoryView {
   const cleared = withRows({ ...view, query: "" });
   const index = cleared.rows.findIndex((r) => r.hash === hash);

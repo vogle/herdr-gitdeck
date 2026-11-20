@@ -4,7 +4,6 @@
 import { logArgs, parseLog, type Commit } from "./git/log.ts";
 import type { Git, Target } from "./git/runner.ts";
 import type { TreeFile } from "./tree.ts";
-import type { Stats } from "./stats.ts";
 import type { PrList } from "./forge/index.ts";
 
 /** A commit's version of the file: the work-tree one would run clean filters. */
@@ -119,6 +118,5 @@ export type InspectView =
   | { kind: "blame"; path: string; rev: string; data: Loaded<BlameLine> | null }
   | { kind: "file-log"; path: string; rev: string; data: Loaded<Commit> | null }
   | { kind: "reflog"; data: Loaded<ReflogEntry> | null }
-  | { kind: "stats"; data: Stats | null }
   | { kind: "prs"; data: PrList | null }
   | { kind: "tree"; rev: string; data: Loaded<TreeFile> | null; open: ReadonlySet<string> };

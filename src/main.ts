@@ -714,10 +714,6 @@ export default class GitDeck extends View {
         }
         this.openInspect({ kind: "prs", data: null }, cx);
       },
-      stats: () => {
-        const target = this.repoTarget();
-        if (target) openViewer({ view: "stats", repo: target.cwd, on: target.on });
-      },
       treeFile: (index) => this.treeFile(index),
       toggleTreeFolder: (folder, cx) => {
         const current = this.inspect;

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   emptyView, forRepo, withHistory, rebuild, selectCommit, withCommit, openFile, withDiff, closeFile,
-  setQuery, toggleSidebar, showMore, jumpTo, PAGE,
+  setQuery, showMore, jumpTo, PAGE,
 } from "../src/core/historyView.ts";
 import { EMPTY_HISTORY, UNCOMMITTED, type History } from "../src/core/history.ts";
 import type { Commit } from "../src/core/git/log.ts";
@@ -18,7 +18,6 @@ test("forRepo starts over for another repo and keeps the view for the same one",
   assert.equal(other.repo, "/other");
   assert.equal(other.history, null);
   assert.equal(other.selected, null);
-  assert.equal(other.sidebar, v.sidebar);
 });
 
 test("withHistory ignores a history for a repo no longer shown", () => {
@@ -79,9 +78,8 @@ test("late answers for another commit or file are ignored", () => {
   assert.equal(closeFile(f).file, null);
 });
 
-test("sidebar, paging and jumping to a ref", () => {
+test("paging and jumping to a ref", () => {
   const v = view();
-  assert.equal(toggleSidebar(toggleSidebar(v)).sidebar, v.sidebar);
   assert.equal(showMore(v).limit, v.limit + PAGE);
   const j = jumpTo(setQuery(v, "zzz"), "h1");
   assert.equal(j.selected, "h1");

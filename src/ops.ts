@@ -18,7 +18,6 @@ import {
 } from "./core/opsView.ts";
 import { files } from "./changes.ts";
 import { agentHold, type RepoAgent } from "./core/repoAgents.ts";
-import { FLOW_KINDS, flowBase, flowBranch, flowKinds } from "./core/flow.ts";
 import { loadPlan, runPlan, squashBase, squashPlan } from "./core/rebase.ts";
 import { actionKey, MENU_ITEM, MENU_PAD, MENU_WIDTH, needsConfirm, type OpsActions, type OpsParts } from "./ui/ops.ts";
 
@@ -98,12 +97,10 @@ export class OpsPanel {
 
   parts(): OpsParts {
     const status = this.host.status();
-    const branches = (this.host.history()?.refs ?? []).filter((r) => r.kind === "branch").map((r) => r.name);
-    const flow = flowKinds(branches);
     const menu = this.view.menu;
     const items = menu !== null && menu.x !== null && menu.y !== null ? this.commitList() : null;
     return {
-      view: this.view, ahead: status?.ahead ?? 0, behind: status?.behind ?? 0, name: this.name, flow,
+      view: this.view, ahead: status?.ahead ?? 0, behind: status?.behind ?? 0, name: this.name,
       menu: menu && items ? { x: menu.x ?? 0, y: menu.y ?? 0, actions: items } : null,
     };
   }
@@ -242,10 +239,7 @@ export class OpsPanel {
         }
         this.view = stopNaming(this.view);
         if (naming.kind === "tag") this.git(cx, "Tagging", `Tagged ${name}`, tagArgs(name, naming.at), false, true);
-        else if (naming.kind !== "branch") {
-          const branch = flowBranch(naming.kind, name);
-          this.git(cx, "Creating branch", `On ${branch}, from ${naming.at}`, createBranchArgs(branch, naming.at, true));
-        } else this.git(cx, "Creating branch", `On new branch ${name}`, createBranchArgs(name, naming.at, true));
+        else this.git(cx, "Creating branch", `On new branch ${name}`, createBranchArgs(name, naming.at, true));
       },
       cancelName: (cx) => {
         this.view = stopNaming(this.view);
@@ -262,15 +256,6 @@ export class OpsPanel {
         const into = plan.steps[0]?.hash.slice(0, 7) ?? "";
         this.run(cx, "Squashing", `Squashed ${plan.steps.length - 1} commits into ${into}`, (target) => runPlan(this.host.git, files, target, plan));
         this.view = withPlan(this.view, null);
-        cx.notify();
-      },
-      startFlow: (kind, cx) => {
-        const branches = (this.host.history()?.refs ?? []).filter((r) => r.kind === "branch").map((r) => r.name);
-        const base = flowBase(kind, branches);
-        if (base === null) return;
-        this.view = startNaming(this.view, kind, base);
-        this.name.set_value("");
-        this.name.focus();
         cx.notify();
       },
       runHeld: () => this.pending?.(),

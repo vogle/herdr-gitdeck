@@ -4,10 +4,9 @@
 import type { Ref } from "./git/refs.ts";
 import type { Operation } from "./ops.ts";
 import type { RebasePlan } from "./rebase.ts";
-import type { FlowKind } from "./flow.ts";
 
-/** A branch or tag at a commit, or a git-flow branch from its base. */
-export type NameKind = "branch" | "tag" | FlowKind;
+/** A branch or tag at a commit. */
+export type NameKind = "branch" | "tag";
 
 export interface OpsView {
   repo: string | null;

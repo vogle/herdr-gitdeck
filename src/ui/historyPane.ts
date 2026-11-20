@@ -18,14 +18,12 @@ import { inspectPane } from "./inspect.ts";
 import { treePane } from "./treePane.ts";
 import { commitBar, commitMenu, opsNotices, type OpsActions, type OpsParts } from "./ops.ts";
 import { reviewPane, type ReviewActions, type ReviewParts } from "./review.ts";
-import { sidebar } from "./sidebar.ts";
 import { textButton, type Palette } from "./style.ts";
 
 export interface HistoryActions extends GraphActions, DetailActions {
   selectTab: (tab: PanelTab, cx: Context) => void;
   jump: (hash: string, cx: Context) => void;
   reflog: (cx: Context) => void;
-  stats: (cx: Context) => void;
   prs: (cx: Context) => void;
   closeInspect: (cx: Context) => void;
   /** Takes the repo as it is now as seen: the new-file dots and counts clear. */
@@ -63,7 +61,7 @@ export interface HistoryParts {
   review: { parts: ReviewParts; actions: ReviewActions };
 }
 
-const TAB_LABELS: Record<PanelTab, string> = { changes: "Changes", review: "Review", history: "History", branches: "Branches", more: "More" };
+const TAB_LABELS: Record<PanelTab, string> = { changes: "Changes", review: "Review", history: "History" };
 
 function tabRow(parts: HistoryParts, p: Palette, actions: HistoryActions): Element {
   const label = (tab: PanelTab) => (tab === "changes" ? changesTabLabel(parts.status) : TAB_LABELS[tab]);
@@ -183,30 +181,6 @@ function historyTab(parts: HistoryParts, p: Palette, actions: HistoryActions): E
   return pending === null ? body : v_flex().flex_1().min_h_0().child(pending).child(body);
 }
 
-function moreTab(p: Palette, actions: HistoryActions, ops: HistoryParts["ops"]): Element {
-  const row = (id: string, label: string, hint: string, onClick: (cx: Context) => void) =>
-    v_flex()
-      .id(id)
-      .px(12)
-      .py(8)
-      .gap(2)
-      .cursor_pointer()
-      .border_b_1()
-      .border_color(p.border)
-      .hover((el) => el.bg(p.hover))
-      .on_click((_e, cx) => onClick(cx))
-      .child(div().child(label))
-      .child(div().text_xs().text_color(p.dim).child(hint));
-  return v_flex()
-    .flex_1()
-    .min_h_0()
-    .child(row("more-stats", "Statistics", "Authors and commits per month, in a tab", actions.stats))
-    .when(ops !== null, (el) =>
-      el
-        .children((ops?.parts.flow ?? []).map((k) => row(`more-flow-${k}`, `Start a ${k} branch`, "git-flow: name it, then switch to it", (cx) => ops?.actions.startFlow(k, cx)))),
-    );
-}
-
 function tabBody(parts: HistoryParts, p: Palette, actions: HistoryActions): Element {
   // A commit's File Tree opens in the commit pane, under the list.
   if (parts.inspect && !(parts.inspect.kind === "tree" && parts.tab === "history")) {
@@ -221,8 +195,6 @@ function tabBody(parts: HistoryParts, p: Palette, actions: HistoryActions): Elem
     return note(parts.untrusted ? "Work-tree changes are not read for this repo." : "Reading changes…", p);
   }
   if (parts.tab === "review") return reviewPane(parts.review.parts, p, parts.review.actions);
-  if (parts.tab === "branches") return h_flex().flex_1().min_h_0().child(sidebar(parts.view.history, p, actions.jump, true));
-  if (parts.tab === "more") return moreTab(p, actions, parts.ops);
   return historyTab(parts, p, actions);
 }
 

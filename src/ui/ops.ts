@@ -2,7 +2,6 @@
 // continue/abort, the last result); and the selected commit's actions. Pull and
 // push live in the header (header.ts), where every tab can reach them.
 
-import type { FlowKind } from "../core/flow.ts";
 import { planProblem, type RebasePlan } from "../core/rebase.ts";
 import { div, type Context, type Element, type MouseButtonEvent } from "gpui-kit";
 import { h_flex, v_flex, Input, type InputState } from "gpui-base";
@@ -31,8 +30,6 @@ export interface OpsActions {
   closeMenu: (cx: Context) => void;
   /** Runs the action held while an agent works. */
   runHeld: (cx: Context) => void;
-  /** Starts naming a git-flow branch. */
-  startFlow: (kind: FlowKind, cx: Context) => void;
   /** The squash waiting for its confirmation. */
   runPlan: (cx: Context) => void;
   cancelPlan: (cx: Context) => void;
@@ -45,8 +42,6 @@ export interface OpsParts {
   /** The right-click menu, placed: where in the pane, and its commit's actions. */
   menu: { x: number; y: number; actions: CommitAction[] } | null;
   name: InputState;
-  /** The git-flow branches this repo can start (it has develop, main or master). */
-  flow: readonly FlowKind[];
 }
 
 /** The actions that need a second click, and what that click says. */
@@ -126,8 +121,7 @@ export function opsNotices(parts: OpsParts, p: Palette, a: OpsActions): Element[
           .child(div().flex_1().min_w_0().text_xs().text_color(p.changed).child(view.held))
           .child(textButton("op-run-held", "Run anyway", p, a.runHeld, true))
           .child(textButton("op-hold-cancel", "Cancel", p, a.dismiss));
-  const flowNaming = view.naming && view.naming.kind !== "branch" && view.naming.kind !== "tag" ? namingRow(parts, p, a) : null;
-  return [...(busy ? [busy] : []), ...(flowNaming ? [flowNaming] : []), ...(view.operation ? [operationBanner(view.operation, p, a)] : []), ...(held ? [held] : []), ...(result ? [result] : [])];
+  return [...(busy ? [busy] : []), ...(view.operation ? [operationBanner(view.operation, p, a)] : []), ...(held ? [held] : []), ...(result ? [result] : [])];
 }
 
 function namingRow(parts: OpsParts, p: Palette, a: OpsActions): Element {

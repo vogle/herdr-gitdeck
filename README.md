@@ -9,9 +9,9 @@ repository around that folder, lists every repository below it, and shows the
 one you're in, with its branch and where it stands.
 
 > Status: **M5**. Repo discovery, the repo picker, the history (commit graph,
-> commit details and diffs, refs sidebar, search), staging and committing, and
-> branch work and sync, blame, file history, the reflog, the files at a commit
-> interactive rebase, statistics, git-flow branches and GitHub/GitLab review requests
+> commit details and diffs, search), staging and committing, and
+> branch work and sync, blame, file history, the reflog, the files at a commit,
+> squashing commits and GitHub/GitLab review requests
 > (see [Roadmap](#roadmap)).
 
 ## What it does now
@@ -31,9 +31,7 @@ one you're in, with its branch and where it stands.
 - **History.** The shown repo's commit graph over every branch, remote branch
   and tag (500 commits, then "Show older commits"), with uncommitted changes
   as a dashed row on top. Click a commit for its message and changed files,
-  a file for its diff. **Refs** opens a sidebar of branches (with ↑↓ against
-  their upstream), remote branches, tags and stashes; a click jumps to the
-  commit. The search box filters by subject, author, branch, tag or hash.
+  a file for its diff. The search box filters by subject, author, branch, tag or hash.
 - **Staging.** Click the uncommitted row: staged and unstaged files, each with
   Stage / Unstage, and Discard (a second click confirms; an untracked file is
   deleted). Click a file for one side of its diff: click a hunk header to
@@ -67,13 +65,7 @@ one you're in, with its branch and where it stands.
   after the selected one into it, keeping its message, after one confirmation
   (`Squash N commits into <hash>?`). gitdeck writes git's todo list itself (no
   editor opens). Ranges with a merge commit are refused. Repos on this machine only.
-- **Statistics.** **Stats** in the toolbar: commits (no merges) on HEAD, files,
-  authors by commit count, and commits per month, each with a bar.
-- **git-flow.** In a repo with a `develop` branch, **+ feature** and
-  **+ release** start `feature/<name>` or `release/<name>` from `develop`; with
-  `main` or `master`, **+ hotfix** starts `hotfix/<name>` from it. No git-flow
-  tool is needed; finishing one is an ordinary merge.
-- **GitHub and GitLab.** **More → Pull / merge requests** lists the repo's
+- **GitHub and GitLab.** **Review → All pull requests** lists the repo's
   PRs (GitHub, through `gh`) or MRs (GitLab, through `glab`): open, merged
   and closed, the latest 100, read-only. A click jumps to the head commit.
   gitdeck reads the project from `origin` and runs the CLI with `--repo`
@@ -139,8 +131,8 @@ the rules a Herdr mod has to follow.
 | | |
 |---|---|
 | **M0** | Foundation: TS build, tests, install, git layer, herd discovery, picker ✅ |
-| **M1** | Commit graph, commit details and diff, branches/tags/stashes sidebar, search ✅ |
+| **M1** | Commit graph, commit details and diff, search ✅ (the refs sidebar was removed) |
 | **M2** | Staging by file, hunk and line; commit and amend; discard ✅ |
 | **M3** | Checkout, merge, rebase, cherry-pick, revert, reset, stash; fetch/pull/push ✅ |
-| **M4** | Blame, file history, reflog, take ours/theirs, block-by-block conflict resolver, files at a commit, interactive rebase, image diff ✅ |
-| **M5** | Repository statistics, git-flow start, GitHub pull requests (read-only), submodules and Git LFS shown read-only ✅. Updating submodules and fetching LFS content are left out: both run programs a repo names |
+| **M4** | Blame, file history, reflog, take ours/theirs, block-by-block conflict resolver, files at a commit, image diff ✅ (the interactive rebase step editor was replaced by "Squash later commits into this") |
+| **M5** | GitHub pull requests (read-only), submodules and Git LFS shown read-only ✅. Updating submodules and fetching LFS content are left out: both run programs a repo names. Repository statistics and git-flow start were removed |

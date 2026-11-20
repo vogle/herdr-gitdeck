@@ -22,7 +22,6 @@ import {
 } from "./core/panel.ts";
 import { loadStatus } from "./core/scan.ts";
 import { Signal } from "./core/signal.ts";
-import { loadStats } from "./core/stats.ts";
 import { neighbor, parseQueue, REVIEW_QUEUE_KEY, REVIEWED_KEY, withViewed, type QueueFile, type ReviewQueue } from "./core/reviewed.ts";
 import { diffBody } from "./ui/details.ts";
 import { FeedbackBox } from "./feedbackBox.ts";
@@ -203,7 +202,6 @@ export class Viewer {
 
   private async read(r: ViewerRequest): Promise<Shown> {
     const target: Target = { cwd: r.repo, on: r.on };
-    if (r.view === "stats") return { kind: "inspect", view: { kind: "stats", data: await loadStats(this.git, target) } };
     if (r.view === "file") {
       // An image is drawn, not read as text.
       const picture = await loadImageAt(this.git, exec, target, r.rev, r.path, { abs: `${appHome()}/${IMAGE_CACHE}`, rel: IMAGE_CACHE });
@@ -304,11 +302,9 @@ export class Viewer {
     const where =
       r.view === "diff"
         ? `${side}${r.source.path}`
-        : r.view === "stats"
-          ? r.repo
-          : r.view === "stage"
-            ? `${r.staged ? "Staged" : "Unstaged"}: ${r.path}`
-            : `${r.path} at ${r.rev.slice(0, 10)}`;
+        : r.view === "stage"
+          ? `${r.staged ? "Staged" : "Unstaged"}: ${r.path}`
+          : `${r.path} at ${r.rev.slice(0, 10)}`;
     return h_flex()
       .h(32)
       .px(8)
