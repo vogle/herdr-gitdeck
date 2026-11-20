@@ -1,0 +1,21 @@
+src/core/codeView.ts
+  s_7cdf9208076a99::t_00b1d168096694 33-35,38-42,45
+tests/codeView.test.ts
+  s_7cdf9208076a99::t_bba226c395fcfe 31-38,41-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "187fef586e1b818e0623e18d8b2728881a16fcec",
+  "prompts": {},
+  "sessions": {
+    "s_7cdf9208076a99": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c36cb7dc-d64c-445a-9a8d-ccb9a1219a29",
+        "model": "unknown"
+      },
+      "human_author": "Allan Im <allan@vogle.com>"
+    }
+  }
+}
