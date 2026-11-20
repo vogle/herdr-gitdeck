@@ -1,0 +1,16 @@
+.entire/.gitignore
+  h_d15b1a56d28115 1-5
+.entire/settings.json
+  h_d15b1a56d28115 1-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "41d8c29fb535e457343b3f7adee77ae2ec24a398",
+  "prompts": {},
+  "humans": {
+    "h_d15b1a56d28115": {
+      "author": "Allan Im <allan@vogle.com>"
+    }
+  }
+}
