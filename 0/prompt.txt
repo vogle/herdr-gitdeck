@@ -1,0 +1,94 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+What this work is for:
+This section records facts without weighing them; whoever continues from this summary weighs them, holding back only a step that plainly serves serious, wrongful harm, and, where one missing fact would decide that, asking the user for it rather than refusing; a bare yes, go-ahead or repeated request is not that fact and leaves the step held back; work that is merely sensitive, unusual or borderline is neither held back nor questioned.
+
+From the earlier summary (its view, not evidence):
+- The project is gitdeck (`/Volumes/WorkSpace/vogle/herdr-gitdeck`). `CLAUDE.md` and `package.json` call it "a git client mod for the Herdr desktop app". It is TypeScript, bundled into one `main.js`.
+- `scripts/dev-install.sh` installs it on the user's (Allan Im's) own machine, into `~/.config/herdr-app/mods/gitdeck`.
+- Herdr's AGENTS.md says Herdr auto-updates only its shipped mods and the app itself. Shared mods are listed at herdr.dev/mods via the GitHub topic `herdr-mod` and have no update mechanism. Mods are trusted code with unrestricted commands and network access.
+- PR #2 (with release-please) added a new-version notification. When the user clicks it, it downloads a release from this repo and replaces the user's `mods/gitdeck` folder. It was merged, and v0.2.0 was released.
+- The user made the repo `vogle/herdr-gitdeck` public themselves.
+- The README calls gitdeck a git client "built for working with a herd of repositories".
+- `SECURITY.md` was written by the assistant. It says GitDeck runs `git`, `gh`/`glab` and `claude`/`codex` (the last two only when asked for a suggested commit message). It also says GitDeck uses the network for git sync, PR data and a daily release check.
+- The user said "우리 기능을 만들때 에이젼트 코딩을 중심으로 하자고 했잖아", "커밋도 에이젼트가 하게 진행할건대" and "그 방향으로 진행해줘". Features serve someone supervising coding agents.
+- PR #8's browser-open feature runs `open` / `rundll32.exe url.dll,FileProtocolHandler` / `xdg-open` for `https://` PR links fetched via `gh`/`glab`.
+- Agent feedback lets a reviewer pick diff lines, write a note and send it to the coding agent's terminal on the user's machine via `hc send`, or copy it to the clipboard. Notes are stored in the Herdr shared value `gitdeck.feedback`. Control characters are written out as text (`src/core/feedback.ts`, `plain()`).
+- Forge-choice and Link-origin code writes only the user's own repo config (`git config --local gitdeck.forge <kind>`, `git branch --set-upstream-to=origin/<branch>`), and only after a button click.
+- The bsp workspaces (`~/orca/workspaces/bsp/...`) are the user's own repos. The outer repo is `github.com/allanim/bsp`. The nested code repos are on the self-hosted GitLab `bsp-git.uzen.io`.
+
+This conversation: the user asked for repo names to be visible without opening the dropdown ("있는건 일단 다 보였으면 하는데"). The assistant added an always-visible repo strip, verified it, and installed it locally via `pnpm -s dev`. The user then asked whether the PR/MR shown is any PR for the branch or only ones merging into main. The user later said "계속 진행해줘". The pending step is to answer that question in Korean.
+
+## Standing user rules
+- ALWAYS reply in Korean, in natural 해요체. Translate the MoAI-Easy banners into Korean. Code, paths, identifiers, commit messages and PR bodies stay English. The user once corrected this: "한국어로 커뮤니케이션 하자 영어로 하지 말고." Memory file: `user-language-korean.md`.
+- Never add a "🗿 MoAI" trailer to commits or PRs.
+- Ask questions only via AskUserQuestion, loaded first with `ToolSearch select:AskUserQuestion`. When the user asks for an explanation, deliver it with no question appended.
+- Commit or push only when asked. Take no outward-facing or irreversible action without an explicit request. Merge PR #5 "chore(main): release 0.2.1" only if the user says "릴리스해줘".
+- Never commit the untracked `.claude/`, `.claudeignore`, `.git_hooks/`, `.mcp.json` (may hold keys) or `.worktreeinclude`. Stage by explicit path only, never `git add -A`.
+- Before committing:
+  - Run `pnpm verify > node_modules/.cache/verify.log 2>&1` and grep the log for `^ℹ (tests|pass|fail)|all files|error TS|✖`.
+  - Then run `pnpm -s dev` and `herdr-app status` (expect `"errors": []`).
+  - Then take a screenshot with `herdr-app shot <path>.png` + `sips -Z 1600`, saved in the scratchpad `/private/tmp/claude-501/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29/scratchpad`.
+  - The assistant can't click in the app, so ask the user to try things.
+- Herdr runtime rules: no Node APIs, no setTimeout, never keep a `cx`, no work in render, exec has no stdin and a 30 s limit. State is immutable.
+- The global post-commit `git-stats` hook prints `TypeError: Cannot read properties of undefined (reading 'commits')`; commits still succeed. A PreToolUse hook blocks `rm -rf /...` paths.
+- Do not modify the user's bsp repos; read-only inspection only.
+
+## Uncommitted work (all on branch `feat/agent-centered-panel`; last commits `dfe309f`, `1084894`)
+1. **Forge choice for an unknown host** (from before)
+   - `src/core/forge/index.ts`: `readOrigin`, `setForge`, `BranchPrState { pr; error; label; host }`.
+   - `src/ui/review.ts`: `prLine` shows "origin is on <host>: which is it?" with buttons `rv-forge-gitlab` / `rv-forge-github`.
+   - `src/main.ts`: `setForge` action.
+2. **Link origin instead of Publish** (from before)
+   - `sameOnOrigin` in `src/core/scan.ts`, `RepoStatus.remoteBranch` in `src/core/git/status.ts`.
+   - Chip kind "link" in `src/core/syncChips.ts`, `linkArgs` in `src/core/ops.ts`, plus `src/ops.ts` and `src/ui/ops.ts`.
+   - Tests: `tests/forge.test.ts`, `tests/ops.test.ts`, `tests/scan.test.ts`, `tests/syncChips.test.ts`.
+3. **New this turn: repo strip**
+   - `src/ui/repoList.ts`:
+     - New `repoChip(repo, state, p, onPick, chips)`: a 22 px chip showing agent dots (`agentDots`), the name (max_w 180, truncated) and `statusBadges`. The selected chip has an `p.accent` border and `p.selected` background. The tooltip reads `group/name · branch`. Its id is `chip:<path>`.
+     - New exported `repoStrip(state, p, onPick, byRepo)`: returns null when there are fewer than 2 repos. Otherwise it renders an `h_flex` with id `repo-strip`, using `flex_wrap()` and a bottom border, over `groupRepos(state.repos)`.
+   - `src/main.ts`:
+     - The import became `import { repoList, repoStrip } from "./ui/repoList.ts";`.
+     - In `render`, after `header(...)` and before the `prBar`, it adds `.when(!this.herd.picking, el => el.children([repoStrip(this.herd, p, (path,cx)=>this.pick(path,cx), herdAgents(this.herd.repos.map(r=>r.path), agents(), panes()))].filter(x => x !== null)))`. The strip hides while the dropdown list is open.
+   - Verification run:
+     - `pnpm verify`: exit 0, tests 377, pass 377, fail 0, all files 99.73% lines.
+     - `pnpm -s dev` installed to `~/.config/herdr-app/mods/gitdeck`.
+     - `herdr-app status`: `"errors": []`.
+     - The screenshot `strip.png`/`strip-s.png` showed the herdr-gitdeck space. It has a single repo, so no strip appeared, as designed. The strip is not yet seen in the bsp space. The user was asked to `/restart` and open bsp → ECPF_OP-2447 to check for the chips `ECPF_OP-2447`, `bsp-customer-service` and `bsp-fo`. The user replied "좋아".
+- Files to stage when asked (15): the 13 earlier ones (`src/core/forge/index.ts`, `src/core/git/status.ts`, `src/core/ops.ts`, `src/core/scan.ts`, `src/core/syncChips.ts`, `src/main.ts`, `src/ops.ts`, `src/ui/ops.ts`, `src/ui/review.ts`, `tests/forge.test.ts`, `tests/ops.test.ts`, `tests/scan.test.ts`, `tests/syncChips.test.ts`) plus `src/ui/repoList.ts`. `src/main.ts` is already in the 13.
+
+## Investigation for the pending PR/MR question (findings so far)
+- **Branch PR** (shown in the PR bar and the Review tab): `loadBranchPr` in `src/core/forge/index.ts`.
+  - It runs `gh pr view <branch> --repo <repo> --json number,title,state,isDraft,url,reviewDecision,statusCheckRollup` (`prViewArgs`, `src/core/forge/github.ts`) or `glab mr view <branch> --repo <repo> --output json` (`mrViewArgs`, `src/core/forge/gitlab.ts`).
+  - So it looks up the PR/MR whose source (head) branch is the current branch. It does not filter by target branch, so a PR into develop or anything else would show too.
+  - It only reads `origin`; other remotes such as `glab-base` are not considered.
+  - Which one wins when several PRs exist for the same branch (open vs merged) is up to gh/glab and was not verified. gh likely prefers an open one.
+  - "No PR" errors matching `NONE` show "No PR/MR for this branch".
+- **PR list** (`loadPrs`) lists all PRs/MRs in the repo regardless of target:
+  - `gh pr list --repo R --state all --limit 100 --json number,title,state,isDraft,headRefName,headRefOid,author,updatedAt`
+  - `glab mr list --repo R --all --per-page 100 --output json`
+- **Comparison base** (separate from the PR): the header's "→ main ↓29" and the Review tab's file list compare against a fixed main line.
+  - `baseBranch` in `src/core/review.ts` uses `BASES = ["main","master","origin/main","origin/master"]`, and `compareArgs` runs `rev-list --left-right --count base...HEAD`.
+  - The PR's actual target branch (baseRefName / target_branch) is not fetched or used.
+  - So if an MR targets `develop`, the PR line still shows it, but Review's diff and the ahead/behind counts are measured against main.
+  - Likely improvement to offer: fetch `baseRefName` (gh) / `target_branch` (glab) and use it as the Review/compare base when a PR exists.
+
+## Next step
+- Answer the user in Korean (MoAI-Easy style, explaining terms plainly):
+  - Shown PR/MR = any PR from this branch, whatever its target, read from origin.
+  - The Review diff and the "→ main" counts are always against main/master, not the PR's target.
+  - Mention the possible improvement of using the PR's target branch as the base. A decision on that goes through AskUserQuestion only if needed, after the explanation.
+- Do not commit unless asked.
+- Other follow-ups from before:
+  - The PR-list error text could offer the forge buttons.
+  - `remoteBranch` only checks origin.
+  - `tab?: string` cleanup in `src/core/repoAgents.ts`.
+  - Whole-file feedback notes.
+  - Nested-repo header idea for bsp.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
