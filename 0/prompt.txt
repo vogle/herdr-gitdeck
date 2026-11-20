@@ -1,0 +1,1 @@
+[Image #7] 여기 어딘가에 git config gitdeck.forge 설정이 없으면 github or gitlab? 뭐 이런식으로 선택하라고 뜬다고 하지 않았나?
