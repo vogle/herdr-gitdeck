@@ -1,0 +1,94 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+What this work is for:
+This section records facts without weighing them; whoever continues from this summary weighs them, holding back only a step that plainly serves serious, wrongful harm, and, where one missing fact would decide that, asking the user for it rather than refusing; a bare yes, go-ahead or repeated request is not that fact and leaves the step held back; work that is merely sensitive, unusual or borderline is neither held back nor questioned.
+
+From the earlier summary (its view, not evidence):
+- The project is gitdeck (`/Volumes/WorkSpace/vogle/herdr-gitdeck`). `CLAUDE.md` and `package.json` call it "a git client mod for the Herdr desktop app". It is written in TypeScript and bundled into one `main.js`.
+- `scripts/dev-install.sh` installs it on the user's (Allan Im's) own machine, into `~/.config/herdr-app/mods/gitdeck`.
+- Herdr's AGENTS.md says Herdr auto-updates only its shipped mods and the app itself. Shared mods are listed at herdr.dev/mods through the GitHub topic `herdr-mod` and have no update mechanism. Mods are trusted code with unrestricted commands and network access.
+- PR #2 (with release-please) added a new-version notification that, when clicked, replaces the installed mod; it was merged, and v0.2.0 was released. It downloads a release from this repo and swaps the user's `mods/gitdeck` folder only after the user clicks.
+- The user made the repo public themselves (`vogle/herdr-gitdeck`).
+- The README calls gitdeck a git client "built for working with a herd of repositories". `SECURITY.md` (written by the assistant) says GitDeck runs `git`, `gh`/`glab` and `claude`/`codex` (the last two only when asked for a suggested commit message), and uses the network for git sync, PR data and the daily release check.
+- The user said "우리 기능을 만들때 에이젼트 코딩을 중심으로 하자고 했잖아", "커밋도 에이젼트가 하게 진행할건대" and "그 방향으로 진행해줘". Features serve someone supervising coding agents.
+- PR #8's browser-open feature runs `open` / `rundll32.exe url.dll,FileProtocolHandler` / `xdg-open` for `https://` PR links fetched via `gh`/`glab`.
+- Agent feedback (stages 1–3) is built. A reviewer picks diff lines, writes a note, previews it and presses Send. The note goes to the coding agent's terminal on the user's machine through `hc send <terminal> <text>`; with no agent, it is copied to the clipboard. Queued notes are sent automatically once the chosen agent is free. Notes are stored in the Herdr shared value `gitdeck.feedback`. A security fix writes control characters out as text in sent messages (`src/core/feedback.ts`, `plain()`, `CONTROL` regex).
+- Commits `1084894` and `dfe309f` are pushed to `feat/agent-centered-panel` (PR #8).
+- The user asked to set the self-hosted GitLab host from inside gitdeck ("gitlab 호스팅 주소 설정하는걸 여기서 하게 할수 없나??"). They also called the "↑ Publish" button on branch `ECPF_OP-2376` odd ("그냥 이렇게 publish 로 나오는것도 이상하고.."). For Publish they chose "서버에 있으면 연결 (권장)". The new code writes only the user's own repo config (`git config --local gitdeck.forge <kind>`, `git branch --set-upstream-to=origin/<branch>`), and only after a button click.
+
+This conversation: the user reports that in the "bsp" project every branch (ECPF_OP-2376, BNKR-3710, ECPF_OP-2319, ECPF_OP-2447) shows push/Publish and no GitLab prompt appears. The bsp workspaces are the user's own repos under `~/orca/workspaces/bsp/` (main checkout at `/Volumes/WorkSpace/uzen/bsp`). The outer repo pushes to `https://github.com/allanim/bsp.git`. Its nested code repos point to a self-hosted GitLab at `bsp-git.uzen.io`. The pending step is to explain the cause to the user in Korean and possibly propose letting gitdeck see the nested repos.
+
+## Standing user rules
+- ALWAYS reply in Korean (natural 해요체; translate the MoAI-Easy banners). Code, paths, identifiers, commit messages and PR bodies stay English. The user once corrected English drift: "한국어로 커뮤니케이션 하자 영어로 하지 말고." Memory `user-language-korean.md`. A progress line this turn drifted into English ("Found the repos…"); the next reply must be fully Korean.
+- Never add a "🗿 MoAI" trailer to commits or PRs.
+- Ask questions only via AskUserQuestion, loaded first with `ToolSearch select:AskUserQuestion`. Deliver requested explanations with no question appended.
+- Commit or push only when asked. Take no outward-facing or irreversible action without an explicit request. Merge PR #5 "chore(main): release 0.2.1" only if the user says "릴리스해줘".
+- Never commit the untracked `.claude/`, `.claudeignore`, `.git_hooks/`, `.mcp.json` (may hold keys) or `.worktreeinclude`. Stage by explicit path only, never `git add -A`.
+- Before committing, run `pnpm verify > node_modules/.cache/verify.log 2>&1` and grep it for `^ℹ (tests|pass|fail)|all files|error TS|✖`. Then run `pnpm -s dev`, `herdr-app status` (expect `"errors": []`), and take a screenshot with `herdr-app shot` + `sips`. The assistant can't click in the app, so ask the user to try things.
+- Herdr runtime rules: no Node APIs, no setTimeout, never keep a `cx`, no work in render, exec has no stdin and a 30 s limit. State is immutable.
+- The global post-commit `git-stats` hook prints `TypeError: Cannot read properties of undefined (reading 'commits')`; commits still succeed. A PreToolUse hook blocks `rm -rf /...` paths.
+- Do not modify the user's bsp repos (they are a separate project); read-only inspection only unless asked.
+
+## Uncommitted work in gitdeck (from before; verified then)
+1. **Forge choice in the Review tab for an unknown host**
+   - `src/core/forge/index.ts`: `readOrigin`, exported `setForge(git, target, kind)`, `BranchPrState { pr; error; label; host }`.
+   - `src/ui/review.ts` `prLine`: shows "origin is on <host>: which is it?" with buttons `rv-forge-gitlab` / `rv-forge-github`.
+   - `src/main.ts`: Review action `setForge` → `this.readPr(cx, true)`.
+2. **Link instead of Publish when origin already has the branch**
+   - `sameOnOrigin` in `src/core/scan.ts`.
+   - `RepoStatus.remoteBranch`.
+   - Chip kind "link" with label "↔ Link origin/X" in `src/core/syncChips.ts`.
+   - `linkArgs` in `src/core/ops.ts`; `OpsActions.link`; `src/ops.ts` link; `headerSync` routing in `main.ts`.
+   - Tests updated: `tests/forge.test.ts`, `tests/scan.test.ts`, `tests/syncChips.test.ts`, `tests/ops.test.ts`.
+   - Verified earlier: `pnpm verify` 377/377 pass, 99.73% line coverage; `herdr-app status` `"errors": []`.
+   - Files to stage when asked (13): `src/core/forge/index.ts`, `src/core/git/status.ts`, `src/core/ops.ts`, `src/core/scan.ts`, `src/core/syncChips.ts`, `src/main.ts`, `src/ops.ts`, `src/ui/ops.ts`, `src/ui/review.ts`, `tests/forge.test.ts`, `tests/ops.test.ts`, `tests/scan.test.ts`, `tests/syncChips.test.ts`.
+   - The previous report was already given to the user in Korean.
+
+## Investigation this turn
+- `herdr-app ls` shows the bsp spaces at these folders:
+  - `/Users/allan/orca/workspaces/bsp/ECPF_OP-2376`
+  - `.../BNKR-3710`
+  - `.../ECPF_OP-2319`
+  - one more, presumably ECPF_OP-2447
+  - (one "bsp" space has folder `/Volumes/WorkSpace/vogle/paper-empires`)
+- In `ECPF_OP-2376`, outer repo:
+  - origin is `https://github.com/allanim/bsp.git`
+  - branch `ECPF_OP-2376` has no upstream
+  - `git ls-remote --heads origin ECPF_OP-2376` printed nothing, so the branch is not on GitHub
+  - no `refs/remotes/origin/ECPF_OP-2376`
+  - `gitdeck.forge` is unset (exit 1)
+  - working-tree change: `.moai/state/session-memo.md` modified
+- `git branch -vv` in the outer repo:
+  - BNKR-3710, ECPF_OP-2319 and main are worktrees at `ac4bd5e` (main tracks origin/main; the other two have no upstream)
+  - ECPF_OP-2447 is a worktree at `4d6e597` with no upstream; its commit message mentions "customer !594・FO !2510" (GitLab MRs)
+  - some `allanim/...` branches do track origin
+  - So "Publish" for those branches is correct per the GitHub outer repo: they were never pushed there.
+- The GitLab question doesn't appear because the outer origin is github.com, a known forge.
+- The real code repos are nested, independent clones, ignored by the outer `.gitignore` (lines 249–250), and not submodules:
+  - `bsp-sales-service`:
+    - remotes `glab-base` (`https://bsp-git.uzen.io/bsp/bsp-bo.git`) and `origin`
+    - branch `feat/ECPF_OP-2376`, upstream `origin/feat/ECPF_OP-2376`
+  - `bsp-system-service`:
+    - origin `https://bsp-git.uzen.io/bsp/bsp-system-service.git`
+    - branch `feat/ECPF_OP-2376`, upstream `origin/feat/ECPF_OP-2376`
+- How gitdeck finds repos (`src/core/repos/discover.ts`):
+  - `findHerdRoot` climbs to the outermost repo.
+  - `findArgs` runs `find` for `.git` up to depth (1–6) and prunes hidden dirs and SKIP_DIRS; `parseFound` lists repos below the root.
+  - So nested repos should, in principle, be discoverable as "herd" members. It is not yet checked why the user's view shows only the outer repo's worktree branches. The screenshot shows the sidebar listing bsp → ECPF_OP-2376, BNKR-3710, ECPF_OP-2319, ECPF_OP-2447, which look like Herdr spaces/worktrees rather than gitdeck repos.
+
+## Open threads / next steps
+- Explain to the user in Korean (MoAI-Easy style, no unexplained jargon):
+  - The bsp workspace folder is a GitHub repo (allanim/bsp), so gitdeck correctly treats it as GitHub. It never asks about GitLab there.
+  - Those branches really aren't on GitHub, so Publish is accurate there.
+  - The GitLab code lives in the nested `bsp-sales-service` / `bsp-system-service` repos at `bsp-git.uzen.io`.
+- Possibly check whether gitdeck's herd list shows the nested repos when focused inside them, and whether selecting them shows the GitLab question (host `bsp-git.uzen.io`). Note `bsp-sales-service` also has an extra remote `glab-base`; forge code reads only `origin`.
+- If a design change is warranted (e.g., surfacing nested repos more prominently), report the findings first, then ask via AskUserQuestion.
+- Other follow-ups: PR-list error text could offer the forge buttons; `remoteBranch` only checks origin; `tab?: string` cleanup in `src/core/repoAgents.ts`; whole-file feedback notes; Review-tab ideas.
+- Commit/push only when the user asks.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
