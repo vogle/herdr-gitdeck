@@ -1,0 +1,83 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+What this work is for:
+This section records facts without weighing them; whoever continues from this summary weighs them, holding back only a step that plainly serves serious, wrongful harm, and, where one missing fact would decide that, asking the user for it rather than refusing; a bare yes, go-ahead or repeated request is not that fact and leaves the step held back; work that is merely sensitive, unusual or borderline is neither held back nor questioned.
+
+From the earlier summary:
+- The project is gitdeck (`/Volumes/WorkSpace/vogle/herdr-gitdeck`). `CLAUDE.md` and `package.json` call it "a git client mod for the Herdr desktop app", written in TypeScript and bundled into one `main.js`.
+- `scripts/dev-install.sh` installs it on the user's (Allan Im's) own machine, into `~/.config/herdr-app/mods/gitdeck`.
+- Herdr's AGENTS.md says Herdr auto-updates only its shipped mods and the app itself. Shared mods are listed at herdr.dev/mods through the GitHub topic `herdr-mod` and have no update mechanism. Mods are trusted code with unrestricted commands and network access.
+- The user asked for a new-version notification that replaces the installed mod when clicked. It was built in PR #2 (with release-please) and merged, and v0.2.0 was released. The feature downloads a release from this repo and swaps a user's `mods/gitdeck` folder, but only after they click the notification.
+- The user made the repo public themselves (`vogle/herdr-gitdeck`).
+- The README describes gitdeck as a git client "built for working with a herd of repositories". `SECURITY.md` (written by the assistant) says GitDeck runs `git`, `gh`/`glab`, and `claude`/`codex` (the last two only when asked for a suggested commit message), and uses the network for git sync, PR data and the daily release check.
+- The user said "우리 기능을 만들때 에이젼트 코딩을 중심으로 하자고 했잖아", "커밋도 에이젼트가 하게 진행할건대", and "그 방향으로 진행해줘".
+- The Changes-panel features are for someone supervising coding agents to scan, stage, delete or locally ignore what the agents changed.
+- In the previous stretch, the browser-open feature (in PR #8) runs `open`, `rundll32.exe url.dll,FileProtocolHandler`, or `xdg-open` on the person's machine for `https://` PR links fetched via `gh`/`glab`.
+
+In this conversation, the user wrote "아까 뉴 폴더인경우 리스트에서 도 플랫하게 다 뿌려 달라고 햬어 고쳤는데 그거 다시 돌려줄래 뉴일경우는 그냥 폴더로열리게..". They wanted List view to show wholly new, untracked folders as a single folder row again, while other files stay flat. The change touches only the user's own repo and the panel shown in their Herdr app.
+
+## Standing user rules (from memory/config)
+- Always reply in Korean (natural 해요체, MoAI-Easy banners translated, e.g. "다 됐어요"). Code, paths, identifiers, commit messages and PR bodies stay in English.
+- Never add a "🗿 MoAI" trailer to commits or PRs.
+- Ask questions only through AskUserQuestion (load via `ToolSearch select:AskUserQuestion`). When the user asks for an explanation or analysis, deliver it with no question appended.
+- Commit or push only when asked. No outward-facing or irreversible actions (repo visibility, tags, releases) without an explicit request.
+- PR #5 "chore(main): release 0.2.1" is unmerged. Merge it only if the user says "릴리스해줘".
+- Never commit the untracked `.claude/`, `.claudeignore`, `.git_hooks/`, `.mcp.json` (may hold keys) or `.worktreeinclude`. Stage by explicit path only (never `git add -A`).
+- Run `pnpm verify` right before committing. Check changes with `pnpm verify`, `pnpm dev`, `herdr-app status`, and a screenshot via `herdr-app shot <path>`.
+- A PreToolUse hook blocks Write outside the project. Put scratch files in `node_modules/.cache/mockups/`.
+- `herdr-app` can't click, so ask the user to try interactions themselves.
+- Agent-centered design. Tab order is Changes → Review → History → Branches → More.
+
+## Prior state (from earlier summary)
+- Branch `feat/agent-centered-panel`. PR #8 (https://github.com/vogle/herdr-gitdeck/pull/8), "feat: agent-centered panel, reorganized Changes list and a PR bar", targets `main`.
+- PR commits: `31713cf`, `2fdbb81` "feat: reorganize the Changes panel and add a PR bar", and `d177d4c` "fix: read the PR again on refresh, so one opened since shows up". All were pushed, and local and remote were in sync.
+- Earlier features:
+  - B-plan panel: filter, List/Tree switch, foldable sections, status squares, +/− counts, hover overlay, and Ignored with Unignore.
+  - Flat List view.
+  - PR bar (`src/ui/prBar.ts`, `src/core/openUrl.ts`, `src/core/forge/summary.ts`).
+  - Overlay fix: an opaque `bg(p.surface)` sits under `p.hover`.
+- The previous completion report was already given. It said:
+  - The overlay fix can't be checked in a screenshot without the pointer over a row.
+  - The ↗ button needs a manual check.
+  - The `git-stats` global hook error is noise.
+
+## Work done this turn (restoring new folders in List view)
+- `src/core/fileGroups.ts`: added the following, inserted before `foldKey`:
+  - `export type ListEntry<T> = { file: T } | { folder: FolderNode<T> };`
+  - A private `find(node, folder)` that searches a node's subtree recursively.
+  - `export function listEntries<T extends { path: string }>(files, newFolders): ListEntry<T>[]`. It groups each file under its outermost matching new folder (the shortest prefix in `newFolders`). Each group becomes one folder entry at the position of its first file. That entry is built by `find(folderTree(groupFiles, newFolders), n)` with `label` set to the full path `n`. Other files become `{ file }` entries.
+- `src/ui/changeFiles.ts`:
+  - The import now includes `listEntries`.
+  - The list branch of `sectionBody` is now `return listEntries(s.files, parts.newFolders).flatMap((e) => "folder" in e ? folderRows(s, e.folder, e.folder.label, 0, p, parts, a) : [fileRowIn(s, e.file, 0, p, parts, a)]);`
+  - The Tree branch is unchanged.
+  - `foldAll` still returns `[]` in list mode.
+  - New folders start folded through the existing `isOpen` (a folder inside a new folder is open only when flipped).
+  - Folder rows keep their buttons: Delete folder, Ignore locally, and Stage folder (or Unstage folder in Staged).
+- `tests/fileGroups.test.ts`:
+  - The import now includes `listEntries`.
+  - Two tests were added: "listEntries keeps the list flat, but a wholly new folder is one folder row in its first file's place", and "listEntries puts a file in its outermost new folder; with none, every file stands alone".
+  - Both were first seen failing (RED), then passing.
+- Verification:
+  - `pnpm verify` exited 0 with 340 tests, 340 passed and 0 failed. `fileGroups.ts` coverage is 99.28% statements and 93.88% branches. All files are at 99.69% statements and 95.03% branches. The log is at `node_modules/.cache/verify.log`.
+  - After `pnpm dev`, `herdr-app status` showed `"errors": []`.
+  - Screenshot `node_modules/.cache/mockups/list-newfolder.png`: List mode shows `.claude/ [new] 389` as one folded row. `.claudeignore`, `.mcp.json` and `.worktreeinclude` show as separate U rows, and the modified files `fileGroups.ts`, `changeFiles.ts` and `fileGroups.test.ts` show as M rows. The PR bar shows "PR #8 … OPEN checks 1✓".
+- The final report was given in Korean. It said expanding a folder by click is unverified and the user should try it. It also said the change is not committed yet, and the assistant will commit and push to PR #8 only if the user asks.
+
+## Remaining / open
+- The change is uncommitted. Modified files: `src/core/fileGroups.ts`, `src/ui/changeFiles.ts`, `tests/fileGroups.test.ts`. Commit and push to PR #8 only if the user asks; stage by explicit path and run `pnpm verify` first.
+- Manual checks for the user:
+  - Clicking a new-folder row in List view.
+  - The hover overlay hiding the counts.
+  - The ↗ button opening PR #8 in the browser.
+- Older open items:
+  - The U/new labeling choice is still undecided.
+  - Local branches `feat/self-update` and `fix/update-anytime` are merged but not deleted.
+  - The rewrite-language (Rust/Go) analysis is not done.
+  - Dependabot PR #7 and release PR #5 are open.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
