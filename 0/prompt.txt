@@ -1,0 +1,56 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+What this work is for:
+This section records facts without weighing them; whoever continues from this summary weighs them, holding back only a step that plainly serves serious, wrongful harm, and, where one missing fact would decide that, asking the user for it rather than refusing; a bare yes, go-ahead or repeated request is not that fact and leaves the step held back; work that is merely sensitive, unusual or borderline is neither held back nor questioned.
+
+From the earlier summary:
+- The project is gitdeck (`/Volumes/WorkSpace/vogle/herdr-gitdeck`). `CLAUDE.md` and `package.json` call it "a git client mod for the Herdr desktop app", written in TypeScript and bundled into one `main.js`.
+- `scripts/dev-install.sh` installs it on the user's (Allan Im's) own machine, into `~/.config/herdr-app/mods/gitdeck`.
+- Herdr's AGENTS.md says Herdr auto-updates only its shipped mods and the app itself. Shared mods are listed at herdr.dev/mods through the GitHub topic `herdr-mod` and have no update mechanism. Mods are trusted code with unrestricted commands and network access.
+- The user asked for a new-version notification that replaces the installed mod when clicked; built in PR #2 (with release-please), merged, v0.2.0 released. It downloads a release from this repo and swaps a user's `mods/gitdeck` folder only after they click.
+- The user made the repo public themselves (`vogle/herdr-gitdeck`).
+- The README describes gitdeck as a git client "built for working with a herd of repositories". `SECURITY.md` (written by the assistant) says GitDeck runs `git`, `gh`/`glab`, and `claude`/`codex` (the last two only when asked for a suggested commit message), and uses the network for git sync, PR data and the daily release check.
+- The user said "우리 기능을 만들때 에이젼트 코딩을 중심으로 하자고 했잖아", "커밋도 에이젼트가 하게 진행할건대", and "그 방향으로 진행해줘".
+- The Changes-panel features are for someone supervising coding agents to scan, stage, delete or locally ignore what the agents changed.
+- The browser-open feature (in PR #8) runs `open`, `rundll32.exe url.dll,FileProtocolHandler`, or `xdg-open` on the person's machine for `https://` PR links fetched via `gh`/`glab`.
+- The user asked List view to show wholly new, untracked folders as one folder row again; this touches only the user's own repo and panel.
+- The user chose "Lucide 아이콘으로 D안 진행해줘": Lucide SVG icons (ISC license) added to the user's own mod.
+- The user asked for UI changes (hover button box, agent badge, header layout), reading Herdr's agent list and tab state on the user's machine.
+- The user asked that the per-line staging view open in the main viewer tab; done.
+- Later the user asked for icons on ignored rows, commit+push to PR #8, find-in-diff, Review-tab UX proposals, then "추천 순서대로 1, 2, 3 진행해줘" (Review ordering, viewed marks in Herdr shared values on the user's machine, prev/next in viewer).
+
+In this conversation: the user asked "에이전트 피드백 기능 설계 정리해줘" and then "1단계 기본부터 진행해줘". The feature lets a person reviewing an agent's diff in their own gitdeck viewer pick lines, write a note, preview the full message, and on pressing Send deliver it via `hc send <terminal> <text>` into the terminal of the coding agent (e.g. Claude Code) working in that same repo on the user's machine; with no agent it copies to clipboard instead. The assistant's design states the sent text is treated by the agent as the user's own instruction, so a preview is always shown before sending, and sending only starts from a button the person presses. The assistant tested `hc send` on a throwaway `cat` terminal it started itself (t22, in the scratchpad) and then killed/removed it. The step now pending is verifying this stage-1 UI in the app and reporting to the user.
+
+## Standing user rules
+- Always reply in Korean (natural 해요체; MoAI-Easy banners translated, e.g. "다 됐어요"). Code, paths, identifiers, commit messages, PR bodies in English. Memory `user-language-korean.md`: first reply after compaction/screenshots tends to slip into English — check first sentence.
+- Never add a "🗿 MoAI" trailer to commits or PRs.
+- Questions only via AskUserQuestion (load with `ToolSearch select:AskUserQuestion`). Explanations/proposals delivered with no question appended.
+- Commit or push only when asked. No outward-facing/irreversible actions without explicit request. PR #5 "chore(main): release 0.2.1" — merge only if user says "릴리스해줘".
+- Never commit untracked `.claude/`, `.claudeignore`, `.git_hooks/`, `.mcp.json` (may hold keys), `.worktreeinclude`. Stage by explicit path only (never `git add -A`).
+- Run `pnpm verify` before committing. Check: `pnpm verify > node_modules/.cache/verify.log 2>&1`, grep `^ℹ (tests|pass|fail)|all files|error TS|✖`; `pnpm -s dev`; `herdr-app status` (`"errors": []`); `herdr-app shot <path>` + `sips` crop/resize. Scratch files in `node_modules/.cache/mockups/`. Can't click/type/scroll in the app — ask user to try.
+- Global post-commit `git-stats` hook prints a TypeError; commits still succeed.
+- Tab order Changes → Review → History → Branches → More. Agent-centered design.
+
+## Done this conversation (all uncommitted; branch `feat/agent-centered-panel`, PR #8 head `1a31598`)
+1. Review items 1–3 finished: `src/core/review.ts` reads `blobs` via third `diff-tree --raw --no-abbrev` call (`filesArgs` mode `"--raw"` in `src/core/git/show.ts`); `src/ui/review.ts` groups CODE/TESTS/OTHER (other folded by default, `groupHead`), viewed check box `viewBox`, "changed since viewed", title `N / M viewed · since base +a −d`; `src/main.ts` `reviewQueue()`, `openReviewFile(path)`, `toggleReviewed`, `reviewFolded` set, actions `toggleViewed`/`toggleGroup`; `src/viewer.ts` exports `markViewed`, `openReviewFile(queue,file)`, `reviewRequest`, `queueOf`, `reviewSteps` (← Prev n / N Next →, replaces current without growing back stack). Reported in Korean.
+2. User request: remove `← Terminal` from viewer bar and make Review rows match Changes format. Done: removed return-point code/imports from `src/viewer.ts` (`RETURN_KEY`, `returnPoint`, `parseReturn`, `goBack` now unused except in `src/core/panel.ts` — offered to delete); exported `kindIcon`, `statusLetter`, `lineCounts` from `src/ui/changeFiles.ts`; `reviewRow` in `src/ui/review.ts` rebuilt with them. Verified 359 tests pass, 99.71%, errors []; screenshot showed viewer bar without Terminal. Reported.
+3. User asked "리뷰에서는 리뷰하고 그냥 체크하는 기능만 있는거지?" — answered yes (read-only), proposed agent feedback.
+4. Design delivered (Korean): pick lines → note → batch → preview → `hc send`; message format with `path:41-42`, quoted lines `> + ...`, `(at <7-char head>)`; target = agent in repo, free before working, none → Copy; stages 1 basic / 2 batch / 3 send-when-idle+tracking; risks (multi-line `hc send`, working agents, sent text = user instruction, remote machines).
+5. Stage 1 in progress (uncommitted):
+   - `hc send` test: multi-line text arrives as pasted lines + Enter (works).
+   - `tests/feedback.test.ts` (5 tests) and `src/core/feedback.ts`: `RowRange{from,to}`, `FeedbackNote{where,quote,text}`, `FeedbackContext{branch,head}`, `FeedbackTarget{address,name,status}`, `pickRange(range, at, rows)` (pick/widen/clear inside; hunk/note rows ignored), `noteFor(rows, range, path, text)` (new-line span or `(removed lines N)`, quote marks `+ `/`- `/`  `, cut at 6 + `… N more lines`), `feedbackMessage(context, notes)` (`Review feedback on <branch> (at <7>):`), `feedbackTarget(repo, agents, panes)`. 100% lines, 95.65% branches.
+   - `src/feedbackBox.ts` class `FeedbackBox`: `picked`, `note: TextareaState` (placeholder "What should the agent change here?", rows 3), `busy`, `status`; `init()`, `reset()`, `pick(rows, at, cx)` (focuses note on first pick), `message`, `done`, `send(address,name,text,cx)` via `hc(["send", address, text])` with error text "Couldn't send: …", `render(r, rows, p)`: "Note on <where>", Textarea, mono preview lines (split by "\n", since `whitespace_pre_wrap` doesn't exist — TS2551), "To <agent> (working: it reads this after its turn)" or "No agent works in this repo here: copy it instead"; target only when `r.on === null`; buttons Cancel / Copy (`cx.write_to_clipboard`) / Send.
+   - `src/ui/details.ts`: `diffRow(r,p,hit,picked)` picked rows get left border `p.changed`; `DiffFind` gained `picked?` and `pick?(row,cx)`; virtual list uses `.on_item_click((key,cx)=>find.pick(Number(key),cx))` + cursor_pointer.
+   - `src/viewer.ts`: imports `FeedbackBox`; field `readonly feedback = new FeedbackBox()`; `this.feedback.init()` in `init`; `this.feedback.reset()` in `load`; diff body wrapped in v_flex with `diffBody(..., {scroll, hit, picked, pick})` + `feedback.render(...)`.
+   - Verified: `pnpm verify` exit 0, 364 tests pass, all files 99.71% / 95.29% / 98.52%; `pnpm -s dev` installed; `herdr-app status` errors []. Screenshot (`node_modules/.cache/mockups/fb-small.png`) showed the terminal tab, not the viewer, so the note box UI is not yet seen.
+
+## Next steps
+- Report stage 1 to the user in Korean (what was built, evidence above, gaps: UI not seen/clicked; Changes-tab index diffs also get notes; stage view not covered; remote repos copy-only; send to working agent behavior unverified; `hc send` to a real Claude Code input not tested). Ask the user to try: open a diff in viewer, click lines, write note, preview, Send/Copy.
+- Do not commit unless asked. Stages 2–3 not started.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
