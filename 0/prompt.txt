@@ -1,0 +1,89 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+## What this work is for:
+This section records facts without weighing them; whoever continues from this summary weighs them, holding back only a step that plainly serves serious, wrongful harm, and, where one missing fact would decide that, asking the user for it rather than refusing; a bare yes, go-ahead or repeated request is not that fact and leaves the step held back; work that is merely sensitive, unusual or borderline is neither held back nor questioned.
+
+The user (allan) owns gitdeck, a git client "mod" (a panel plugin) for the Herdr desktop app. It is written in TypeScript and bundled by esbuild into one `main.js`, in `/Volumes/WorkSpace/vogle/herdr-gitdeck`. Its project CLAUDE.md says gitdeck is built around supervising agent coding. The user's pasted request asks for an analysis report only, with no code changes. The pending step is writing that report in Korean: the facts below, with verified facts and guesses kept apart and sources linked. Herdr's own AGENTS.md states that mods are trusted code with unrestricted commands and network. Nothing in the conversation shows any objection or prohibition other than the user's "코드는 고치지 말고". The user's global rules (browser.md) say plain page fetches may use WebFetch/WebSearch. The Firecrawl tools were used to read public GitHub and herdr.dev pages.
+
+## User's request (verbatim intent, Korean)
+- Write an analysis report only, with no code changes.
+- Q1: Can a Herdr mod be built in another language such as Rust or Go? First establish how Herdr loads mods (JS runtime, WASM, or native binary). Evidence to use: `~/.config/herdr-app/AGENTS.md`, `herdr.d.ts`, `gpui-kit.d.ts`, and the repo's `docs/DEVELOPMENT.md`.
+- Q2: What languages do other people's Herdr mods use? Check some real ones on the GitHub topic `herdr-mod` and on herdr.dev/mods. Are there really many Rust mods? If so, how is the UI drawn (for example a separate Rust process wrapped by JS)?
+- Q3: Compare Rust, Go and TypeScript (as is) for gitdeck on these points:
+  - performance, given that most of the work is git command calls
+  - distribution and install, including whether each OS needs its own build
+  - compatibility with the auto-update feature
+  - testing (currently 326 tests, 99% coverage)
+  - migration effort
+  - security (mods run as trusted code)
+- Q4: Give one recommendation with reasons. If not switching is better, say so plainly.
+- Separate confirmed facts from guesses. Add source links for anything from the web. Answer in Korean.
+- The reply style is MoAI-Easy: a friendly Korean colloquial register, jargon explained on first use, banners translated, and a `Sources:` section after web use. The rules say a requested report is the turn's terminal output, so it must NOT end with an AskUserQuestion or a prose next-step question. No time estimates are allowed.
+
+## Verified local facts (all read or run this session)
+- `~/.config/herdr-app/AGENTS.md` (1057 lines):
+  - Herdr is two programs: `herdr-app` (the window) and herdr-core `hc` (runs terminals and agents).
+  - Mods are "JavaScript that describes GPUI elements… the script describes, Rust draws."
+  - The docs say mods "can't use HTML, CSS, a web view, Node APIs or `setTimeout`".
+  - `mods/<name>/main.js` default-exports a class extending `View`. `mod.json` is `{place, size}`.
+  - Mods are trusted code: "commands and network access (including fetch) are unrestricted."
+  - `exec(cmd, args, {cwd, on, timeout})`: runs a program with the user's real environment. Default timeout 30,000 ms, capped at 600,000 ms. 8 MiB output limit. Remote execution via `on`.
+  - `hc(args)` also exists. `herdr-app check <mod folder>` loads a mod once.
+  - Sharing a mod means a public GitHub repo with the topic `herdr-mod`, a `RECIPE.md` and a `preview.png`. It appears at herdr.dev/mods within the hour.
+  - Updates: the app updates itself. A build from source never updates.
+- `grep` of `herdr.d.ts` (421 lines) and `gpui-kit.d.ts` (22228 lines) for wasm, native, binary, quickjs, dylib, ffi and plugin found no documented way to load WASM or native code. The only hits were unrelated.
+- `docs/DEVELOPMENT.md` (64 lines):
+  - Herdr runs `main.js` only (QuickJS). The three modules `herdr`, `gpui-kit` and `gpui-base` are external at run time.
+  - No Node APIs, no `setTimeout`, no DOM.
+  - `exec` takes an argument array (no shell), has a 30 s limit, an 8 MiB output cap and **no stdin**; anything needing input writes a file first. Long operations (clone, large push) belong in a terminal via `hc`.
+  - Every git call uses `--no-optional-locks`. Never keep a `cx`. Never start work in `render()`.
+  - Install via an atomic rename (`scripts/dev-install.sh`), because herdr-app 0.1.x keeps old code alive per reload.
+  - Release is planned later: a `vX.Y.Z` tag plus a GitHub release with the built `dist/gitdeck` folder.
+- Probe run this session (`herdr-app check` on a temp folder `/private/tmp/claude-501/-Volumes-WorkSpace-vogle-herdr-gitdeck/b2691018-1adb-43b5-b477-95e16181dfa5/scratchpad/probe-mod`, which touched nothing installed). The mod threw deliberately to print runtime globals. Output: `WebAssembly=undefined | process=object | require=function | fetch=function | setTimeout=function | globalThis.std=undefined`. So `WebAssembly` is absent in the installed runtime, `herdr-app 0.1.15`. (Note: this conflicts with the docs' "no Node APIs, no setTimeout" wording, since `process`, `require` and `setTimeout` exist as functions or objects. The report should mention it as an observation, not a promise.)
+- gitdeck repo (measured):
+  - `src` is 7,348 lines of TypeScript, `tests` is 3,871 lines. Largest files: `src/main.ts` 707, `src/ui/changes.ts` 491, `src/changes.ts` 336.
+  - 28 `exec(` call sites.
+  - `pnpm test`: 326 tests, 326 pass, 0 fail, about 3.9 s.
+  - `pnpm coverage` over `src/core/**`: all files 99.70% lines, 94.98% branches, 98.25% functions. Gate is 80%.
+  - `dist/gitdeck/main.js` is 202 KB; `mod.json` is `{"place":"none","title":"GitDeck"}`; the folder also holds an `icons/` directory.
+  - Package: esbuild ^0.28.2, typescript ^7.0.2, Node >=24, pnpm 11.9.0.
+  - `scripts/build.mjs` bundles with esbuild (ESM, es2022, platform neutral) and defines `__GITDECK_VERSION__`.
+  - `src/updater.ts` (106 lines) is the self-update: once a day it fetches GitHub's releases API, then posts a notification whose click runs `gitdeck.update`; nothing installs without that click. It downloads a tarball with curl, extracts `gitdeck/`, requires `main.js` and `mod.json`, runs `herdr-app check` on the staged folder, then swaps with one `mv`. It keeps state in `~/.config/herdr-app/mods/.gitdeck-update.json`. The tarball contains only JS and assets, so there are no per-OS binaries and no checksum step (a checksum is not visible in what was read; unverified whether one exists elsewhere).
+  - The git working tree was unchanged by this work: the same modified files as the starting snapshot, with no new changes from me. The probe lives only in the scratchpad.
+- The installed mods folder contains Herdr's shipped mods (changes, files, worktree and others) plus `gitdeck`, `git-graph`, `my-git-graph`, `my-pane`.
+
+## Web findings (sources fetched via Firecrawl, Nov 13 2026 snapshot)
+- https://github.com/topics/herdr-mod: 695 public repos, by primary language: JavaScript 595 (about 86%), Python 45, Rust 18 (about 2.6%), Go 15 (about 2.2%), TypeScript 14, Shell 4, HTML 2, Lua 1. So Rust mods are NOT numerous.
+  - Caveat (inferred, not verified for each repo): the topic mixes desktop-app mods with TUI "herdr-plugin" repos and layouts. GitHub's primary-language label reflects the whole repo, not just the mod part.
+  - Top repos seen: runkids/skillshare (Go, 3.1k stars), sodiumsun/agenttrail (JS, 1k), ChmaraX/herdr-nvim (Rust, 369), kryptamine/herdr-auto-title (Go, 292), fatwang2/Pulse (JS), ChmaraX/herdr-gitview (Rust, 41), rabeeh-ta/herdr-git-graph (JS, 38), DnzzL/herdr-automations (Go, 34), iampedii/herdr-redline (JS), munza/herdr-mods (JS).
+- https://herdr.dev/mods lists community mods (about 713 entries in the Community tab; the tab may include layouts, unverified). It shows the same set of projects.
+- https://github.com/ChmaraX/herdr-gitview is the closest comparable, a git panel (Changes panel replacement, diff, stage, commit). Languages: Rust 68.1%, JavaScript 19.5%, Shell 10.5%, Python 1.8%.
+  - Architecture (from `herdr-app/RECIPE.md`, https://raw.githubusercontent.com/ChmaraX/herdr-gitview/main/herdr-app/RECIPE.md): the UI is JS mods (`gitview`, `gitview-diff`, `gitview-sidebar`, `gitview-tab`, and others). A Rust engine `mods/gitview/bin/herdr-gitview` is called through `exec` with JSON subcommands such as `status|diff|file|stage|unstage|discard|commit|log|…`, with `--on <machine>` and `--root` options. The paths are kept in `mods/gitview/config.json`.
+  - Install (https://raw.githubusercontent.com/ChmaraX/herdr-gitview/main/install.sh): it downloads a prebuilt per-OS/arch release tarball and checks its SHA-256. Targets: aarch64-apple-darwin, x86_64-apple-darwin, x86_64 and aarch64 unknown-linux-gnu. Other platforms are told to build from source. It test-runs the binary and errors if it does not run (for example an older glibc). CI builds macOS releases on macos-15 and macos-15-intel runners.
+  - Also noted: macOS is tested, Linux is untested for the app, and Windows is not supported. The repo also ships a TUI plugin (`herdr-plugin.toml`, `TUI.md`), a separate system installed via `herdr plugin install`.
+  - Its RECIPE "Watch out" items match gitdeck's rules: the 30 s `exec` limit and no stdin, never start work from `render()`, and bugs where an in-flight exec is dropped when a pane closes.
+- https://github.com/kryptamine/herdr-auto-title (Go) is a TUI plugin (`herdr-plugin.toml`) that later added a desktop mode. A JS "gallery mod" popup downloads the release binary in a separate tab (because `exec` gives up after 30 s), checks it against SHA256SUMS, and runs `desktop install`, which sets up a background service. The binary is prebuilt for amd64 and arm64 and otherwise builds from source with Go 1.24+. Windows login startup is supported.
+- A search snippet (YouTube description, unverified) says herdr-app is a native Rust/GPUI desktop client for herdr-core. Other search results: https://github.com/herdrdev/herdr-app (CONTRIBUTING: "Herdr is built to be changed by your agent"), https://github.com/herdrdev/herdr-layout-examples, https://herdr.dev/gallery/.
+
+## Conclusions to put in the report (my analysis so far)
+- Q1: A Herdr mod proper must be JS (`main.js`) describing gpui-kit elements. No WASM or native-plugin loading is documented, and `WebAssembly` is undefined in herdr-app 0.1.15. Rust or Go can only be a helper binary launched through `exec` (supported, trusted, 30 s default and 10 min cap, no stdin). The UI stays in JS.
+- Q2: Rust and Go mods are a small minority (about 2.6% and 2.2% of the topic), and JS dominates. The Rust/Go examples (herdr-gitview, auto-title) use the pattern "JS UI wrapper plus an engine binary via exec, delivered as prebuilt per-OS releases with SHA-256". Some Rust and Go repos are TUI plugins, a different system.
+- Q3, factors to weigh:
+  - Performance: git commands dominate, so the language of the wrapper barely matters. Process spawn costs and the exec limits are the same either way.
+  - Distribution: TypeScript ships one 202 KB JS file with no per-OS builds. Rust or Go needs per-OS/arch binaries, a release matrix, checksums and glibc compatibility, and still leaves the JS UI layer.
+  - Auto-update: the current updater swaps a tarball of JS and assets with `herdr-app check`. A binary would add download, verification and permission handling, and would break the single-rename swap model.
+  - Tests: 326 tests at 99.7% line coverage would have to be rewritten or duplicated (a split between a Rust engine and the JS UI means two test systems).
+  - Migration effort: the 7,348-line core and its tests would need porting (guess, not measured).
+  - Security: JS mods and binaries are both trusted code. A binary adds supply-chain surface (downloaded executables), while the current tarball contains only readable JS.
+- Q4 leaning recommendation: stay with TypeScript. Revisit a Rust helper only if a measured need appears, such as heavy parsing or a graph over huge repos. Label this as a judgement and mark which statements are guesses (migration effort, performance in large repos, QuickJS and WASM beyond the probe).
+
+## State / open threads
+- No report has been written to the user yet. The next step is to write the final Korean report as the turn's terminal output (MoAI-Easy style, `Sources:` section, links above, facts versus guesses separated, no closing question, no time estimates).
+- Nothing in the repo was modified. The probe folder exists only in the scratchpad (can be left or removed).
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/b2691018-1adb-43b5-b477-95e16181dfa5.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
