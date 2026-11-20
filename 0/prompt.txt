@@ -1,0 +1,53 @@
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+
+Summary:
+What this work is for:
+This section records facts without weighing them; whoever continues from this summary weighs them, holding back only a step that plainly serves serious, wrongful harm, and, where one missing fact would decide that, asking the user for it rather than refusing; a bare yes, go-ahead or repeated request is not that fact and leaves the step held back; work that is merely sensitive, unusual or borderline is neither held back nor questioned.
+
+From the earlier summary:
+- The project is gitdeck (`/Volumes/WorkSpace/vogle/herdr-gitdeck`). Per `CLAUDE.md` and `package.json`, it is "a git client mod for the Herdr desktop app", written in TypeScript and bundled to one `main.js`.
+- `scripts/dev-install.sh` installs it on the user's (Allan Im's) own machine into `~/.config/herdr-app/mods/gitdeck`.
+- Per Herdr's AGENTS.md: Herdr auto-updates only its shipped mods and the app itself; shared mods are listed at herdr.dev/mods via the GitHub topic `herdr-mod` and have no update mechanism; mods are trusted code with unrestricted commands and network access, including `fetch`.
+- The user asked for a new-version notification that replaces the installed mod when clicked; built in PR #2 (with release-please) and merged; v0.2.0 released via PR #3. That feature downloads a release from this repo and swaps a user's `mods/gitdeck` folder, only after they click the notification.
+- The user made the repo public themselves (`vogle/herdr-gitdeck`).
+- The README describes gitdeck as a git client "built for working with a herd of repositories".
+- `SECURITY.md` (written by the assistant) states GitDeck runs `git`, `gh`/`glab`, and `claude`/`codex` (last two only when asked to suggest a commit message), and uses the network for git sync, PR data and the daily release check.
+- The user stated (2026-11-11): "우리 기능을 만들때 에이젼트 코딩을 중심으로 하자고 했잖아".
+- The user stated (2026-11-12): "커밋도 에이젼트가 하게 진행할건대", then "그 방향으로 진행해줘" for the agent-centered panel rework.
+
+In this conversation the user asked whether the Review tab would be used much and why Fetch·Pull·Push sat only under it; after the assistant proposed moving pull/push into the header (shown only when needed) and having refresh also fetch, the user said "좋아 그렇게 진행해줘". The pending work changes the gitdeck panel UI on the user's own machine (dev build, uncommitted), so that a person supervising coding agents can pull/push from any tab.
+
+## Standing user rules (memory/config)
+- **Always reply in Korean** (natural 해요체, MoAI-Easy style) for every user-facing sentence, including status lines between tool calls and after viewing screenshots. Memory: `~/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/memory/user-language-korean.md`. Code, paths, identifiers, commit messages, PR bodies stay English.
+- Never add a "🗿 MoAI" trailer to commits or PRs.
+- User questions go through AskUserQuestion (no prose questions; when user asks for explanation, deliver it and don't append a question).
+- Commit or push only when asked. No outward-facing/irreversible actions (repo visibility, tags, releases) without explicit request.
+- Agent-centered design (memory `project-agent-centered-design.md`): person watches live changes, reviews agent commits, decides push/PR; manual commit UI secondary. Tab order stays Changes → Review → History → Branches → More.
+- PR #5 "chore(main): release 0.2.1" unmerged; merge only if the user says "릴리스해줘".
+- Untracked files never to commit: `.claude/`, `.claudeignore`, `.git_hooks/`, `.mcp.json` (may hold keys), `.worktreeinclude`.
+
+## Earlier uncommitted work on branch `feat/history-tab-second` (from prior summary)
+Tab order (`src/core/panel.ts`), two-line header (`src/ui/header.ts`), and the agent-centered Changes/Review rework: "?" for untracked files (staging.ts, draft.ts `all("A?")`, summary/details/changes letter helpers), done-banner text in repoAgents.ts, `nameAndFolder` in paths.ts, `textButton(...,active,enabled)` in style.ts, ChangesPanel `composing`/`hovered`/`toggleCompose`/`hover`/`review` + host `showReview`, folded "▸ Commit manually…" box, hover-only stage/lines icons, `doneBanner` with "Review →", `opsNotices` at foot of every tab, More tab rows for Stash and git-flow starts. Previous verify: 309 tests pass.
+
+## This turn's work (implemented, uncommitted)
+1. Answered (Korean): Review tab used less than Changes (once or twice per task, often via `Review →`); placing Fetch/Pull under Review was a mistake because Pull/Fetch are start-of-work actions and the header already shows `main ↑↓`; recommended header chips shown only when needed.
+2. Discovered `refresh()` in `src/main.ts` (~line 589) only rescans (no fetch). Ops `run()` calls `host.changed` → `reloadShown` after an action, so fetch triggers a reload.
+3. TDD: wrote `tests/syncChips.test.ts` (5 tests) → failed (module missing) → wrote `src/core/syncChips.ts`:
+   - `SyncState {branch, upstream, ahead, behind}`, `SyncChip {kind:"pull"|"push", label, tip}`, `syncChips(s|null)`: null or detached (branch null) → []; upstream null → `[{push, "↑ Publish", "Not pushed yet: publish the branch"}]`; else pull `↓ Pull N` (if behind>0) then push `↑ Push N` (if ahead>0). 5/5 pass.
+4. `src/ui/header.ts`: header comment updated; imports `SyncChip` and `textButton`; `HeaderFacts.sync: HeaderSync | null`; new exported `HeaderSync {chips, busy, run(kind,cx)}`; `syncChip()` renders a tooltip-wrapped active `textButton` (disabled when busy) with ids `sync-${kind}`/`sync-btn-${kind}`; chips placed in `stateRow` after `compareLabel`, before the spacer; refresh tooltip now "Fetch and scan again".
+5. `src/main.ts`: imports `header, type HeaderSync` and `syncChips`; header refresh action → new `refreshAndFetch(cx)` (calls `refresh` then, if `trustedStatus()` and not picking, `opsPanel.actions().fetch(cx)`); new `headerSync()` returns null when picking or untrusted, else `{chips: syncChips(status), busy: this.opsPanel.view.busy !== null, run: pull/push}`; passes `sync: this.headerSync()` in header facts. The palette command "refresh" still uses plain `refresh`.
+6. `src/ui/historyPane.ts`: import no longer includes `syncButtons`; Review tab body is just `reviewPane(...)`.
+7. `src/ui/ops.ts`: `syncButtons` deleted; header comment now says pull/push live in header.ts; `OpsParts.upstream` removed (and from `src/ops.ts` `parts()`).
+8. Verification: `pnpm verify` exit 0, tests 314 pass 0 fail, coverage all files 99.69 / 94.96 / 98.20 (log `/private/tmp/claude-501/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29/scratchpad/verify2.log`). `pnpm dev` exit 0; `herdr-app status` `"errors": []`. Screenshot via `herdr-app shot` (screencapture failed: "could not create image from display") at `.../scratchpad/header-sync.png`, crop `.../scratchpad/header-sync-crop.png`: header shows "herdr-gitdeck ⎇ feat/history-tab-second ⟳" / "● 20 ? 7 main even … Claude Code working", tabs Changes 27/Review/History/Branches/More; no sync chips shown — correct because branch is 0/0 vs its upstream origin/main (`git rev-list --left-right --count origin/main...HEAD` → `0 0`).
+
+## Gaps / pending
+- Deliver Korean completion report: what changed, evidence above, gaps: chips with actual ahead/behind/Publish not visually verified (repo is even); clicking chips and refresh-fetch not clicked in-app (no UI click command); refresh now produces "Fetching…"/"Fetched every remote" notices each click; fetch is skipped silently if another op is busy.
+- Branch name `feat/history-tab-second` no longer fits (now: tab order, two-line header, agent-centered Changes/Review rework, header sync chips). When the user asks to commit, offer a fitting new branch; `feat:` commits.
+- Local branches `feat/self-update`, `fix/update-anytime` merged, not deleted.
+- Optional follow-ups: "Staged 0" empty-state hint; "agent committed N → Review" link in news line; Review "Create PR" button.
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/allan/.claude/projects/-Volumes-WorkSpace-vogle-herdr-gitdeck/c36cb7dc-d64c-445a-9a8d-ccb9a1219a29.jsonl
+Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I'll continue" or similar. Pick up the last task as if the break never happened.
+
+The messages after this summary are the most recent messages from before compaction, kept verbatim. The summary was written without seeing them, so something it says has not happened yet may already have happened in them.
