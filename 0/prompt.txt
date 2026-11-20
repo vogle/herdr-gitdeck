@@ -1,0 +1,11 @@
+<task-notification>
+<summary>Commit security review did not complete: the API was busy or unavailable (HTTP 429). Log: /Users/allan/.claude/security/log.txt</summary>
+</task-notification>
+
+---
+
+계속 진행해줘
+
+---
+
+Your claude.ai usage limit has reset. Continue the task you were working on when the limit was reached; do not repeat work that is already complete.
