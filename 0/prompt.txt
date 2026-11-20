@@ -1,0 +1,1 @@
+gitlab 에서 github  아이콘이 나오는대 이거 두개 나누어야 하지 않을까? 그리고 git config --global gitdeck.avatars true 이렇게 해서 설정하는거 이거 항상 트루로 하게 할수 없나? 해도 상관없지 않나?
