@@ -1,0 +1,31 @@
+package.json
+  s_7cdf9208076a99::t_c80b67cadfdfd4 14-15
+tests/history.integration.test.ts
+  s_7cdf9208076a99::t_3badff1b93cc52 36
+tests/indexLock.integration.test.ts
+  s_7cdf9208076a99::t_3badff1b93cc52 28
+tests/rebase.integration.test.ts
+  s_7cdf9208076a99::t_3badff1b93cc52 30
+tests/ops.integration.test.ts
+  s_7cdf9208076a99::t_3badff1b93cc52 40,44
+tests/integration.test.ts
+  s_7cdf9208076a99::t_3badff1b93cc52 32,113
+tests/staging.integration.test.ts
+  s_7cdf9208076a99::t_3badff1b93cc52 33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "1c08abbb396e0cc89a8204afe0bbbcacf43a5e63",
+  "prompts": {},
+  "sessions": {
+    "s_7cdf9208076a99": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c36cb7dc-d64c-445a-9a8d-ccb9a1219a29",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Allan Im <allan@vogle.com>"
+    }
+  }
+}
