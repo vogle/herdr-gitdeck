@@ -1,0 +1,40 @@
+src/main.ts
+  s_7cdf9208076a99::t_27ec695519be58 744-747
+src/ui/historyPane.ts
+  s_7cdf9208076a99::t_3fedfe8e556693 7
+  s_7cdf9208076a99::t_0ef90c85fe83a5 21
+  s_7cdf9208076a99::t_27ec695519be58 38-39,109
+tests/searchBox.test.ts
+  s_7cdf9208076a99::t_9473cd32dde26b 1-15
+src/ui/style.ts
+  s_7cdf9208076a99::t_50fd2362fe6355 3-5,99,152-194
+  s_7cdf9208076a99::t_334ef0ede57476 195-196
+src/ui/changeFiles.ts
+  s_7cdf9208076a99::t_27ec695519be58 262
+  s_7cdf9208076a99::t_0ef90c85fe83a5 15
+  s_7cdf9208076a99::t_3fedfe8e556693 8
+src/viewer.ts
+  s_7cdf9208076a99::t_0ef90c85fe83a5 35
+  s_7cdf9208076a99::t_27ec695519be58 384-389
+  s_7cdf9208076a99::t_3fedfe8e556693 7
+mod/icons/x.svg
+  s_7cdf9208076a99::t_50fd2362fe6355 1
+src/core/searchBox.ts
+  s_7cdf9208076a99::t_2d3fe976e0e847 1-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "3087b8925ecf28f4175cc530e4e206a41e6be576",
+  "prompts": {},
+  "sessions": {
+    "s_7cdf9208076a99": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c36cb7dc-d64c-445a-9a8d-ccb9a1219a29",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Allan Im <allan@vogle.com>"
+    }
+  }
+}
