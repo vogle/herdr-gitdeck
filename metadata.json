@@ -1,0 +1,53 @@
+{
+  "cli_version": "0.13.4",
+  "checkpoint_id": "01M7XS3VTFQQ984T37FRSPZE9A",
+  "strategy": "manual-commit",
+  "branch": "feat/agent-centered-panel",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "mod/icons/terminal.svg",
+    "src/core/agentLink/gitAi.ts",
+    "src/core/agentLink/merge.ts",
+    "src/core/agentLink/text.ts",
+    "src/core/agentLink/types.ts",
+    "src/core/historyView.ts",
+    "src/main.ts",
+    "src/ui/agentPane.ts",
+    "src/ui/graph.ts",
+    "src/ui/style.ts",
+    "tests/agentLink/gitAi.test.ts",
+    "tests/agentLink/merge.test.ts",
+    "tests/agentLink/text.test.ts",
+    "tests/historyView.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 62,
+    "cache_creation_tokens": 37033,
+    "cache_read_tokens": 10241622,
+    "output_tokens": 18479,
+    "api_call_count": 31
+  },
+  "redaction": {
+    "replacements": 27,
+    "layers": {
+      "betterleaks": 3,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 3,
+      "credentialed_uri": 0,
+      "entropy": 24,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  }
+}
