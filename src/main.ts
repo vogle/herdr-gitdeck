@@ -28,6 +28,9 @@ import { loadCommit, refreshHistory, type DiffSource } from "./core/history.ts";
 import { entireSessions, loadEntireIndex, type EntireIndex } from "./core/agentLink/entire.ts";
 import { mergeSessions } from "./core/agentLink/merge.ts";
 import { gitAiCommits, gitAiSessions } from "./core/agentLink/gitAi.ts";
+import { claudeFolder, guessClaudeSessions, readClaudeLogs, type ClaudeLogCache } from "./core/agentLink/claudeLog.ts";
+import { commitWindow } from "./core/agentLink/claudeLink.ts";
+import type { AgentSession } from "./core/agentLink/types.ts";
 import { forgeNamedLate } from "./core/graph/remoteKind.ts";
 import { agentsKey, liveGap, QUIET_MS, relevantChange } from "./core/live.ts";
 import {
@@ -119,6 +122,8 @@ export default class GitDeck extends View {
   historyFor: string | null = null;
   /** Entire's checkpoint index for one repo, read once and again when its history changes. */
   entireIndex: { cwd: string; index: Promise<EntireIndex> } | null = null;
+  /** What was read from Claude Code's logs, per log file: only changed logs are read again. */
+  claudeLogs: ClaudeLogCache = new Map();
   /** The repo picker lists only the repos with agents. */
   agentsOnly = false;
   /** Each repo as the person last looked at it (memory only). */
@@ -475,11 +480,13 @@ export default class GitDeck extends View {
       const read = await loadCommit(this.git, target, hash, commit.parents);
       this.view = withCommit(this.view, hash, read);
       cx.notify();
-      const [entire, gitAi] = await Promise.all([
+      const time = read.detail?.commitTime ?? 0;
+      const [entire, gitAi, claude] = await Promise.all([
         entireSessions(this.git, target, { hash, message: read.detail?.message ?? "" }, await this.entireIndexFor(target)),
-        gitAiSessions(this.git, target, hash, read.detail?.commitTime ?? 0),
+        gitAiSessions(this.git, target, hash, time),
+        this.guessFromLogs(target, { time, parents: commit.parents, files: read.files.map((f) => f.path) }),
       ]);
-      this.view = withAgents(this.view, hash, mergeSessions([entire, gitAi]));
+      this.view = withAgents(this.view, hash, mergeSessions([entire, gitAi, claude]));
       cx.notify();
       // The committer (GitHub, for a merge made on its site) isn't in the graph's authors.
       const committer = read.detail?.committerEmail ?? "";
@@ -487,6 +494,15 @@ export default class GitDeck extends View {
         await this.avatars.load(this.git, target, await this.homeFor(target), [{ ...commit, email: committer, author: read.detail?.committer ?? "" }], cx);
       }
     });
+  }
+
+  /** Claude Code sessions that edited the commit's files between its parent and itself. */
+  async guessFromLogs(target: Target, commit: { time: number; parents: readonly string[]; files: readonly string[] }): Promise<AgentSession[]> {
+    const window = await commitWindow(this.git, target, commit);
+    const home = await this.homeFor(target);
+    const read = await readClaudeLogs(exec, target, window.roots.map((root) => claudeFolder(home, root)), this.claudeLogs);
+    this.claudeLogs = read.cache;
+    return guessClaudeSessions(read.logs, window);
   }
 
   /** The commits with an Entire checkpoint or a Git AI note naming an agent. */

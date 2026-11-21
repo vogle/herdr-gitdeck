@@ -10,3 +10,13 @@ export function promptText(raw: string): string {
 }
 
 export const lineText = (n: number): string => `${n} line${n === 1 ? "" : "s"}`;
+
+/** Why a session is only a guess: "Estimated · 2 files edited, 1 named in commands". */
+export function overlapText(edited: number, named: number): string {
+  const files = (n: number): string => `${n} file${n === 1 ? "" : "s"}`;
+  const parts = [
+    ...(edited > 0 ? [`${files(edited)} edited`] : []),
+    ...(named > 0 ? [`${edited > 0 ? named : files(named)} named in commands`] : []),
+  ];
+  return `Estimated · ${parts.join(", ")}`;
+}

@@ -20,3 +20,4 @@ test("lineText says how many lines", async () => {
   assert.equal(lineText(1), "1 line");
   assert.equal(lineText(23), "23 lines");
 });
+test("overlapText", async () => { const { overlapText } = await import("../../src/core/agentLink/text.ts"); assert.equal(overlapText(1, 0), "Estimated · 1 file edited"); assert.equal(overlapText(0, 3), "Estimated · 3 files named in commands"); assert.equal(overlapText(2, 1), "Estimated · 2 files edited, 1 named in commands"); });

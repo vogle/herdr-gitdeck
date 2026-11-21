@@ -21,4 +21,7 @@ export interface AgentSession {
   prompt: string | null;
   /** Lines in the commit the session wrote, when a source records them (Git AI). */
   lines?: number;
+  /** Files of the commit a guessed session edited, and others its shell commands only named. */
+  overlap?: number;
+  named?: number;
 }

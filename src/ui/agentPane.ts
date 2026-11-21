@@ -4,7 +4,7 @@
 import { div, type Element } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import type { AgentSession } from "../core/agentLink/types.ts";
-import { lineText, tokenText } from "../core/agentLink/text.ts";
+import { lineText, overlapText, tokenText } from "../core/agentLink/text.ts";
 import { dateTime } from "../core/time.ts";
 import { label, monoFont, type Palette } from "./style.ts";
 
@@ -12,6 +12,7 @@ const MAX_PROMPT = 400;
 
 function session(s: AgentSession, p: Palette): Element {
   const facts = [
+    ...(s.confidence === "guess" ? [overlapText(s.overlap ?? 0, s.named ?? 0)] : []),
     dateTime(s.time),
     ...(s.tokens === null ? [] : [tokenText(s.tokens)]),
     ...(s.lines === undefined ? [] : [lineText(s.lines)]),
