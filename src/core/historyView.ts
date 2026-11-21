@@ -3,6 +3,7 @@
 
 import type { Commit } from "./git/log.ts";
 import type { Diff } from "./git/diff.ts";
+import type { AgentSession } from "./agentLink/types.ts";
 import { layoutLanes, type Lanes } from "./graph/lanes.ts";
 import { searchCommits, withUncommitted, UNCOMMITTED, type CommitView, type History } from "./history.ts";
 
@@ -25,6 +26,8 @@ export interface HistoryView {
   selected: string | null;
   /** The selected commit's details; null while they load. */
   commit: CommitView | null;
+  /** The agent sessions behind the selected commit; null while they load. */
+  agents: readonly AgentSession[] | null;
   /** The file whose diff is open. */
   file: string | null;
   diff: Diff | null;
@@ -38,7 +41,7 @@ const NO_LANES: Lanes = { rows: [], width: 0 };
 export function emptyView(): HistoryView {
   return {
     repo: null, history: null, head: null, changes: 0, rows: [], lanes: NO_LANES, query: "", searching: false,
-    selected: null, commit: null, file: null, diff: null, limit: PAGE, scrollTo: null,
+    selected: null, commit: null, agents: null, file: null, diff: null, limit: PAGE, scrollTo: null,
   };
 }
 
@@ -49,7 +52,7 @@ function withRows(view: HistoryView): HistoryView {
   const rows = searching ? searchCommits(all, view.history?.byCommit ?? {}, view.query).flatMap((i) => all[i] ?? []) : all;
   const lanes = searching ? NO_LANES : layoutLanes(rows.map((r) => ({ ...r, dashed: r.hash === UNCOMMITTED })));
   const keep = view.selected !== null && all.some((c) => c.hash === view.selected);
-  const cleared = keep ? {} : { selected: null, commit: null, file: null, diff: null };
+  const cleared = keep ? {} : { selected: null, commit: null, agents: null, file: null, diff: null };
   return { ...view, ...cleared, rows, lanes, searching };
 }
 
@@ -74,11 +77,15 @@ export function setQuery(view: HistoryView, query: string): HistoryView {
 
 export function selectCommit(view: HistoryView, hash: string): HistoryView {
   const selected = view.selected === hash ? null : hash;
-  return { ...view, selected, commit: null, file: null, diff: null };
+  return { ...view, selected, commit: null, agents: null, file: null, diff: null };
 }
 
 export function withCommit(view: HistoryView, hash: string, commit: CommitView): HistoryView {
   return view.selected === hash ? { ...view, commit } : view;
+}
+
+export function withAgents(view: HistoryView, hash: string, agents: readonly AgentSession[]): HistoryView {
+  return view.selected === hash ? { ...view, agents } : view;
 }
 
 export function openFile(view: HistoryView, path: string): HistoryView {

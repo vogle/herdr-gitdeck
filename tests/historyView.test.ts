@@ -87,3 +87,12 @@ test("paging and jumping to a ref", () => {
   assert.equal(j.scrollTo, 1);
   assert.equal(jumpTo(v, "nope"), v);
 });
+
+test("withAgents keeps a commit's agent sessions, and a new selection clears them", async () => {
+  const { withAgents } = await import("../src/core/historyView.ts");
+  const s = { id: "s", source: "entire", confidence: "exact", agent: "Claude Code", model: null, time: 0, tokens: null, prompt: null } as const;
+  const v = withAgents(selectCommit(view(), "h2"), "h2", [s]);
+  assert.deepEqual(v.agents, [s]);
+  assert.equal(withAgents(v, "h1", []), v);
+  assert.equal(selectCommit(v, "h1").agents, null);
+});

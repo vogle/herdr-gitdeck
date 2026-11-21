@@ -25,11 +25,13 @@ import { createGit, type Git, type Target } from "./core/git/runner.ts";
 import type { RepoStatus } from "./core/git/status.ts";
 import { closePicker, emptyHerd, select, selectedRepo, togglePicker, withRepos, withStatus, type HerdState } from "./core/herd.ts";
 import { loadCommit, refreshHistory, type DiffSource } from "./core/history.ts";
+import { entireSessions, loadEntireIndex, type EntireIndex } from "./core/agentLink/entire.ts";
+import { mergeSessions } from "./core/agentLink/merge.ts";
 import { forgeNamedLate } from "./core/graph/remoteKind.ts";
 import { agentsKey, liveGap, QUIET_MS, relevantChange } from "./core/live.ts";
 import {
   closeFile, emptyView, forRepo, jumpTo, rebuild, scrolled, selectCommit, setQuery, showMore,
-  withCommit, withHistory, UNCOMMITTED, type HistoryView,
+  withAgents, withCommit, withHistory, UNCOMMITTED, type HistoryView,
 } from "./core/historyView.ts";
 import { mapLimit } from "./core/pool.ts";
 import { loadStatus, scanHerd } from "./core/scan.ts";
@@ -114,6 +116,8 @@ export default class GitDeck extends View {
   /** What the history was last read for: the log is read again only when it changes. */
   historyKey: string | null = null;
   historyFor: string | null = null;
+  /** Entire's checkpoint index for one repo, read once and again when its history changes. */
+  entireIndex: { cwd: string; index: Promise<EntireIndex> } | null = null;
   /** The repo picker lists only the repos with agents. */
   agentsOnly = false;
   /** Each repo as the person last looked at it (memory only). */
@@ -420,6 +424,7 @@ export default class GitDeck extends View {
     this.historyFor = target.cwd;
     if (read.history) {
       this.view = withHistory(this.view, target.cwd, read.history);
+      if (this.entireIndex?.cwd === target.cwd) this.entireIndex = null;
       const history = read.history;
       // Its own task: looking up pictures never holds up the git task.
       if (history.avatars) cx.spawn(async (cx) => this.avatars.load(this.git, target, await this.homeFor(target), history.commits, cx));
@@ -467,12 +472,20 @@ export default class GitDeck extends View {
       const read = await loadCommit(this.git, target, hash, commit.parents);
       this.view = withCommit(this.view, hash, read);
       cx.notify();
+      const sessions = await entireSessions(this.git, target, { hash, message: read.detail?.message ?? "" }, await this.entireIndexFor(target));
+      this.view = withAgents(this.view, hash, mergeSessions([sessions]));
+      cx.notify();
       // The committer (GitHub, for a merge made on its site) isn't in the graph's authors.
       const committer = read.detail?.committerEmail ?? "";
       if (this.view.history?.avatars && committer !== "" && committer !== read.detail?.email) {
         await this.avatars.load(this.git, target, await this.homeFor(target), [{ ...commit, email: committer, author: read.detail?.committer ?? "" }], cx);
       }
     });
+  }
+
+  entireIndexFor(target: Target): Promise<EntireIndex> {
+    if (this.entireIndex?.cwd !== target.cwd) this.entireIndex = { cwd: target.cwd, index: loadEntireIndex(this.git, target) };
+    return this.entireIndex.index;
   }
 
   diffSource(path: string): DiffSource | null {

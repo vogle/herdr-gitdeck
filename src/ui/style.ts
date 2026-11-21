@@ -119,6 +119,11 @@ export function badge(mark: string, count: number, color: Color, title: string):
 }
 
 /** The terminal font, for hashes and diffs. */
+/** A label in small capitals, right-aligned in a column of its own, as Fork lays the commit out. */
+export function label(text: string, p: Palette): Element {
+  return div().w(64).flex_shrink_0().text_right().text_size(10).text_color(p.dim).child(text);
+}
+
 export function monoFont(): string {
   const f = settings().font_family;
   return typeof f === "string" && f !== "" ? f : "Menlo";

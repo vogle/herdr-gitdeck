@@ -11,7 +11,8 @@ import { UNCOMMITTED, type HistoryView } from "../core/historyView.ts";
 import { authorBadge } from "../core/graph/rowText.ts";
 import { dateTime } from "../core/time.ts";
 import { kindIcon, lineCounts, statusLetter } from "./changeFiles.ts";
-import { monoFont, textButton, type Palette } from "./style.ts";
+import { label, monoFont, textButton, type Palette } from "./style.ts";
+import { agentBlock } from "./agentPane.ts";
 
 const DIFF_LIST = "gitdeck-diff";
 const DIFF_ROW = 18;
@@ -77,11 +78,6 @@ export function tabBar(p: Palette, ...buttons: Element[]): Element {
     .border_b_1()
     .border_color(p.border)
     .children(buttons);
-}
-
-/** A label in small capitals, right-aligned in a column of its own, as Fork lays the commit out. */
-function label(text: string, p: Palette): Element {
-  return div().w(64).flex_shrink_0().text_right().text_size(10).text_color(p.dim).child(text);
 }
 
 /** The author's saved picture, large, or their initials on their color. */
@@ -173,7 +169,9 @@ function commitBody(view: HistoryView, p: Palette, actions: DetailActions, avata
     fileRow(`cf:${i}`, f.status, f.path, [counts(f, p)], p, (cx) => actions.openFile(f.path, cx)),
   );
   const title = div().px(10).pb(2).text_xs().text_color(p.dim).child(`${c.files.length} file${c.files.length === 1 ? "" : "s"} changed`);
-  return [head, divider(p), message, divider(p), title, ...files];
+  const agents = view.agents ?? [];
+  const block = agents.length > 0 ? [divider(p), agentBlock(agents, p)] : [];
+  return [head, divider(p), message, ...block, divider(p), title, ...files];
 }
 
 export function entryLetter(e: StatusEntry): string {
