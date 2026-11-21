@@ -1,0 +1,44 @@
+{
+  "cli_version": "0.13.4",
+  "checkpoint_id": "01M7XYTD3RBKXF47M9R1J1Q4C0",
+  "strategy": "manual-commit",
+  "branch": "feat/agent-centered-panel",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md",
+    "src/core/agentLink/merge.ts",
+    "src/main.ts",
+    "src/viewer.ts",
+    "tests/agentLink/merge.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 54,
+    "cache_creation_tokens": 27475,
+    "cache_read_tokens": 8567158,
+    "output_tokens": 12553,
+    "api_call_count": 27
+  },
+  "redaction": {
+    "replacements": 31,
+    "layers": {
+      "betterleaks": 3,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 3,
+      "credentialed_uri": 0,
+      "entropy": 28,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  }
+}
