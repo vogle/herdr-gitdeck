@@ -28,6 +28,9 @@ one you're in, with its branch and where it stands.
   untracked, `↑` to push, `↓` to pull. ⟳ scans again.
 - **Picker.** Every repo grouped by folder, the root first, each with its
   branch and counts. Click one to show it.
+- **Three tabs.** **Changes** (what's uncommitted, staging and stashes),
+  **Review** (the branch's diff, checks and pull request) and **History**.
+  A keys.json binding to a tab gitdeck no longer has opens Changes.
 - **History.** The shown repo's commit graph over every branch, remote branch
   and tag (500 commits, then "Show older commits"), with uncommitted changes
   as a dashed row on top. Click a commit for its message and changed files,
@@ -131,8 +134,8 @@ the rules a Herdr mod has to follow.
 | | |
 |---|---|
 | **M0** | Foundation: TS build, tests, install, git layer, herd discovery, picker ✅ |
-| **M1** | Commit graph, commit details and diff, search ✅ (the refs sidebar was removed) |
+| **M1** | Commit graph, commit details and diff, search ✅ · removed: the refs sidebar |
 | **M2** | Staging by file, hunk and line; commit and amend; discard ✅ |
 | **M3** | Checkout, merge, rebase, cherry-pick, revert, reset, stash; fetch/pull/push ✅ |
-| **M4** | Blame, file history, reflog, take ours/theirs, block-by-block conflict resolver, files at a commit, image diff ✅ (the interactive rebase step editor was replaced by "Squash later commits into this") |
-| **M5** | GitHub pull requests (read-only), submodules and Git LFS shown read-only ✅. Updating submodules and fetching LFS content are left out: both run programs a repo names. Repository statistics and git-flow start were removed |
+| **M4** | Blame, file history, reflog, take ours/theirs, block-by-block conflict resolver, files at a commit, image diff ✅ · removed: the interactive rebase step editor (replaced by "Squash later commits into this") |
+| **M5** | GitHub pull requests (read-only), submodules and Git LFS shown read-only ✅. Updating submodules and fetching LFS content are left out: both run programs a repo names · removed: repository statistics, git-flow start |
