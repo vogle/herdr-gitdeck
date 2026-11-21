@@ -1,0 +1,45 @@
+{
+  "cli_version": "0.13.4",
+  "checkpoint_id": "01M7XXS2QNJF7C87K74E98EA24",
+  "strategy": "manual-commit",
+  "branch": "feat/agent-centered-panel",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/core/agentLink/claudeLog.ts",
+    "src/core/agentLink/codexLog.ts",
+    "src/main.ts",
+    "tests/agentLink/claudeLog.test.ts",
+    "tests/agentLink/codexLog.test.ts",
+    "tests/fixtures/agentLink/codex-session.jsonl"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 84,
+    "cache_creation_tokens": 655673,
+    "cache_read_tokens": 12523623,
+    "output_tokens": 26217,
+    "api_call_count": 42
+  },
+  "redaction": {
+    "replacements": 31,
+    "layers": {
+      "betterleaks": 3,
+      "connection_string": 0,
+      "credential_key": 0,
+      "credential_value": 3,
+      "credentialed_uri": 0,
+      "entropy": 28,
+      "key_context": 0,
+      "provider_token": 0,
+      "shell_stdin": 0
+    }
+  }
+}
