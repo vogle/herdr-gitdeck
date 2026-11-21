@@ -1,0 +1,28 @@
+README.md
+  s_7cdf9208076a99::t_d945f71a7d6f5d 79-91,95-96,155
+src/viewer.ts
+  s_7cdf9208076a99::t_3106432e6f70f4 20,210
+src/core/agentLink/merge.ts
+  s_7cdf9208076a99::t_3106432e6f70f4 16-22
+tests/agentLink/merge.test.ts
+  s_7cdf9208076a99::t_e4aa8b8b66201c 26-39
+src/main.ts
+  s_7cdf9208076a99::t_3106432e6f70f4 29,485-494
+  s_7cdf9208076a99::t_fb80c11fb4a909 518-523
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "5599f9ade1770d0fcd2f35d9a82761d35191cf19",
+  "prompts": {},
+  "sessions": {
+    "s_7cdf9208076a99": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c36cb7dc-d64c-445a-9a8d-ccb9a1219a29",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Allan Im <allan@vogle.com>"
+    }
+  }
+}
