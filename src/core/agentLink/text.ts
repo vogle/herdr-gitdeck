@@ -8,3 +8,5 @@ export function tokenText(n: number): string {
 export function promptText(raw: string): string {
   return raw.replace(/<\/?pasted_content\b[^>]*>/g, "").replace(/\n{3,}/g, "\n\n").trim();
 }
+
+export const lineText = (n: number): string => `${n} line${n === 1 ? "" : "s"}`;

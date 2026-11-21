@@ -96,3 +96,11 @@ test("withAgents keeps a commit's agent sessions, and a new selection clears the
   assert.equal(withAgents(v, "h1", []), v);
   assert.equal(selectCommit(v, "h1").agents, null);
 });
+
+test("withLinked marks the commits with a recorded agent session, for the shown repo only", async () => {
+  const { withLinked } = await import("../src/core/historyView.ts");
+  const v = withLinked(view(), "/r", new Set(["h1"]));
+  assert.ok(v.linked.has("h1"));
+  assert.equal(withLinked(v, "/old", new Set()), v);
+  assert.equal(forRepo(v, "/other").linked.size, 0);
+});

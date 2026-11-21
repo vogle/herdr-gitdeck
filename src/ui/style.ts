@@ -94,6 +94,7 @@ export const ICONS = {
   github: "mods/gitdeck/icons/forge-github.svg",
   gitlab: "mods/gitdeck/icons/forge-gitlab.svg",
   git: "mods/gitdeck/icons/forge-git.svg",
+  agent: "mods/gitdeck/icons/terminal.svg",
 } as const;
 
 /** A changed file's icon by its kind (Lucide, see icons/LICENSE-lucide.txt); its color says its status. */

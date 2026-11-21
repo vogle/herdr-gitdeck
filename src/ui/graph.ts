@@ -185,6 +185,8 @@ function row(view: HistoryView, i: number, width: number, now: number, p: Palett
     .children(labels(refs, p, color, view.history?.remotes ?? {}))
     // Merge commits are muted.
     .child(subject(commit.subject, uncommitted ? p.muted : merge ? p.dim : p.foreground))
+    // An agent session is recorded for this commit (Entire or Git AI).
+    .when(view.linked.has(commit.hash), (el) => el.child(icon(ICONS.agent, p.dim, 12)))
     .when(!uncommitted, (el) => el.child(author(commit.author, avatar(commit.email), p)))
     .child(div().w(26).flex_shrink_0().text_right().text_xs().text_color(p.dim).child(ago(now, commit.time)));
 }

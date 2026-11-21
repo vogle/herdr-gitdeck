@@ -16,3 +16,10 @@ test("mergeSessions keeps one session per id, from the first source that has it"
 test("mergeSessions of nothing is nothing", () => {
   assert.deepEqual(mergeSessions([]), []);
 });
+
+test("mergeSessions keeps the first session but takes the line count a later source knows", () => {
+  const merged = mergeSessions([[session("a", "entire")], [{ ...session("a", "git-ai"), lines: 12 }]]);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0]?.source, "entire");
+  assert.equal(merged[0]?.lines, 12);
+});

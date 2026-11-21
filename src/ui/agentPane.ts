@@ -4,14 +4,18 @@
 import { div, type Element } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import type { AgentSession } from "../core/agentLink/types.ts";
-import { tokenText } from "../core/agentLink/text.ts";
+import { lineText, tokenText } from "../core/agentLink/text.ts";
 import { dateTime } from "../core/time.ts";
 import { label, monoFont, type Palette } from "./style.ts";
 
 const MAX_PROMPT = 400;
 
 function session(s: AgentSession, p: Palette): Element {
-  const facts = [dateTime(s.time), ...(s.tokens === null ? [] : [tokenText(s.tokens)])].join(" · ");
+  const facts = [
+    dateTime(s.time),
+    ...(s.tokens === null ? [] : [tokenText(s.tokens)]),
+    ...(s.lines === undefined ? [] : [lineText(s.lines)]),
+  ].join(" · ");
   const prompt = s.prompt === null ? null : s.prompt.length > MAX_PROMPT ? `${s.prompt.slice(0, MAX_PROMPT)}…` : s.prompt;
   return v_flex()
     .flex_1()

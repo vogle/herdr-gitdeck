@@ -14,3 +14,9 @@ test("promptText drops pasted-content tags and blank runs", async () => {
   assert.equal(promptText('<pasted_content id="f912">\nfix it\n</pasted_content>\n\n\n\nthanks'), "fix it\n\nthanks");
   assert.equal(promptText("  <pasted_content id=\"a\"></pasted_content>  "), "");
 });
+
+test("lineText says how many lines", async () => {
+  const { lineText } = await import("../../src/core/agentLink/text.ts");
+  assert.equal(lineText(1), "1 line");
+  assert.equal(lineText(23), "23 lines");
+});

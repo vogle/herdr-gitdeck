@@ -27,11 +27,12 @@ import { closePicker, emptyHerd, select, selectedRepo, togglePicker, withRepos, 
 import { loadCommit, refreshHistory, type DiffSource } from "./core/history.ts";
 import { entireSessions, loadEntireIndex, type EntireIndex } from "./core/agentLink/entire.ts";
 import { mergeSessions } from "./core/agentLink/merge.ts";
+import { gitAiCommits, gitAiSessions } from "./core/agentLink/gitAi.ts";
 import { forgeNamedLate } from "./core/graph/remoteKind.ts";
 import { agentsKey, liveGap, QUIET_MS, relevantChange } from "./core/live.ts";
 import {
   closeFile, emptyView, forRepo, jumpTo, rebuild, scrolled, selectCommit, setQuery, showMore,
-  withAgents, withCommit, withHistory, UNCOMMITTED, type HistoryView,
+  withAgents, withCommit, withHistory, withLinked, UNCOMMITTED, type HistoryView,
 } from "./core/historyView.ts";
 import { mapLimit } from "./core/pool.ts";
 import { loadStatus, scanHerd } from "./core/scan.ts";
@@ -425,6 +426,8 @@ export default class GitDeck extends View {
     if (read.history) {
       this.view = withHistory(this.view, target.cwd, read.history);
       if (this.entireIndex?.cwd === target.cwd) this.entireIndex = null;
+      // Its own task too: marking linked commits never holds up the git task.
+      cx.spawn(async (cx) => this.readLinked(target, cx));
       const history = read.history;
       // Its own task: looking up pictures never holds up the git task.
       if (history.avatars) cx.spawn(async (cx) => this.avatars.load(this.git, target, await this.homeFor(target), history.commits, cx));
@@ -472,8 +475,11 @@ export default class GitDeck extends View {
       const read = await loadCommit(this.git, target, hash, commit.parents);
       this.view = withCommit(this.view, hash, read);
       cx.notify();
-      const sessions = await entireSessions(this.git, target, { hash, message: read.detail?.message ?? "" }, await this.entireIndexFor(target));
-      this.view = withAgents(this.view, hash, mergeSessions([sessions]));
+      const [entire, gitAi] = await Promise.all([
+        entireSessions(this.git, target, { hash, message: read.detail?.message ?? "" }, await this.entireIndexFor(target)),
+        gitAiSessions(this.git, target, hash, read.detail?.commitTime ?? 0),
+      ]);
+      this.view = withAgents(this.view, hash, mergeSessions([entire, gitAi]));
       cx.notify();
       // The committer (GitHub, for a merge made on its site) isn't in the graph's authors.
       const committer = read.detail?.committerEmail ?? "";
@@ -481,6 +487,13 @@ export default class GitDeck extends View {
         await this.avatars.load(this.git, target, await this.homeFor(target), [{ ...commit, email: committer, author: read.detail?.committer ?? "" }], cx);
       }
     });
+  }
+
+  /** The commits with an Entire checkpoint or a Git AI note naming an agent. */
+  async readLinked(target: Target, cx: AsyncContext): Promise<void> {
+    const [index, gitAi] = await Promise.all([this.entireIndexFor(target), gitAiCommits(this.git, target)]);
+    this.view = withLinked(this.view, target.cwd, new Set([...index.keys(), ...gitAi]));
+    cx.notify();
   }
 
   entireIndexFor(target: Target): Promise<EntireIndex> {

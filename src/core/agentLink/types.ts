@@ -19,4 +19,6 @@ export interface AgentSession {
   tokens: number | null;
   /** The user's prompt, read only when the commit is opened. */
   prompt: string | null;
+  /** Lines in the commit the session wrote, when a source records them (Git AI). */
+  lines?: number;
 }

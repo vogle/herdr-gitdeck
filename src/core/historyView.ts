@@ -28,6 +28,8 @@ export interface HistoryView {
   commit: CommitView | null;
   /** The agent sessions behind the selected commit; null while they load. */
   agents: readonly AgentSession[] | null;
+  /** Commits with a recorded agent session (Entire, Git AI), marked in the list. */
+  linked: ReadonlySet<string>;
   /** The file whose diff is open. */
   file: string | null;
   diff: Diff | null;
@@ -41,7 +43,7 @@ const NO_LANES: Lanes = { rows: [], width: 0 };
 export function emptyView(): HistoryView {
   return {
     repo: null, history: null, head: null, changes: 0, rows: [], lanes: NO_LANES, query: "", searching: false,
-    selected: null, commit: null, agents: null, file: null, diff: null, limit: PAGE, scrollTo: null,
+    selected: null, commit: null, agents: null, linked: new Set(), file: null, diff: null, limit: PAGE, scrollTo: null,
   };
 }
 
@@ -82,6 +84,10 @@ export function selectCommit(view: HistoryView, hash: string): HistoryView {
 
 export function withCommit(view: HistoryView, hash: string, commit: CommitView): HistoryView {
   return view.selected === hash ? { ...view, commit } : view;
+}
+
+export function withLinked(view: HistoryView, repo: string, linked: ReadonlySet<string>): HistoryView {
+  return view.repo === repo ? { ...view, linked } : view;
 }
 
 export function withAgents(view: HistoryView, hash: string, agents: readonly AgentSession[]): HistoryView {
