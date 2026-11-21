@@ -8,7 +8,8 @@ import { join } from "node:path";
 import { createGit, type Exec } from "../src/core/git/runner.ts";
 import { loadPlan, runPlan, squashBase, squashPlan } from "../src/core/rebase.ts";
 
-const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+// GIT_CONFIG_GLOBAL keeps the user's ~/.gitconfig (hook templates, trace2 targets) out of the test repos.
+const env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_"))), GIT_CONFIG_GLOBAL: "/dev/null" };
 const exec: Exec = (command, args, options) =>
   new Promise((resolve, reject) => {
     execFile(command, args, { cwd: options.cwd, encoding: "utf8", env }, (error, stdout, stderr) => {

@@ -11,8 +11,8 @@
   "scripts": {
     "types": "node scripts/sync-types.mjs",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json --noEmit",
-    "test": "GIT_TRACE2_EVENT=0 node --test \"tests/**/*.test.ts\"",
-    "coverage": "GIT_TRACE2_EVENT=0 node --test --experimental-test-coverage --test-coverage-include=\"src/core/**\" --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80 \"tests/**/*.test.ts\"",
+    "test": "node --test \"tests/**/*.test.ts\"",
+    "coverage": "node --test --experimental-test-coverage --test-coverage-include=\"src/core/**\" --test-coverage-lines=80 --test-coverage-branches=80 --test-coverage-functions=80 \"tests/**/*.test.ts\"",
     "build": "node scripts/build.mjs",
     "dev": "pnpm build && sh scripts/dev-install.sh",
     "verify": "pnpm typecheck && pnpm coverage && pnpm build"

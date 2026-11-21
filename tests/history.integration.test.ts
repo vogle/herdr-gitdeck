@@ -10,7 +10,8 @@ import { createGit, type Exec } from "../src/core/git/runner.ts";
 import { loadHistory, loadCommit, loadDiff } from "../src/core/history.ts";
 
 // A commit hook runs with GIT_INDEX_FILE and friends set; the test repos must not inherit them.
-const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+// GIT_CONFIG_GLOBAL keeps the user's ~/.gitconfig (hook templates, trace2 targets) out of the test repos.
+const env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_"))), GIT_CONFIG_GLOBAL: "/dev/null" };
 
 const exec: Exec = (command, args, options) =>
   new Promise((resolve, reject) => {
