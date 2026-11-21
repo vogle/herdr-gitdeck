@@ -1,0 +1,35 @@
+src/viewer.ts
+  s_7cdf9208076a99::t_3298c665e0d596 18-19,99-100,206-212,227
+src/core/inspect.ts
+  s_7cdf9208076a99::t_2edd96a45acae8 22-24,31-32,41,49-50,55-56,64,68-69,74-78
+  s_7cdf9208076a99::t_041aca28cbcca9 79-80
+tests/agentLink/gitAi.test.ts
+  s_7cdf9208076a99::t_d737a8e8a9c084 86,90-97,99-102,104-128
+  s_7cdf9208076a99::t_44a4a9d82c00a0 87-89,103
+  s_7cdf9208076a99::t_2edd96a45acae8 98
+tests/blameAgents.integration.test.ts
+  s_7cdf9208076a99::t_8fc5eaf71809f5 1-48
+src/core/agentLink/gitAi.ts
+  s_7cdf9208076a99::t_2edd96a45acae8 7,28-41,44,57-58,60,65,67-76,120-178
+src/ui/inspect.ts
+  s_7cdf9208076a99::t_2edd96a45acae8 7,34
+tests/inspect.test.ts
+  s_7cdf9208076a99::t_d737a8e8a9c084 3,28-43
+  s_7cdf9208076a99::t_12fb930eb8cfdb 44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "507719d40856b557e90a0e2552efad1117e3a862",
+  "prompts": {},
+  "sessions": {
+    "s_7cdf9208076a99": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c36cb7dc-d64c-445a-9a8d-ccb9a1219a29",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Allan Im <allan@vogle.com>"
+    }
+  }
+}
