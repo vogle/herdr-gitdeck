@@ -76,10 +76,24 @@ one you're in, with its branch and where it stands.
   `gh auth login` or `glab auth login`. Only github.com and gitlab.com are
   recognised on their own; for your own host, set
   `git config gitdeck.forge gitlab` (or `github`) in that repo.
+- **Agent sessions.** A commit's pane names the agent conversations behind
+  it. Recorded links come from [Entire](https://github.com/entireio/cli)
+  checkpoints (`refs/entire/checkpoints/…`, only their small metadata and
+  prompt files) and [Git AI](https://github.com/git-ai-project/git-ai) notes
+  (`refs/notes/ai`); History marks those commits. Without a record, gitdeck
+  estimates from Claude Code (`~/.claude/projects/`) and Codex
+  (`~/.codex/sessions/`) logs: a session in this repo or one of its worktrees
+  that edited, or named in a shell command, one of the commit's files between
+  its parent and itself. Estimates say so and are never marked in History.
+  **Blame** names the agent on each line a Git AI note records. On a space on
+  another machine, that machine's records are read. A source that can't be
+  read is skipped. Set the shared value `gitdeck.agentLink` to `"off"` to read
+  none of them.
 
 Reading uses `git status`, `git log`, `git show -s`, `git diff-tree`,
 `git diff`, `git for-each-ref`, `git stash list`, `git rev-parse`, `git blame`
-(of a commit, never the work tree), `git ls-tree`, `git cat-file`, `git ls-files` and `find`.
+(of a commit, never the work tree), `git ls-tree`, `git cat-file`, `git ls-files`,
+`git notes` and `find`, and `perl` reads agent logs from where it last stopped.
 Only the buttons you click write: `git add`, `git restore`, `git rm --cached`,
 `git clean` (discarding an untracked file), `git apply --cached` (hunks and
 lines, from a patch file gitdeck writes into the repo's `.git` folder) and
@@ -138,4 +152,5 @@ the rules a Herdr mod has to follow.
 | **M2** | Staging by file, hunk and line; commit and amend; discard ✅ |
 | **M3** | Checkout, merge, rebase, cherry-pick, revert, reset, stash; fetch/pull/push ✅ |
 | **M4** | Blame, file history, reflog, take ours/theirs, block-by-block conflict resolver, files at a commit, image diff ✅ · removed: the interactive rebase step editor (replaced by "Squash later commits into this") |
+| **Agents** | Agent sessions from Entire checkpoints, Git AI notes, and Claude Code and Codex logs; Blame line marks ✅ |
 | **M5** | GitHub pull requests (read-only), submodules and Git LFS shown read-only ✅. Updating submodules and fetching LFS content are left out: both run programs a repo names · removed: repository statistics, git-flow start |

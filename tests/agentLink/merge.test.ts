@@ -23,3 +23,17 @@ test("mergeSessions keeps the first session but takes the line count a later sou
   assert.equal(merged[0]?.source, "entire");
   assert.equal(merged[0]?.lines, 12);
 });
+
+test("orNone: a source that fails gives no sessions, so the others still show (REQ-6)", async () => {
+  const { orNone } = await import("../../src/core/agentLink/merge.ts");
+  assert.deepEqual(await orNone(Promise.reject(new Error("timed out"))), []);
+  assert.deepEqual(await orNone(Promise.resolve([session("a", "claude")])).then((s) => s.map((x) => x.id)), ["a"]);
+});
+
+test("agentLinkOn: on unless gitdeck.agentLink is off", async () => {
+  const { agentLinkOn } = await import("../../src/core/agentLink/merge.ts");
+  assert.equal(agentLinkOn(undefined), true);
+  assert.equal(agentLinkOn("on"), true);
+  assert.equal(agentLinkOn("off"), false);
+  assert.equal(agentLinkOn(false), false);
+});

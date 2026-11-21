@@ -13,3 +13,10 @@ export function mergeSessions(lists: readonly (readonly AgentSession[])[]): Agen
   }
   return [...byId.values()];
 }
+
+/** A source that fails (no tool, another format, a timeout) is left out; the others still show. */
+export const orNone = <T>(sessions: Promise<readonly T[]>): Promise<readonly T[]> => sessions.catch(() => []);
+
+/** `gitdeck.agentLink`: "off" (or false) stops every read of agent records. */
+export const AGENT_LINK_KEY = "gitdeck.agentLink";
+export const agentLinkOn = (value: unknown): boolean => value !== "off" && value !== false;

@@ -17,6 +17,7 @@ import { files } from "./changes.ts";
 import { loadImageAt, loadImagePair } from "./core/imageDiff.ts";
 import { blameRev, loadBlame, loadFileLog, type BlameLine, type InspectView, type Loaded } from "./core/inspect.ts";
 import { readNoteLines, withBlameAgents, type NoteCache } from "./core/agentLink/gitAi.ts";
+import { AGENT_LINK_KEY, agentLinkOn } from "./core/agentLink/merge.ts";
 import {
   findViewerTab, liveDiff, parseViewer, staleViewerTab, VIEWER_TAB_NAME, viewerBack, viewerKey, viewerShow, viewerFocused, viewerTitle, VIEWER_KEY,
   type ViewerNav, type ViewerRequest,
@@ -206,6 +207,7 @@ export class Viewer {
   /** A file's blame, each line marked with the agent Git AI recorded for it. */
   private async blame(target: Target, rev: string, path: string): Promise<Loaded<BlameLine>> {
     const data = await loadBlame(this.git, target, rev, path);
+    if (!agentLinkOn(shared(AGENT_LINK_KEY))) return data;
     this.gitAiNotes = await readNoteLines(this.git, target, data.items.map((l) => l.hash), this.gitAiNotes);
     return { ...data, items: withBlameAgents(data.items, this.gitAiNotes) };
   }
