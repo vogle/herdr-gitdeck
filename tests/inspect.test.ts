@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { blameArgs, blameRev, parseBlame, fileLogArgs, reflogArgs, parseReflog, takeSideArgs } from "../src/core/inspect.ts";
+import { blameArgs, blameHead, blameRev, parseBlame, fileLogArgs, reflogArgs, parseReflog, takeSideArgs } from "../src/core/inspect.ts";
 
 const A = "a".repeat(40);
 const B = "b".repeat(40);
@@ -23,6 +23,23 @@ test("parseBlame gives each line its commit, author and time, details given once
     [B, 3, "", "Bob", 200, "second"],
   ]);
   assert.deepEqual(lines.map((l) => l.first), [true, false, true], "a new block starts where the commit changes");
+});
+
+test("parseBlame keeps each line's number and file in the commit that wrote it", () => {
+  const out = [
+    `${A} 7 1 2`, "author Ann", "author-time 100", "summary first", "filename old.ts", "\tone",
+    `${A} 8 2`, "\ttwo",
+    `${B} 3 3 1`, "author Bob", "author-time 200", "summary second", "filename f.ts", "\tthree",
+  ].join("\n");
+  assert.deepEqual(parseBlame(out).map((l) => [l.origLine, l.origPath]), [[7, "old.ts"], [8, "old.ts"], [3, "f.ts"]]);
+});
+
+test("blameHead names the commit at a block's first line, and an agent on every line it wrote", () => {
+  const line = { hash: A, line: 1, origLine: 1, origPath: "f", text: "", author: "Ann", time: 0, summary: "", first: true };
+  assert.equal(blameHead(line), `${A.slice(0, 7)} Ann`);
+  assert.equal(blameHead({ ...line, first: false }), "");
+  assert.equal(blameHead({ ...line, agent: "Claude Code" }), `${A.slice(0, 7)} Claude Code`);
+  assert.equal(blameHead({ ...line, first: false, agent: "Claude Code" }), "Claude Code");
 });
 
 test("a file's history follows renames from the given commit", () => {

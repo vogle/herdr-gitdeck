@@ -83,3 +83,46 @@ test("gitAiCommits is empty without notes or when git fails", async () => {
   assert.equal((await gitAiCommits(async () => "", TARGET)).size, 0);
   assert.equal((await gitAiCommits(async () => { throw new Error("no notes ref"); }, TARGET)).size, 0);
 });
+
+const SESSION_NOTE = fixture("gitai-note-session.txt");
+const HUMAN_NOTE = fixture("gitai-note-human.txt");
+
+test("noteLines: the lines of each file an agent session wrote, people's lines left out", async () => {
+  const { noteLines, agentAt } = await import("../../src/core/agentLink/gitAi.ts");
+  const files = noteLines(SESSION_NOTE);
+  assert.equal(agentAt(files, "src/core/codeView.ts", 33), "Claude Code");
+  assert.equal(agentAt(files, "src/core/codeView.ts", 36), null);
+  assert.equal(agentAt(files, "src/core/codeView.ts", 45), "Claude Code");
+  assert.equal(agentAt(files, "tests/codeView.test.ts", 47), "Claude Code");
+  assert.equal(agentAt(files, "other.ts", 33), null);
+  assert.equal(agentAt(noteLines(HUMAN_NOTE), ".entire/.gitignore", 1), null);
+  assert.equal(noteLines("no note").size, 0);
+});
+
+test("withBlameAgents marks the lines AC-4 names and no others", async () => {
+  const { withBlameAgents, noteLines: noteLinesOf } = await import("../../src/core/agentLink/gitAi.ts");
+  const meta = JSON.stringify({ schema_version: "authorship/3.0.0", sessions: { s_1: { agent_id: { tool: "claude", id: "x", model: "m" } } } });
+  const notes = new Map([["c1", noteLinesOf(`a.ts\n  s_1::t_1 3-5\n---\n${meta}`)], ["c2", null]]);
+  const line = (n: number, hash = "c1") => ({ hash, line: n, origLine: n, origPath: "a.ts", text: "", author: "Ann", time: 0, summary: "", first: n === 1 });
+  const marked = withBlameAgents([1, 2, 3, 4, 5, 6].map((n) => line(n)).concat(line(3, "c2")), notes);
+  assert.deepEqual(marked.map((l) => l.agent ?? null), [null, null, "Claude Code", "Claude Code", "Claude Code", null, null]);
+});
+
+test("readNoteLines reads the notes of the blamed commits once, in one log, and skips uncommitted lines", async () => {
+  const { readNoteLines } = await import("../../src/core/agentLink/gitAi.ts");
+  const calls: string[][] = [];
+  const git = async (_t: unknown, args: string[]) => {
+    calls.push(args);
+    return `c1\x1f${SESSION_NOTE}\x1e\nc2\x1f\x1e\n`;
+  };
+  const zero = "0".repeat(40);
+  const first = await readNoteLines(git, TARGET, ["c1", "c2", "c1", zero], new Map());
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0]?.slice(-2), ["c1", "c2"]);
+  assert.ok(first.get("c1")?.size);
+  assert.equal(first.get("c2"), null);
+  await readNoteLines(git, TARGET, ["c1", "c2"], first);
+  assert.equal(calls.length, 1, "notes already read are not read again");
+  const failing = async () => { throw new Error("no git"); };
+  assert.equal((await readNoteLines(failing, TARGET, ["c3"], first)).has("c3"), false);
+});

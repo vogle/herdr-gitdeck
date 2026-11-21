@@ -4,7 +4,7 @@
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex, v_virtual_list, Scrollbar } from "gpui-base";
 import type { ForgeChoice } from "../core/forge/index.ts";
-import type { InspectView } from "../core/inspect.ts";
+import { blameHead, type InspectView } from "../core/inspect.ts";
 import { ago } from "../core/time.ts";
 import { monoFont, textButton, type Palette } from "./style.ts";
 
@@ -31,7 +31,7 @@ function rowsOf(v: InspectView, p: Palette, now: number): Row[] {
     return (v.data?.items ?? []).map((l) => ({
       hash: l.hash,
       cells: () => [
-        dim(l.first ? `${l.hash.slice(0, 7)} ${l.author}` : "", 150),
+        dim(blameHead(l), 150),
         dim(l.first ? ago(now, l.time) : "", 60),
         div().w(36).flex_shrink_0().text_right().text_color(p.dim).child(String(l.line)),
         div().flex_1().min_w_0().truncate().child(l.text === "" ? " " : l.text),

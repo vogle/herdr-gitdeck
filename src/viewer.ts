@@ -15,7 +15,8 @@ import type { Pick } from "./core/stage.ts";
 import { applyPicks, loadStageDiff } from "./core/staging.ts";
 import { files } from "./changes.ts";
 import { loadImageAt, loadImagePair } from "./core/imageDiff.ts";
-import { blameRev, loadBlame, loadFileLog, type InspectView } from "./core/inspect.ts";
+import { blameRev, loadBlame, loadFileLog, type BlameLine, type InspectView, type Loaded } from "./core/inspect.ts";
+import { readNoteLines, withBlameAgents, type NoteCache } from "./core/agentLink/gitAi.ts";
 import {
   findViewerTab, liveDiff, parseViewer, staleViewerTab, VIEWER_TAB_NAME, viewerBack, viewerKey, viewerShow, viewerFocused, viewerTitle, VIEWER_KEY,
   type ViewerNav, type ViewerRequest,
@@ -95,6 +96,8 @@ export class Viewer {
   at = 0;
   /** Lines picked in the shown diff, and the note on them for the agent. */
   readonly feedback = new FeedbackBox();
+  /** Git AI notes of blamed commits, read once each. */
+  gitAiNotes: NoteCache = new Map();
 
   constructor(git: Git) {
     this.git = git;
@@ -200,6 +203,13 @@ export class Viewer {
     if (shown?.kind === "file") shown.code?.release();
   }
 
+  /** A file's blame, each line marked with the agent Git AI recorded for it. */
+  private async blame(target: Target, rev: string, path: string): Promise<Loaded<BlameLine>> {
+    const data = await loadBlame(this.git, target, rev, path);
+    this.gitAiNotes = await readNoteLines(this.git, target, data.items.map((l) => l.hash), this.gitAiNotes);
+    return { ...data, items: withBlameAgents(data.items, this.gitAiNotes) };
+  }
+
   private async read(r: ViewerRequest): Promise<Shown> {
     const target: Target = { cwd: r.repo, on: r.on };
     if (r.view === "file") {
@@ -214,7 +224,7 @@ export class Viewer {
     if (r.view !== "diff" && r.view !== "stage") {
       const view: InspectView =
         r.view === "blame"
-          ? { kind: "blame", path: r.path, rev: r.rev, data: await loadBlame(this.git, target, r.rev, r.path) }
+          ? { kind: "blame", path: r.path, rev: r.rev, data: await this.blame(target, r.rev, r.path) }
           : { kind: "file-log", path: r.path, rev: r.rev, data: await loadFileLog(this.git, target, r.rev, r.path) };
       return { kind: "inspect", view };
     }
