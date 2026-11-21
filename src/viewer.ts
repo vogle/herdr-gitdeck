@@ -4,7 +4,7 @@
 // asks for it through the shared VIEWER_KEY value, so a restart shows it again.
 
 import { div, type AsyncContext, type Context, type Element } from "gpui-kit";
-import { h_flex, v_flex, Input, InputState, VirtualListScrollHandle, type EditorState } from "gpui-base";
+import { h_flex, v_flex, InputState, VirtualListScrollHandle, type EditorState } from "gpui-base";
 import { appHome, exec, focused, panes, run, setShared, shared, spaces } from "herdr";
 import { sameDiff, type Diff } from "./core/git/diff.ts";
 import type { Git, Target } from "./core/git/runner.ts";
@@ -32,7 +32,7 @@ import { codeState, fileBody, imageBody, type Picture } from "./ui/fileBody.ts";
 import { isMarkdown, isSvg } from "./core/codeView.ts";
 import { loadFileAt, type BlobView } from "./core/tree.ts";
 import { stagePane } from "./ui/stagePane.ts";
-import { textButton, type Palette } from "./ui/style.ts";
+import { searchBox, textButton, type Palette } from "./ui/style.ts";
 
 /** Image diffs are written here (hidden, so writing doesn't reload the mod), under the app folder `image()` reads from. */
 export const IMAGE_CACHE = "mods/gitdeck/.cache/images";
@@ -381,7 +381,12 @@ export class Viewer {
       .gap(6)
       .items_center()
       .flex_shrink_0()
-      .child(div().w(180).h(22).px(6).rounded(4).border_1().border_color(p.border).bg(p.surface).child(Input.new(this.find).size_full().text_xs().text_color(p.foreground)))
+      .child(
+        searchBox("viewer-find", this.find, p, (cx) => {
+          this.match(true);
+          cx.notify();
+        }).w(180).h(22).bg(p.surface),
+      )
       .when(typed, (el) => el.child(div().text_xs().text_color(this.hits.length === 0 ? p.removed : p.dim).child(count)));
   }
 

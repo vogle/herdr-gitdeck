@@ -4,7 +4,7 @@
 // history tab shows the selected commit below its list.
 
 import { div, type Context, type Element } from "gpui-kit";
-import { h_flex, v_flex, v_resizable, resizable_panel, Input, type InputState, type VirtualListScrollHandle } from "gpui-base";
+import { h_flex, v_flex, v_resizable, resizable_panel, type InputState, type VirtualListScrollHandle } from "gpui-base";
 import type { RepoStatus } from "../core/git/status.ts";
 import { changesTabLabel } from "../core/headerText.ts";
 import { UNCOMMITTED, type HistoryView } from "../core/historyView.ts";
@@ -18,7 +18,7 @@ import { inspectPane } from "./inspect.ts";
 import { treePane } from "./treePane.ts";
 import { commitBar, commitMenu, opsNotices, type OpsActions, type OpsParts } from "./ops.ts";
 import { reviewPane, type ReviewActions, type ReviewParts } from "./review.ts";
-import { textButton, type Palette } from "./style.ts";
+import { searchBox, textButton, type Palette } from "./style.ts";
 
 export interface HistoryActions extends GraphActions, DetailActions {
   selectTab: (tab: PanelTab, cx: Context) => void;
@@ -35,6 +35,8 @@ export interface HistoryActions extends GraphActions, DetailActions {
   setForge: (kind: ForgeChoice, cx: Context) => void;
   /** Opens or closes the History tab's ⋯ menu. */
   toggleMenu: (cx: Context) => void;
+  /** The search box was emptied by its × or Esc: every commit shows again. */
+  clearSearch: (cx: Context) => void;
 }
 
 export interface HistoryParts {
@@ -104,18 +106,7 @@ function searchRow(parts: HistoryParts, p: Palette, actions: HistoryActions): El
     .flex_shrink_0()
     .border_b_1()
     .border_color(p.border)
-    .child(
-      div()
-        .flex_1()
-        .min_w_0()
-        .h(22)
-        .px(6)
-        .rounded(4)
-        .border_1()
-        .border_color(p.border)
-        .bg(p.chrome)
-        .child(Input.new(parts.search).size_full().text_xs().text_color(p.foreground)),
-    )
+    .child(searchBox("history-search", parts.search, p, actions.clearSearch).flex_1().min_w_0().h(22).bg(p.chrome))
     .child(div().flex_shrink_0().text_xs().text_color(p.dim).child(count))
     .child(textButton("history-menu", "⋯", p, actions.toggleMenu, parts.menuOpen));
 }

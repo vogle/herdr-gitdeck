@@ -5,14 +5,14 @@
 // name, the lines it adds and removes, and the status letter again at the end.
 
 import { div, type Context, type Element } from "gpui-kit";
-import { h_flex, Input } from "gpui-base";
+import { h_flex } from "gpui-base";
 import { excludeLabel } from "../core/exclude.ts";
 import { fileKind, patternKind } from "../core/fileKind.ts";
 import { allOpen, folderTree, foldKey, isOpen, listEntries, matching, setAll, type FolderNode } from "../core/fileGroups.ts";
 import type { LineCounts } from "../core/git/show.ts";
 import { nameAndFolder } from "../core/paths.ts";
 import type { ChangeFile } from "../core/staging.ts";
-import { FILE_ICONS, ICONS, icon, iconButton, textButton, type Palette } from "./style.ts";
+import { FILE_ICONS, ICONS, icon, iconButton, searchBox, textButton, type Palette } from "./style.ts";
 import type { ChangesActions, ChangesParts } from "./changes.ts";
 
 const MAX_FILES = 500;
@@ -259,7 +259,7 @@ export function filesBar(parts: ChangesParts, p: Palette, a: ChangesActions): El
     .items_center()
     .border_b_1()
     .border_color(p.border)
-    .child(div().flex_1().min_w_0().h(24).px(6).rounded(4).border_1().border_color(p.border).bg(p.chrome).child(Input.new(parts.filter).size_full().text_xs().text_color(p.foreground)))
+    .child(searchBox("changes-filter", parts.filter, p, (cx) => cx.notify()).flex_1().min_w_0().h(24).bg(p.chrome))
     .child(h_flex().flex_shrink_0().gap(2).child(seg("List", true)).child(seg("Tree", false)));
 }
 

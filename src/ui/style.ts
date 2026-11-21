@@ -1,7 +1,8 @@
 // Theme access and small shared pieces. Colors always come from the person's theme.
 
-import { div, svg, type Color, type Context, type Element } from "gpui-kit";
-import { h_flex } from "gpui-base";
+import { div, svg, type Color, type Context, type Element, type NativeElement } from "gpui-kit";
+import { h_flex, Input, type InputState } from "gpui-base";
+import { clearsOnEscape, showsClear } from "../core/searchBox.ts";
 import { settings, theme } from "herdr";
 import type { FileKind } from "../core/fileKind.ts";
 import type { AgentStatus } from "../core/repoAgents.ts";
@@ -95,6 +96,7 @@ export const ICONS = {
   gitlab: "mods/gitdeck/icons/forge-gitlab.svg",
   git: "mods/gitdeck/icons/forge-git.svg",
   agent: "mods/gitdeck/icons/terminal.svg",
+  clear: "mods/gitdeck/icons/x.svg",
 } as const;
 
 /** A changed file's icon by its kind (Lucide, see icons/LICENSE-lucide.txt); its color says its status. */
@@ -145,6 +147,51 @@ export function iconButton(id: string, path: string, tip: string, p: Palette, on
       onClick(cx);
     })
     .child(icon(path, p.muted, 14));
+}
+
+/**
+ * A search box's frame, its input, and an × at the right end while it holds text.
+ * The × and Esc empty it and keep the cursor in it; `onClear` then does what typing would.
+ * Esc on an empty box goes on to the panel (Back). The caller sizes the frame and picks its background.
+ */
+export function searchBox(id: string, state: InputState, p: Palette, onClear: (cx: Context) => void): NativeElement {
+  const clear = (cx: Context) => {
+    state.set_value("");
+    state.focus();
+    onClear(cx);
+  };
+  return h_flex()
+    .id(id)
+    .items_center()
+    .gap(2)
+    .pl(6)
+    .pr(2)
+    .rounded(4)
+    .border_1()
+    .border_color(p.border)
+    .on_key_down((e, cx) => {
+      if (!clearsOnEscape(e.keystroke, state.value())) return;
+      cx.stop_propagation();
+      clear(cx);
+    })
+    .child(div().flex_1().min_w_0().h_full().child(Input.new(state).size_full().text_xs().text_color(p.foreground)))
+    .when(showsClear(state.value()), (el) =>
+      el.child(
+        div()
+          .id(`${id}-clear`)
+          .flex_shrink_0()
+          .p(2)
+          .rounded(3)
+          .cursor_pointer()
+          .tooltip("Clear")
+          .hover((h) => h.bg(p.hover))
+          .on_click((_e, cx) => {
+            cx.stop_propagation();
+            clear(cx);
+          })
+          .child(icon(ICONS.clear, p.dim, 12)),
+      ),
+    );
 }
 
 /**

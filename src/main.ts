@@ -741,6 +741,10 @@ export default class GitDeck extends View {
 
   historyActions(): HistoryActions {
     return {
+      clearSearch: (cx) => {
+        this.view = setQuery(this.view, "");
+        cx.notify();
+      },
       pick: (hash, cx) => this.pickCommit(hash, cx),
       more: (cx) => {
         this.view = showMore(this.view);
