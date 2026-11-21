@@ -1,0 +1,48 @@
+src/core/agentLink/text.ts
+  s_7cdf9208076a99::t_378b20ed8175fd 14-22
+  s_7cdf9208076a99::t_757eabd5102f7d 13
+tests/fixtures/agentLink/claude-session.jsonl
+  s_7cdf9208076a99::t_90bc04a47d85a2 4
+src/core/agentLink/claudeLog.ts
+  s_7cdf9208076a99::t_378b20ed8175fd 4-6,19,21-22,45,54,68-74,77,81-87,89,100-101,131-139,142-145,147,149,151-157,160,162,164-165
+  s_7cdf9208076a99::t_491269bc777fc5 150
+  s_7cdf9208076a99::t_f04616cfb30c1d 51-52
+  s_7cdf9208076a99::t_757eabd5102f7d 1-3,7-18,20,23-44,46-49,53,55-67,75-76,78-80,88,90-99,102-130,140-141,146,148,158-159,161,163,166
+  s_7cdf9208076a99::t_04dcac0f08dbbb 50
+src/core/agentLink/claudeLink.ts
+  s_7cdf9208076a99::t_95146cb650b09e 1-28
+tests/agentLink/text.test.ts
+  s_7cdf9208076a99::t_90bc04a47d85a2 23
+src/main.ts
+  s_7cdf9208076a99::t_77974912895e78 31-33,125-126,483-484,486-487,489,499-505
+  s_7cdf9208076a99::t_fde0d23f5588be 506-507
+tests/agentLink/claudeLink.test.ts
+  s_7cdf9208076a99::t_3bfd0c5a5fb915 1-24
+tests/agentLink/claudeLog.test.ts
+  s_7cdf9208076a99::t_9f69a2cce9963c 11,74
+  s_7cdf9208076a99::t_90bc04a47d85a2 32-33,55,96-110
+  s_7cdf9208076a99::t_34f68c5c27de0f 1-10,12-31,34-54,56-73,75-95,111
+  s_7cdf9208076a99::t_491269bc777fc5 112-117
+src/ui/agentPane.ts
+  s_7cdf9208076a99::t_77974912895e78 7
+  s_7cdf9208076a99::t_378b20ed8175fd 15
+src/core/agentLink/types.ts
+  s_7cdf9208076a99::t_757eabd5102f7d 25
+  s_7cdf9208076a99::t_378b20ed8175fd 24,26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "639fce5c43a3236e0f142faa73e895a0e1898792",
+  "prompts": {},
+  "sessions": {
+    "s_7cdf9208076a99": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c36cb7dc-d64c-445a-9a8d-ccb9a1219a29",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Allan Im <allan@vogle.com>"
+    }
+  }
+}
