@@ -28,7 +28,8 @@ import { loadCommit, refreshHistory, type DiffSource } from "./core/history.ts";
 import { entireSessions, loadEntireIndex, type EntireIndex } from "./core/agentLink/entire.ts";
 import { mergeSessions } from "./core/agentLink/merge.ts";
 import { gitAiCommits, gitAiSessions } from "./core/agentLink/gitAi.ts";
-import { claudeFolder, guessClaudeSessions, readClaudeLogs, type ClaudeLogCache } from "./core/agentLink/claudeLog.ts";
+import { claudeFolder, guessSessions, readClaudeLogs, type ClaudeLogCache } from "./core/agentLink/claudeLog.ts";
+import { CODEX, readCodexLogs } from "./core/agentLink/codexLog.ts";
 import { commitWindow } from "./core/agentLink/claudeLink.ts";
 import type { AgentSession } from "./core/agentLink/types.ts";
 import { forgeNamedLate } from "./core/graph/remoteKind.ts";
@@ -124,6 +125,7 @@ export default class GitDeck extends View {
   entireIndex: { cwd: string; index: Promise<EntireIndex> } | null = null;
   /** What was read from Claude Code's logs, per log file: only changed logs are read again. */
   claudeLogs: ClaudeLogCache = new Map();
+  codexLogs: ClaudeLogCache = new Map();
   /** The repo picker lists only the repos with agents. */
   agentsOnly = false;
   /** Each repo as the person last looked at it (memory only). */
@@ -496,13 +498,17 @@ export default class GitDeck extends View {
     });
   }
 
-  /** Claude Code sessions that edited the commit's files between its parent and itself. */
+  /** Claude Code and Codex sessions that touched the commit's files between its parent and itself. */
   async guessFromLogs(target: Target, commit: { time: number; parents: readonly string[]; files: readonly string[] }): Promise<AgentSession[]> {
     const window = await commitWindow(this.git, target, commit);
     const home = await this.homeFor(target);
-    const read = await readClaudeLogs(exec, target, window.roots.map((root) => claudeFolder(home, root)), this.claudeLogs);
-    this.claudeLogs = read.cache;
-    return guessClaudeSessions(read.logs, window);
+    const [claude, codex] = await Promise.all([
+      readClaudeLogs(exec, target, window.roots.map((root) => claudeFolder(home, root)), this.claudeLogs),
+      readCodexLogs(exec, target, home, window.roots, this.codexLogs),
+    ]);
+    this.claudeLogs = claude.cache;
+    this.codexLogs = codex.cache;
+    return [...guessSessions(claude.logs, window), ...guessSessions(codex.logs, window, CODEX)];
   }
 
   /** The commits with an Entire checkpoint or a Git AI note naming an agent. */

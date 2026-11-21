@@ -7,7 +7,7 @@
 // script pulls out only the edit calls, and only from where it last stopped.
 
 import type { Exec, Target } from "../git/runner.ts";
-import type { AgentSession } from "./types.ts";
+import type { AgentSession, Source } from "./types.ts";
 
 export interface Edit {
   /** The tool call id: a call can be logged twice. */
@@ -91,33 +91,46 @@ export function parseScan(out: string): { edits: Edit[]; named: Edit[]; offset: 
 
 const sessionOf = (path: string): string => path.slice(path.lastIndexOf("/") + 1).replace(/\.jsonl$/, "");
 
-async function scan(exec: Exec, target: Target, path: string, from: LogEntry | undefined, size: number, mtime: number): Promise<LogEntry | null> {
+/** How one agent's logs are found and read. */
+export interface LogReader {
+  /** The listing script's folders. */
+  list: readonly string[];
+  listScript: string;
+  /** The scan script's arguments after the offset and path. */
+  scanScript: string;
+  scanArgs: readonly string[];
+  session: (path: string) => string;
+}
+
+async function scan(exec: Exec, target: Target, reader: LogReader, path: string, from: LogEntry | undefined, size: number, mtime: number): Promise<LogEntry | null> {
   if (from && from.size === size && from.mtime === mtime) return from;
   // A log that shrank was rewritten: read it again from the start.
   const base = from && size > from.size ? from : undefined;
-  const r = await exec("perl", ["-e", SCAN, String(base?.offset ?? 0), path], { on: target.on, timeout: TIMEOUT });
+  const r = await exec("perl", ["-e", reader.scanScript, String(base?.offset ?? 0), path, ...reader.scanArgs], { on: target.on, timeout: TIMEOUT });
   if (r.code !== 0) return base ?? null;
   const { edits, named, offset } = parseScan(r.stdout);
   return { size, mtime, offset, edits: [...(base?.edits ?? []), ...edits, ...named] };
 }
 
-/** The edits of every log in the folders, reading only logs that changed. Empty when anything fails. */
-export async function readClaudeLogs(
-  exec: Exec,
-  target: Target,
-  folders: readonly string[],
-  cache: ClaudeLogCache,
-): Promise<{ logs: SessionEdits; cache: ClaudeLogCache }> {
+/** The edits of every log a reader lists, reading only logs that changed. Empty when anything fails. */
+export async function readLogs(exec: Exec, target: Target, reader: LogReader, cache: ClaudeLogCache): Promise<{ logs: SessionEdits; cache: ClaudeLogCache }> {
   try {
-    const listed = await exec("perl", ["-e", LIST, ...folders], { on: target.on, timeout: TIMEOUT });
+    const listed = await exec("perl", ["-e", reader.listScript, ...reader.list], { on: target.on, timeout: TIMEOUT });
     if (listed.code !== 0) return { logs: new Map(), cache };
-    const entries = await Promise.all(parseListing(listed.stdout).map(async ({ path, size, mtime }) => [path, await scan(exec, target, path, cache.get(path), size, mtime)] as const));
+    const entries = await Promise.all(
+      parseListing(listed.stdout).map(async ({ path, size, mtime }) => [path, await scan(exec, target, reader, path, cache.get(path), size, mtime)] as const),
+    );
     const next = new Map(entries.flatMap(([path, entry]) => (entry === null ? [] : [[path, entry] as const])));
-    return { logs: new Map([...next].map(([path, entry]) => [sessionOf(path), entry.edits])), cache: next };
+    const logs = new Map([...next].filter(([, entry]) => entry.edits.length > 0).map(([path, entry]) => [reader.session(path), entry.edits]));
+    return { logs, cache: next };
   } catch {
     return { logs: new Map(), cache };
   }
 }
+
+/** Claude Code's logs in the repo's project folders. */
+export const readClaudeLogs = (exec: Exec, target: Target, folders: readonly string[], cache: ClaudeLogCache): Promise<{ logs: SessionEdits; cache: ClaudeLogCache }> =>
+  readLogs(exec, target, { list: folders, listScript: LIST, scanScript: SCAN, scanArgs: [], session: sessionOf }, cache);
 
 export interface CommitWindow {
   /** The commit's time and its parent's (0 for a root commit), in seconds. */
@@ -139,11 +152,19 @@ function commitFile(e: Edit, commit: CommitWindow, files: ReadonlySet<string>): 
   return (root === "" && !e.named) || !files.has(relative) ? null : relative;
 }
 
+/** Which agent wrote a set of logs. */
+export interface Agent {
+  source: Source;
+  name: string;
+}
+
+export const CLAUDE: Agent = { source: "claude", name: "Claude Code" };
+
 /**
  * Sessions that touched the commit's files between its parent and itself. Ranked by files an
  * edit tool wrote, then files a command named, then being on the commit's branch.
  */
-export function guessClaudeSessions(logs: SessionEdits, commit: CommitWindow): AgentSession[] {
+export function guessSessions(logs: SessionEdits, commit: CommitWindow, agent: Agent = CLAUDE): AgentSession[] {
   const files = new Set(commit.files);
   const scored = [...logs].flatMap(([id, edits]) => {
     const hits = edits.flatMap((e) => {
@@ -156,7 +177,7 @@ export function guessClaudeSessions(logs: SessionEdits, commit: CommitWindow): A
     const named = new Set(hits.filter((h) => h.e.named && !edited.has(h.file)).map((h) => h.file)).size;
     const branch = commit.branch !== null && hits.some((h) => h.e.branch === commit.branch) ? 1 : 0;
     const session: AgentSession = {
-      id, source: "claude", confidence: "guess", agent: "Claude Code", model: last.model === "" ? null : last.model,
+      id, source: agent.source, confidence: "guess", agent: agent.name, model: last.model === "" ? null : last.model,
       time: last.time, tokens: null, prompt: null, overlap: edited.size, named,
     };
     return [{ session, rank: [edited.size, named, branch] }];

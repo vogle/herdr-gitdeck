@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   claudeFolder,
-  guessClaudeSessions,
+  guessSessions,
   parseListing,
   parseScan,
   readClaudeLogs,
@@ -49,7 +49,7 @@ test("only a session of this repo that edited a commit file between the parent a
     ["C", [edit("/repo/src/x.ts", "2026-11-12T03:00:00Z")]],
   ]);
   const commit = { time: at("2026-11-12T02:30:00Z"), parentTime: at("2026-11-12T02:00:00Z"), files: ["src/x.ts"], roots: ["/repo"], branch: "main" };
-  const sessions = guessClaudeSessions(logs, commit);
+  const sessions = guessSessions(logs, commit);
   assert.deepEqual(sessions, [{
     id: "A", source: "claude", confidence: "guess", agent: "Claude Code", model: "claude-opus-5-5",
     time: at("2026-11-12T02:10:00Z"), tokens: null, prompt: null, overlap: 1, named: 0,
@@ -63,7 +63,7 @@ test("candidates are ranked by files in common, then by being on the commit's br
     ["other-branch", [{ ...edit("/repo/a.ts", "2026-11-12T02:10:00Z"), branch: "x" }]],
   ]);
   const commit = { time: at("2026-11-12T02:30:00Z"), parentTime: 0, files: ["a.ts", "b.ts"], roots: ["/repo", "/wt"], branch: "main" };
-  assert.deepEqual(guessClaudeSessions(logs, commit).map((s) => [s.id, s.overlap]), [["two", 2], ["one", 1], ["other-branch", 1]]);
+  assert.deepEqual(guessSessions(logs, commit).map((s) => [s.id, s.overlap]), [["two", 2], ["one", 1], ["other-branch", 1]]);
 });
 
 test("readClaudeLogs scans a new log, then leaves an unchanged one alone and reads only what was added", async () => {
@@ -102,7 +102,7 @@ test("a file a shell command named counts, below one an edit tool wrote", () => 
     ["tool", [edit("/repo/src/a.ts", "2026-11-12T02:10:00Z")]],
   ]);
   const commit = { time: at("2026-11-12T02:30:00Z"), parentTime: 0, files: ["src/a.ts", "src/b.ts", "src/c.ts"], roots: ["/repo"], branch: null };
-  assert.deepEqual(guessClaudeSessions(logs, commit).map((s) => [s.id, s.overlap, s.named]), [["tool", 1, 0], ["shell", 0, 3]]);
+  assert.deepEqual(guessSessions(logs, commit).map((s) => [s.id, s.overlap, s.named]), [["tool", 1, 0], ["shell", 0, 3]]);
 });
 
 test("pathTokens keeps the words of a command that look like paths", async () => {
@@ -113,5 +113,5 @@ test("pathTokens keeps the words of a command that look like paths", async () =>
 test("a command logged in the parent's second counts: one command can make both commits", () => {
   const logs: SessionEdits = new Map([["s", [{ ...edit("package.json", "2026-11-12T02:00:00.041Z"), named: true as const }]]]);
   const commit = { time: at("2026-11-12T02:00:08Z"), parentTime: at("2026-11-12T02:00:00Z"), files: ["package.json"], roots: ["/repo"], branch: null };
-  assert.equal(guessClaudeSessions(logs, commit).length, 1);
+  assert.equal(guessSessions(logs, commit).length, 1);
 });
