@@ -147,3 +147,32 @@ test("refreshHistory skips the log when refs, HEAD and the limit are unchanged",
   assert.ok((await refreshHistory(git, T, 1000, first.key, "head1")).history, "more commits asked for");
   assert.equal(calls.filter((c) => c[0] === "for-each-ref").length, 4, "refs read once per refresh");
 });
+
+test("loadHistory reads which forge each remote is on, and none when git config finds nothing", async () => {
+  const h = await loadHistory(fake({ log: LOG, "for-each-ref": REFS, config: "remote.origin.url git@github.com:a/b.git\n" }), T, 500);
+  assert.deepEqual(h.remotes, { origin: "github" });
+  const none = await loadHistory(fake({ log: LOG, "for-each-ref": REFS, config: new GitError("", [], 1, "") }), T, 500);
+  assert.deepEqual(none.remotes, {});
+});
+
+test("refreshHistory reads the history again when a remote's forge is named", async () => {
+  const { refreshHistory } = await import("../src/core/history.ts");
+  const answers: Record<string, string> = { log: LOG, "for-each-ref": REFS, config: "remote.origin.url https://git.acme.dev/o/r.git\n" };
+  const first = await refreshHistory(fake(answers), T, 500, null, "head1");
+  assert.deepEqual(first.history?.remotes, { origin: "git" });
+  answers.config = "remote.origin.url https://git.acme.dev/o/r.git\ngitdeck.forge gitlab\n";
+  const named = await refreshHistory(fake(answers), T, 500, first.key, "head1");
+  assert.deepEqual(named.history?.remotes, { origin: "gitlab" }, "the graph's icons follow gitdeck.forge");
+});
+
+test("loadHistory reads whether authors' pictures are on (git config gitdeck.avatars), on unless turned off", async () => {
+  const on = await loadHistory(fake({ log: LOG, "for-each-ref": REFS, config: "remote.origin.url git@github.com:a/b.git\ngitdeck.avatars true\n" }), T, 500);
+  assert.equal(on.avatars, true);
+  assert.equal(on.avatarHost, "github.com", "origin's host keys the pictures");
+  assert.deepEqual(on.remotes, { origin: "github" }, "the setting is not a remote");
+  const off = await loadHistory(fake({ log: LOG, "for-each-ref": REFS, config: "remote.origin.url git@github.com:a/b.git\ngitdeck.avatars false\n" }), T, 500);
+  assert.equal(off.avatars, false);
+  assert.equal((await loadHistory(fake({ log: LOG, "for-each-ref": REFS }), T, 500)).avatars, true, "unset is on");
+  const no = await loadHistory(fake({ log: LOG, "for-each-ref": REFS, config: "gitdeck.avatars no\n" }), T, 500);
+  assert.equal(no.avatars, false);
+});

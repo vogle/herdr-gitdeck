@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { GitError, type Git } from "../src/core/git/runner.ts";
 import type { Ref } from "../src/core/git/refs.ts";
-import { baseBranch, compareArgs, loadCompare, parseCompare } from "../src/core/review.ts";
+import { baseBranch, compareArgs, loadCompare, parseCompare, reviewBase } from "../src/core/review.ts";
 
 const ref = (name: string, kind: Ref["kind"] = "branch"): Ref => ({
   kind, full: kind === "remote" ? `refs/remotes/${name}` : `refs/heads/${name}`, name, hash: "a".repeat(40),
@@ -24,6 +24,17 @@ test("on the main line itself there is nothing to compare", () => {
 
 test("a detached HEAD still compares against main", () => {
   assert.equal(baseBranch([ref("main")], null), "main");
+});
+
+test("reviewBase compares with the PR's target when it is there, else the main line", () => {
+  const refs = [ref("feat"), ref("main"), ref("origin/develop", "remote"), ref("release/1"), ref("origin/release/1", "remote")];
+  assert.equal(reviewBase(refs, "feat", "develop"), "origin/develop", "only the remote copy exists");
+  assert.equal(reviewBase(refs, "feat", "release/1"), "release/1", "a local branch beats its remote copy");
+  assert.equal(reviewBase(refs, "feat", "main"), "main");
+  assert.equal(reviewBase(refs, "feat", "gone"), "main", "a target not fetched falls back to main");
+  assert.equal(reviewBase(refs, "feat", null), "main", "no PR");
+  assert.equal(reviewBase(refs, "feat", ""), "main");
+  assert.equal(reviewBase(refs, "develop", "develop"), null, "on the target itself");
 });
 
 test("compareArgs counts both sides of base...HEAD", () => {
@@ -54,6 +65,7 @@ test("loadReview diffs HEAD against where it split from the base", async () => {
     if (args[0] === "merge-base") return `${M}\n`;
     if (args.includes("--name-status")) return "M\0src/a.ts\0A\0b.md\0";
     if (args.includes("--numstat")) return "3\t1\tsrc/a.ts\0" + "10\t0\tb.md\0";
+    if (args.includes("--raw")) return `:100644 100644 ${M} ${H} M\0src/a.ts\0`;
     return "";
   };
   const r = await loadReview(git, T, "main", H);
@@ -62,6 +74,8 @@ test("loadReview diffs HEAD against where it split from the base", async () => {
   assert.equal(r.mergeBase, M);
   assert.deepEqual(r.files.map((f) => [f.status, f.path, f.added, f.deleted]), [["M", "src/a.ts", 3, 1], ["A", "b.md", 10, 0]]);
   assert.ok(calls.some((c) => c[0] === "diff-tree" && c.at(-2) === M && c.at(-1) === H), "files between the split and HEAD");
+  assert.equal(r.blobs.get("src/a.ts"), H, "each file's blob, to tell when it changed after being viewed");
+  assert.ok(calls.some((c) => c.includes("--raw") && c.includes("--no-abbrev")));
 });
 
 test("loadReview reports git's error instead of a file list", async () => {
@@ -71,5 +85,6 @@ test("loadReview reports git's error instead of a file list", async () => {
   };
   const r = await loadReview(bad, T, "main", "h".repeat(40));
   assert.deepEqual(r.files, []);
+  assert.equal(r.blobs.size, 0);
   assert.match(r.error ?? "", /no merge base/);
 });

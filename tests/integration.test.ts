@@ -12,7 +12,8 @@ import { findArgs, parseFound, findHerdRoot } from "../src/core/repos/discover.t
 import { loadStatus } from "../src/core/scan.ts";
 
 // A commit hook runs with GIT_INDEX_FILE and friends set; the test repos must not inherit them.
-const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+// GIT_CONFIG_GLOBAL keeps the user's ~/.gitconfig (hook templates, trace2 targets) out of the test repos.
+const env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_"))), GIT_CONFIG_GLOBAL: "/dev/null" };
 
 // Herdr's exec, played by Node: an argument array, never a shell.
 const exec: Exec = (command, args, options) =>
@@ -29,7 +30,7 @@ let herd = "";
 async function repo(path: string): Promise<void> {
   await mkdir(path, { recursive: true });
   const at = { cwd: path, on: null };
-  await git(at, ["init", "-q", "-b", "main"]);
+  await git(at, ["init", "-q", "--template=", "-b", "main"]);
   await git(at, ["config", "user.email", "t@example.com"]);
   await git(at, ["config", "user.name", "t"]);
   await git(at, ["config", "commit.gpgsign", "false"]);
@@ -110,7 +111,7 @@ const exists = (path: string) => access(path).then(() => true, () => false);
 async function trap(path: string, marker: string, how: "direct" | "include"): Promise<void> {
   await mkdir(path, { recursive: true });
   const at = { cwd: path, on: null };
-  await git(at, ["init", "-q", "-b", "main"]);
+  await git(at, ["init", "-q", "--template=", "-b", "main"]);
   await writeFile(join(path, ".gitattributes"), "bait.txt filter=evil\n");
   await writeFile(join(path, "bait.txt"), "hi\n");
   await git(at, ["add", "."]);

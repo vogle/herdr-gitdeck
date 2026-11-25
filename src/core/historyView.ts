@@ -3,6 +3,7 @@
 
 import type { Commit } from "./git/log.ts";
 import type { Diff } from "./git/diff.ts";
+import type { AgentSession } from "./agentLink/types.ts";
 import { layoutLanes, type Lanes } from "./graph/lanes.ts";
 import { searchCommits, withUncommitted, UNCOMMITTED, type CommitView, type History } from "./history.ts";
 
@@ -25,10 +26,13 @@ export interface HistoryView {
   selected: string | null;
   /** The selected commit's details; null while they load. */
   commit: CommitView | null;
+  /** The agent sessions behind the selected commit; null while they load. */
+  agents: readonly AgentSession[] | null;
+  /** Commits with a recorded agent session (Entire, Git AI), marked in the list. */
+  linked: ReadonlySet<string>;
   /** The file whose diff is open. */
   file: string | null;
   diff: Diff | null;
-  sidebar: boolean;
   limit: number;
   /** A row to bring on screen once, then cleared. */
   scrollTo: number | null;
@@ -39,7 +43,7 @@ const NO_LANES: Lanes = { rows: [], width: 0 };
 export function emptyView(): HistoryView {
   return {
     repo: null, history: null, head: null, changes: 0, rows: [], lanes: NO_LANES, query: "", searching: false,
-    selected: null, commit: null, file: null, diff: null, sidebar: false, limit: PAGE, scrollTo: null,
+    selected: null, commit: null, agents: null, linked: new Set(), file: null, diff: null, limit: PAGE, scrollTo: null,
   };
 }
 
@@ -50,13 +54,13 @@ function withRows(view: HistoryView): HistoryView {
   const rows = searching ? searchCommits(all, view.history?.byCommit ?? {}, view.query).flatMap((i) => all[i] ?? []) : all;
   const lanes = searching ? NO_LANES : layoutLanes(rows.map((r) => ({ ...r, dashed: r.hash === UNCOMMITTED })));
   const keep = view.selected !== null && all.some((c) => c.hash === view.selected);
-  const cleared = keep ? {} : { selected: null, commit: null, file: null, diff: null };
+  const cleared = keep ? {} : { selected: null, commit: null, agents: null, file: null, diff: null };
   return { ...view, ...cleared, rows, lanes, searching };
 }
 
 export function forRepo(view: HistoryView, repo: string | null): HistoryView {
   if (view.repo === repo) return view;
-  return { ...emptyView(), repo, sidebar: view.sidebar };
+  return { ...emptyView(), repo };
 }
 
 export function withHistory(view: HistoryView, repo: string, history: History): HistoryView {
@@ -75,11 +79,19 @@ export function setQuery(view: HistoryView, query: string): HistoryView {
 
 export function selectCommit(view: HistoryView, hash: string): HistoryView {
   const selected = view.selected === hash ? null : hash;
-  return { ...view, selected, commit: null, file: null, diff: null };
+  return { ...view, selected, commit: null, agents: null, file: null, diff: null };
 }
 
 export function withCommit(view: HistoryView, hash: string, commit: CommitView): HistoryView {
   return view.selected === hash ? { ...view, commit } : view;
+}
+
+export function withLinked(view: HistoryView, repo: string, linked: ReadonlySet<string>): HistoryView {
+  return view.repo === repo ? { ...view, linked } : view;
+}
+
+export function withAgents(view: HistoryView, hash: string, agents: readonly AgentSession[]): HistoryView {
+  return view.selected === hash ? { ...view, agents } : view;
 }
 
 export function openFile(view: HistoryView, path: string): HistoryView {
@@ -94,15 +106,11 @@ export function closeFile(view: HistoryView): HistoryView {
   return { ...view, file: null, diff: null };
 }
 
-export function toggleSidebar(view: HistoryView): HistoryView {
-  return { ...view, sidebar: !view.sidebar };
-}
-
 export function showMore(view: HistoryView): HistoryView {
   return { ...view, limit: view.limit + PAGE };
 }
 
-/** Selects a commit from the sidebar and brings its row on screen. */
+/** Selects a commit (a ref label or a link to it) and brings its row on screen. */
 export function jumpTo(view: HistoryView, hash: string): HistoryView {
   const cleared = withRows({ ...view, query: "" });
   const index = cleared.rows.findIndex((r) => r.hash === hash);

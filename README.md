@@ -9,9 +9,9 @@ repository around that folder, lists every repository below it, and shows the
 one you're in, with its branch and where it stands.
 
 > Status: **M5**. Repo discovery, the repo picker, the history (commit graph,
-> commit details and diffs, refs sidebar, search), staging and committing, and
-> branch work and sync, blame, file history, the reflog, the files at a commit
-> interactive rebase, statistics, git-flow branches and GitHub/GitLab review requests
+> commit details and diffs, search), staging and committing, and
+> branch work and sync, blame, file history, the reflog, the files at a commit,
+> squashing commits and GitHub/GitLab review requests
 > (see [Roadmap](#roadmap)).
 
 ## What it does now
@@ -28,12 +28,13 @@ one you're in, with its branch and where it stands.
   untracked, `↑` to push, `↓` to pull. ⟳ scans again.
 - **Picker.** Every repo grouped by folder, the root first, each with its
   branch and counts. Click one to show it.
+- **Three tabs.** **Changes** (what's uncommitted, staging and stashes),
+  **Review** (the branch's diff, checks and pull request) and **History**.
+  A keys.json binding to a tab gitdeck no longer has opens Changes.
 - **History.** The shown repo's commit graph over every branch, remote branch
   and tag (500 commits, then "Show older commits"), with uncommitted changes
   as a dashed row on top. Click a commit for its message and changed files,
-  a file for its diff. **Refs** opens a sidebar of branches (with ↑↓ against
-  their upstream), remote branches, tags and stashes; a click jumps to the
-  commit. The search box filters by subject, author, branch, tag or hash.
+  a file for its diff. The search box filters by subject, author, branch, tag or hash.
 - **Staging.** Click the uncommitted row: staged and unstaged files, each with
   Stage / Unstage, and Discard (a second click confirms; an untracked file is
   deleted). Click a file for one side of its diff: click a hunk header to
@@ -63,18 +64,11 @@ one you're in, with its branch and where it stands.
   selected commit; click one to read it (raw, from git's objects). A Git LFS
   file shows its real size and object id; a submodule shows the commit it
   records and its URL (from that commit's `.gitmodules`, read as plain text).
-- **Editing history.** "Edit commits after this" opens the commits between
-  the selected one and HEAD, oldest first. Click a step to cycle pick →
-  squash → fixup → drop, move it with ↑ ↓, then Run. gitdeck writes git's todo
-  list itself (no editor opens) and a squash keeps both messages. Ranges with
-  a merge commit are refused. Repos on this machine only.
-- **Statistics.** **Stats** in the toolbar: commits (no merges) on HEAD, files,
-  authors by commit count, and commits per month, each with a bar.
-- **git-flow.** In a repo with a `develop` branch, **+ feature** and
-  **+ release** start `feature/<name>` or `release/<name>` from `develop`; with
-  `main` or `master`, **+ hotfix** starts `hotfix/<name>` from it. No git-flow
-  tool is needed; finishing one is an ordinary merge.
-- **GitHub and GitLab.** **More → Pull / merge requests** lists the repo's
+- **Squashing history.** "Squash later commits into this" folds every commit
+  after the selected one into it, keeping its message, after one confirmation
+  (`Squash N commits into <hash>?`). gitdeck writes git's todo list itself (no
+  editor opens). Ranges with a merge commit are refused. Repos on this machine only.
+- **GitHub and GitLab.** **Review → All pull requests** lists the repo's
   PRs (GitHub, through `gh`) or MRs (GitLab, through `glab`): open, merged
   and closed, the latest 100, read-only. A click jumps to the head commit.
   gitdeck reads the project from `origin` and runs the CLI with `--repo`
@@ -82,16 +76,30 @@ one you're in, with its branch and where it stands.
   `gh auth login` or `glab auth login`. Only github.com and gitlab.com are
   recognised on their own; for your own host, set
   `git config gitdeck.forge gitlab` (or `github`) in that repo.
+- **Agent sessions.** A commit's pane names the agent conversations behind
+  it. Recorded links come from [Entire](https://github.com/entireio/cli)
+  checkpoints (`refs/entire/checkpoints/…`, only their small metadata and
+  prompt files) and [Git AI](https://github.com/git-ai-project/git-ai) notes
+  (`refs/notes/ai`); History marks those commits. Without a record, gitdeck
+  estimates from Claude Code (`~/.claude/projects/`) and Codex
+  (`~/.codex/sessions/`) logs: a session in this repo or one of its worktrees
+  that edited, or named in a shell command, one of the commit's files between
+  its parent and itself. Estimates say so and are never marked in History.
+  **Blame** names the agent on each line a Git AI note records. On a space on
+  another machine, that machine's records are read. A source that can't be
+  read is skipped. Set the shared value `gitdeck.agentLink` to `"off"` to read
+  none of them.
 
 Reading uses `git status`, `git log`, `git show -s`, `git diff-tree`,
 `git diff`, `git for-each-ref`, `git stash list`, `git rev-parse`, `git blame`
-(of a commit, never the work tree), `git ls-tree`, `git cat-file`, `git ls-files` and `find`.
+(of a commit, never the work tree), `git ls-tree`, `git cat-file`, `git ls-files`,
+`git notes` and `find`, and `perl` reads agent logs from where it last stopped.
 Only the buttons you click write: `git add`, `git restore`, `git rm --cached`,
 `git clean` (discarding an untracked file), `git apply --cached` (hunks and
 lines, from a patch file gitdeck writes into the repo's `.git` folder) and
 `git commit`, and the branch and sync buttons run `git switch`, `branch`,
 `tag`, `merge`, `rebase`, `cherry-pick`, `revert`, `reset`, `stash`, `fetch`,
-`pull` and `push`, and Edit commits runs `git rebase -i` with its todo list
+`pull` and `push`, and Squash runs `git rebase -i` with its todo list
 copied in by `cp` (`sequence.editor`). These run your repo's own hooks and signing program, as git
 always does, so use them only in repos whose `.git` folder you trust. Network
 commands never ask for a password (`GIT_TERMINAL_PROMPT=0`): use an SSH key or
@@ -140,8 +148,9 @@ the rules a Herdr mod has to follow.
 | | |
 |---|---|
 | **M0** | Foundation: TS build, tests, install, git layer, herd discovery, picker ✅ |
-| **M1** | Commit graph, commit details and diff, branches/tags/stashes sidebar, search ✅ |
+| **M1** | Commit graph, commit details and diff, search ✅ · removed: the refs sidebar |
 | **M2** | Staging by file, hunk and line; commit and amend; discard ✅ |
 | **M3** | Checkout, merge, rebase, cherry-pick, revert, reset, stash; fetch/pull/push ✅ |
-| **M4** | Blame, file history, reflog, take ours/theirs, block-by-block conflict resolver, files at a commit, interactive rebase, image diff ✅ |
-| **M5** | Repository statistics, git-flow start, GitHub pull requests (read-only), submodules and Git LFS shown read-only ✅. Updating submodules and fetching LFS content are left out: both run programs a repo names |
+| **M4** | Blame, file history, reflog, take ours/theirs, block-by-block conflict resolver, files at a commit, image diff ✅ · removed: the interactive rebase step editor (replaced by "Squash later commits into this") |
+| **Agents** | Agent sessions from Entire checkpoints, Git AI notes, and Claude Code and Codex logs; Blame line marks ✅ |
+| **M5** | GitHub pull requests (read-only), submodules and Git LFS shown read-only ✅. Updating submodules and fetching LFS content are left out: both run programs a repo names · removed: repository statistics, git-flow start |

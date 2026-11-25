@@ -1,5 +1,5 @@
-// gitdeck as a right-side panel: the drill-down's back step, the wide breakpoint,
-// and the viewer tab that shows what needs the whole width (diffs, blame, stats).
+// gitdeck as a right-side panel: the drill-down's back step,
+// and the viewer tab that shows what needs the whole width (diffs, blame, a file).
 // The panel asks for a view by writing a request to a shared value; the viewer
 // tab (a gitdeck pane in the main area) reads it.
 
@@ -7,13 +7,20 @@ import type { DiffSource } from "./history.ts";
 
 /** The shared value carrying what the viewer tab shows. */
 export const VIEWER_KEY = "gitdeck.viewer";
-/** Panel widths from here up get two columns. */
-export const WIDE_PX = 640;
 
-export type PanelTab = "changes" | "review" | "history" | "branches" | "more";
-export const PANEL_TABS: readonly PanelTab[] = ["changes", "review", "history", "branches", "more"];
+export type PanelTab = "changes" | "review" | "history";
+/** The tab bar's order, for agent work: what the agent changed, then the branch review; the panel opens on the first. */
+export const PANEL_TABS: readonly PanelTab[] = ["changes", "review", "history"];
 
-export const isWide = (width: number): boolean => width >= WIDE_PX;
+/** Tabs gitdeck no longer has; a binding to one still opens the panel, on Changes. */
+const REMOVED_TABS: readonly string[] = ["branches", "more"];
+
+/** The tab a `tab:<name>` command (keys.json, or `herdr-app do gitdeck.tab:review`) names; null for any other command. */
+export function tabCommand(command: string): PanelTab | null {
+  const name = command.startsWith("tab:") ? command.slice(4) : "";
+  if (REMOVED_TABS.includes(name)) return "changes";
+  return PANEL_TABS.find((t) => t === name) ?? null;
+}
 
 export type BackStep = "inspect" | "file" | "commit";
 
@@ -33,7 +40,10 @@ interface Where {
 export type ViewerRequest =
   | (Where & { view: "diff"; source: DiffSource })
   | (Where & { view: "blame" | "file-log"; rev: string; path: string })
-  | (Where & { view: "stats" });
+  /** One side of an uncommitted file, to stage (or, staged, unstage) by hunk or line. */
+  | (Where & { view: "stage"; path: string; staged: boolean })
+  /** A file as it is at a commit (the History tab's File Tree). */
+  | (Where & { view: "file"; rev: string; path: string });
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -54,8 +64,8 @@ export function parseViewer(v: unknown): ViewerRequest | null {
   if (!isObj(v) || !isText(v.repo) || !v.repo.startsWith("/")) return null;
   if (v.on !== null && !isText(v.on)) return null;
   const where: Where = { repo: v.repo, on: v.on };
-  if (v.view === "stats") return { ...where, view: "stats" };
-  if (v.view === "blame" || v.view === "file-log") {
+  if (v.view === "stage") return isText(v.path) && typeof v.staged === "boolean" ? { ...where, view: "stage", path: v.path, staged: v.staged } : null;
+  if (v.view === "blame" || v.view === "file-log" || v.view === "file") {
     return isText(v.rev) && isText(v.path) ? { ...where, view: v.view, rev: v.rev, path: v.path } : null;
   }
   if (v.view !== "diff") return null;
@@ -64,7 +74,8 @@ export function parseViewer(v: unknown): ViewerRequest | null {
 }
 
 /** An uncommitted diff: the work tree or the index can change it while it is shown. */
-export const liveDiff = (r: ViewerRequest | null): boolean => r !== null && r.view === "diff" && r.source.kind !== "commit";
+export const liveDiff = (r: ViewerRequest | null): boolean =>
+  r !== null && (r.view === "stage" || (r.view === "diff" && r.source.kind !== "commit"));
 
 /** Equal requests give equal keys (fields in a fixed order). */
 export function viewerKey(r: ViewerRequest | null): string {
@@ -77,9 +88,9 @@ const base = (path: string): string => path.slice(path.lastIndexOf("/") + 1);
 
 export function viewerTitle(r: ViewerRequest): string {
   if (r.view === "diff") return base(r.source.path);
-  if (r.view === "blame") return `Blame ${base(r.path)}`;
-  if (r.view === "file-log") return `History ${base(r.path)}`;
-  return `Stats ${base(r.repo)}`;
+  if (r.view === "file") return base(r.path);
+  if (r.view === "stage") return `${r.staged ? "Unstage" : "Stage"} ${base(r.path)}`;
+  return `${r.view === "blame" ? "Blame" : "History"} ${base(r.path)}`;
 }
 
 /** What the viewer shows, and where its back button returns to. */

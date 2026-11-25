@@ -5,41 +5,13 @@ import { div, type Element } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import type { RepoStatus, StatusEntry } from "../core/git/status.ts";
 import { selectedRepo, type HerdState } from "../core/herd.ts";
+import { entryLetter, fileRow as detailRow, stagedTag } from "./details.ts";
 import type { Palette } from "./style.ts";
 
 const MAX_FILES = 300;
 
-function letter(e: StatusEntry): string {
-  if (e.kind === "untracked") return "U";
-  if (e.kind === "conflict") return "!";
-  if (e.kind === "renamed") return "R";
-  const side = e.index !== "." ? e.index : e.worktree;
-  return side === "?" ? "U" : side;
-}
-
-function letterColor(e: StatusEntry, p: Palette) {
-  const l = letter(e);
-  if (l === "!" || l === "D") return p.removed;
-  if (l === "A" || l === "U") return p.added;
-  if (l === "R") return p.info;
-  return p.changed;
-}
-
-function fileRow(e: StatusEntry, p: Palette): Element {
-  const cut = e.path.lastIndexOf("/");
-  const folder = cut >= 0 ? e.path.slice(0, cut + 1) : "";
-  const name = cut >= 0 ? e.path.slice(cut + 1) : e.path;
-  const staged = e.kind !== "untracked" && e.kind !== "conflict" && e.index !== ".";
-  return h_flex()
-    .h(24)
-    .px(10)
-    .gap(8)
-    .items_center()
-    .child(div().w(12).flex_shrink_0().text_color(letterColor(e, p)).child(letter(e)))
-    .child(div().flex_shrink_0().text_color(p.foreground).child(name))
-    .child(div().min_w_0().truncate().text_color(p.dim).child(folder))
-    .child(div().flex_1())
-    .when(staged, (el) => el.child(div().text_xs().text_color(p.added).child("staged")));
+function fileRow(e: StatusEntry, i: number, p: Palette): Element {
+  return detailRow(`sf:${i}`, entryLetter(e), e.path, stagedTag(e, p), p);
 }
 
 function line(label: string, value: string, p: Palette): Element {
@@ -78,7 +50,7 @@ function fileList(s: RepoStatus, p: Palette): Element[] {
       .min_h_0()
       .overflow_y_scrollbar()
       .pb(8)
-      .children(files.slice(0, MAX_FILES).map((e) => fileRow(e, p)))
+      .children(files.slice(0, MAX_FILES).map((e, i) => fileRow(e, i, p)))
       .when(files.length > MAX_FILES, (el) =>
         el.child(div().px(10).py(6).text_xs().text_color(p.dim).child(`… and ${files.length - MAX_FILES} more`)),
       ),

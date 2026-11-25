@@ -1,0 +1,22 @@
+/** "812 tokens", "12.4K tokens", "2.1M tokens". */
+export function tokenText(n: number): string {
+  const short = n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e4 ? `${(n / 1e3).toFixed(1)}K` : String(n);
+  return `${short} token${n === 1 ? "" : "s"}`;
+}
+
+/** A prompt as the person typed it: without the tags their client wrapped pasted text in. */
+export function promptText(raw: string): string {
+  return raw.replace(/<\/?pasted_content\b[^>]*>/g, "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+export const lineText = (n: number): string => `${n} line${n === 1 ? "" : "s"}`;
+
+/** Why a session is only a guess: "Estimated · 2 files edited, 1 named in commands". */
+export function overlapText(edited: number, named: number): string {
+  const files = (n: number): string => `${n} file${n === 1 ? "" : "s"}`;
+  const parts = [
+    ...(edited > 0 ? [`${files(edited)} edited`] : []),
+    ...(named > 0 ? [`${edited > 0 ? named : files(named)} named in commands`] : []),
+  ];
+  return `Estimated · ${parts.join(", ")}`;
+}

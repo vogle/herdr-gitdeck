@@ -4,6 +4,7 @@
 import type { Git, Target } from "./git/runner.ts";
 import { filesArgs, joinFiles, parseNameStatus, parseNumstat, type CommitFile } from "./git/show.ts";
 import type { Ref } from "./git/refs.ts";
+import { parseBlobs } from "./reviewed.ts";
 
 /** The main line, most likely first: a local branch beats its remote copy. */
 const BASES = ["main", "master", "origin/main", "origin/master"] as const;
@@ -15,6 +16,17 @@ export function baseBranch(refs: readonly Ref[], current: string | null): string
   if (base === null || current === null) return base;
   const short = base.replace(/^origin\//, "");
   return current === base || current === short ? null : base;
+}
+
+/**
+ * What the branch is reviewed against: the PR's target when it has one and it is
+ * here (a local branch beats its remote copy), else the main line.
+ */
+export function reviewBase(refs: readonly Ref[], current: string | null, target: string | null): string | null {
+  if (!target) return baseBranch(refs, current);
+  if (current === target) return null;
+  const names = new Set(refs.filter((r) => r.kind === "branch" || r.kind === "remote").map((r) => r.name));
+  return [target, `origin/${target}`].find((b) => names.has(b)) ?? baseBranch(refs, current);
 }
 
 export function compareArgs(base: string): string[] {
@@ -49,18 +61,21 @@ export interface Review {
   mergeBase: string | null;
   head: string;
   files: readonly CommitFile[];
+  /** Each file's blob at HEAD (a deleted one: the blob it had), to tell a file changed after it was viewed. */
+  blobs: ReadonlyMap<string, string>;
   error: string | null;
 }
 
 export async function loadReview(git: Git, target: Target, base: string, head: string): Promise<Review> {
   try {
     const mergeBase = (await git(target, ["merge-base", base, head])).trim();
-    const [names, counts] = await Promise.all([
+    const [names, counts, raw] = await Promise.all([
       git(target, filesArgs(head, [mergeBase], "--name-status")),
       git(target, filesArgs(head, [mergeBase], "--numstat")),
+      git(target, filesArgs(head, [mergeBase], "--raw")),
     ]);
-    return { base, mergeBase, head, files: joinFiles(parseNameStatus(names), parseNumstat(counts)), error: null };
+    return { base, mergeBase, head, files: joinFiles(parseNameStatus(names), parseNumstat(counts)), blobs: parseBlobs(raw), error: null };
   } catch (error) {
-    return { base, mergeBase: null, head, files: [], error: error instanceof Error ? error.message : String(error) };
+    return { base, mergeBase: null, head, files: [], blobs: new Map(), error: error instanceof Error ? error.message : String(error) };
   }
 }

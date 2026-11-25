@@ -3,7 +3,7 @@
 import { div, type Context, type Element } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { summarize } from "../core/git/status.ts";
-import { groupRepos, type HerdRepo, type HerdState, type StatusResult } from "../core/herd.ts";
+import { chipTip, groupRepos, type HerdRepo, type HerdState, type StatusResult } from "../core/herd.ts";
 import { reposShown, type AgentChip } from "../core/repoAgents.ts";
 import { agentColor, badge, ICONS, icon, textButton, type Palette } from "./style.ts";
 
@@ -89,6 +89,58 @@ function filterRow(state: HerdState, agents: HerdAgents, p: Palette): Element {
     .border_color(p.border)
     .child(div().flex_1().text_color(p.dim).child(`${busy} of ${state.repos.length} repos have agents`))
     .child(textButton("herd-filter", agents.only ? "Show all" : "With agents", p, agents.toggle, agents.only));
+}
+
+/** One repo in the strip: its agents, its name, what's going on; the branch in the tooltip. */
+function repoChip(repo: HerdRepo, state: HerdState, p: Palette, onPick: (path: string, cx: Context) => void, chips: readonly AgentChip[]): Element {
+  const result = state.statuses[repo.path];
+  const here = repo.path === state.selected;
+  const branch = result?.status ? (result.status.branch ?? "detached") : result?.untrusted ? "needs trust" : result?.error ? "error" : "…";
+  return h_flex()
+    .id(`chip:${repo.path}`)
+    .h(22)
+    .px(8)
+    .gap(6)
+    .items_center()
+    .flex_shrink_0()
+    .rounded(4)
+    .border_1()
+    .border_color(here ? p.accent : p.border)
+    .cursor_pointer()
+    .when(here, (el) => el.bg(p.selected))
+    .hover((el) => el.bg(here ? p.selected : p.hover))
+    .tooltip(chipTip(repo, state.repos, branch))
+    .on_click((_e, cx) => onPick(repo.path, cx))
+    .when(chips.length > 0, (el) => el.child(h_flex().gap(3).items_center().children(agentDots(chips, p))))
+    .child(div().max_w(180).truncate().text_color(here ? p.foreground : p.muted).child(repo.name))
+    .child(h_flex().gap(6).items_center().text_xs().text_color(p.muted).children(statusBadges(result, p)));
+}
+
+/** A thin line after the root repo's chip: the ones past it sit inside it. */
+const rootDivider = (p: Palette): Element => div().id("strip-root-divider").w(1).h(16).mx(2).flex_shrink_0().bg(p.border);
+
+/** Every repo at once under the header, so switching takes one click; wraps rather than hides. */
+export function repoStrip(state: HerdState, p: Palette, onPick: (path: string, cx: Context) => void, byRepo: HerdAgents["byRepo"]): Element | null {
+  if (state.repos.length < 2) return null;
+  return h_flex()
+    .id("repo-strip")
+    .flex_wrap()
+    .items_center()
+    .gap(4)
+    .px(8)
+    .py(5)
+    .flex_shrink_0()
+    .text_xs()
+    .border_b_1()
+    .border_color(p.border)
+    .children(
+      groupRepos(state.repos).flatMap((g) =>
+        g.repos.flatMap((r) => {
+          const chip = repoChip(r, state, p, onPick, byRepo[r.path] ?? []);
+          return r.isRoot ? [chip, rootDivider(p)] : [chip];
+        }),
+      ),
+    );
 }
 
 export function repoList(state: HerdState, p: Palette, onPick: (path: string, cx: Context) => void, agents: HerdAgents): Element {

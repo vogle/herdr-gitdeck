@@ -1,5 +1,5 @@
-// Interactive rebase (M4) without an editor: gitdeck writes git's todo list
-// and has git copy it in place of opening one.
+// Squashing a commit's later commits into it, as an interactive rebase without
+// an editor: gitdeck writes git's todo list and has git copy it in place of opening one.
 
 import { logArgs, parseLog, type Commit } from "./git/log.ts";
 import type { Git, Target } from "./git/runner.ts";
@@ -23,8 +23,6 @@ export interface RebasePlan {
   steps: readonly Step[];
 }
 
-const NEXT: Record<StepAction, StepAction> = { pick: "squash", squash: "fixup", fixup: "drop", drop: "pick" };
-
 /** `commits` newest first, as `git log` gives them. */
 export function planOf(base: string | null, commits: readonly Commit[]): RebasePlan {
   return {
@@ -33,17 +31,13 @@ export function planOf(base: string | null, commits: readonly Commit[]): RebaseP
   };
 }
 
-export function cycleStep(plan: RebasePlan, index: number): RebasePlan {
-  return { ...plan, steps: plan.steps.map((s, i) => (i === index ? { ...s, action: NEXT[s.action] } : s)) };
+/** The oldest commit stays, with its message; every later one folds into it. */
+export function squashPlan(plan: RebasePlan): RebasePlan {
+  return { ...plan, steps: plan.steps.map((s, i) => ({ ...s, action: i === 0 ? "pick" : "fixup" })) };
 }
 
-export function moveStep(plan: RebasePlan, index: number, by: -1 | 1): RebasePlan {
-  const to = index + by;
-  const a = plan.steps[index];
-  const b = plan.steps[to];
-  if (!a || !b) return plan;
-  return { ...plan, steps: plan.steps.map((s, i) => (i === index ? b : i === to ? a : s)) };
-}
+/** What the rebase replays onto: the chosen commit's parent, or null from the root. */
+export const squashBase = (hash: string, parents: number): string | null => (parents === 0 ? null : `${hash}^`);
 
 export function todoText(plan: RebasePlan): string {
   return plan.steps
@@ -54,10 +48,8 @@ export function todoText(plan: RebasePlan): string {
 
 /** Why the plan can't run, or null. */
 export function planProblem(plan: RebasePlan): string | null {
-  if (plan.steps.some((s) => s.merge)) return "The range holds a merge commit: rebase it from a later commit";
-  const kept = plan.steps.filter((s) => s.action !== "drop");
-  if (plan.steps.length === 0) return "Nothing to rebase";
-  if (kept[0] && kept[0].action !== "pick") return "The first kept commit must be a pick: there is nothing to squash it into";
+  if (plan.steps.some((s) => s.merge)) return "The range holds a merge commit: squash from a later commit";
+  if (plan.steps.length < 2) return "Nothing to squash: no commits after this one";
   return null;
 }
 

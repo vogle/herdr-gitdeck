@@ -2,14 +2,15 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, writeFile, readFile, rm, realpath } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile, readFile, rm, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createGit, type Exec } from "../src/core/git/runner.ts";
-import { applyPicks, commitChanges, discardFiles, loadStageDiff, stageFiles, unstageFiles } from "../src/core/staging.ts";
+import { applyPicks, commitChanges, discardFiles, discardFolder, loadStageDiff, stageFiles, unstageFiles } from "../src/core/staging.ts";
 
 // A commit hook runs with GIT_INDEX_FILE and friends set; the test repos must not inherit them.
-const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+// GIT_CONFIG_GLOBAL keeps the user's ~/.gitconfig (hook templates, trace2 targets) out of the test repos.
+const env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_"))), GIT_CONFIG_GLOBAL: "/dev/null" };
 
 const exec: Exec = (command, args, options) =>
   new Promise((resolve, reject) => {
@@ -30,7 +31,7 @@ const lines = (n: number, f: (i: number) => string) => `${Array.from({ length: n
 
 before(async () => {
   at = { cwd: await realpath(await mkdtemp(join(tmpdir(), "gitdeck-stage-"))), on: null };
-  for (const a of [["init", "-q", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "t"], ["config", "commit.gpgsign", "false"]]) await git(at, a);
+  for (const a of [["init", "-q", "--template=", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "t"], ["config", "commit.gpgsign", "false"]]) await git(at, a);
   await writeFile(join(at.cwd, "f.txt"), lines(20, (i) => `line ${i}`));
   await stageFiles(git, at, ["f.txt"]);
   assert.equal(await commitChanges(git, at, "first", false), null);
@@ -74,6 +75,16 @@ test("a file named like pathspec magic is only itself: discarding it deletes not
   await writeFile(join(at.cwd, "keep.txt"), "keep\n");
   assert.equal(await discardFiles(git, at, [{ path: ":(glob)*", untracked: true }]), null);
   assert.equal(await readFile(join(at.cwd, ":(glob)*"), "utf8").catch(() => null), null);
+  assert.equal(await readFile(join(at.cwd, "keep.txt"), "utf8"), "keep\n");
+  await rm(join(at.cwd, "keep.txt"));
+});
+
+test("discarding a new folder deletes it and what's inside, nothing else", async () => {
+  await mkdir(join(at.cwd, "new", "deep"), { recursive: true });
+  await writeFile(join(at.cwd, "new", "deep", "x.txt"), "x\n");
+  await writeFile(join(at.cwd, "keep.txt"), "keep\n");
+  assert.equal(await discardFolder(git, at, "new/", true, []), null);
+  assert.equal(await readFile(join(at.cwd, "new", "deep", "x.txt"), "utf8").catch(() => null), null);
   assert.equal(await readFile(join(at.cwd, "keep.txt"), "utf8"), "keep\n");
   await rm(join(at.cwd, "keep.txt"));
 });

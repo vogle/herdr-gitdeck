@@ -9,7 +9,8 @@ import { createGit, type Exec } from "../src/core/git/runner.ts";
 import { loadBlame, loadFileLog, loadReflog, takeSideArgs } from "../src/core/inspect.ts";
 
 // A git hook running these tests sets GIT_AUTHOR_NAME and the like: drop them.
-const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+// GIT_CONFIG_GLOBAL keeps the user's ~/.gitconfig (hook templates, trace2 targets) out of the test repos.
+const env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_"))), GIT_CONFIG_GLOBAL: "/dev/null" };
 const exec: Exec = (command, args, options) =>
   new Promise((resolve, reject) => {
     execFile(command, args, { cwd: options.cwd, encoding: "utf8", env }, (error, stdout, stderr) => {
@@ -24,7 +25,7 @@ const head = async () => (await git(at, ["rev-parse", "HEAD"])).trim();
 
 before(async () => {
   at = { cwd: await realpath(await mkdtemp(join(tmpdir(), "gitdeck-inspect-"))), on: null };
-  for (const a of [["init", "-q", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "Tess"], ["config", "commit.gpgsign", "false"]]) await git(at, a);
+  for (const a of [["init", "-q", "--template=", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "Tess"], ["config", "commit.gpgsign", "false"]]) await git(at, a);
   await writeFile(join(at.cwd, "a.txt"), "one\ntwo\n");
   await git(at, ["add", "a.txt"]);
   await commit("first");
@@ -92,22 +93,11 @@ test("a conflict resolved block by block is written and staged", async () => {
   await git(at, ["merge", "--abort"]);
 });
 
-test("stats count the commits, the author and the files", async () => {
-  const { loadStats } = await import("../src/core/stats.ts");
-  const s = await loadStats(git, at);
-  assert.equal(s.error, null);
-  // first, second, rename, main: "side" is on another branch, not in HEAD.
-  assert.equal(s.commits, 4);
-  assert.deepEqual(s.authors.map((a) => [a.name, a.count]), [["Tess", 4]]);
-  assert.equal(s.files, 1);
-  assert.equal(s.months.reduce((n, m) => n + m.count, 0), 4);
-});
-
 test("an LFS pointer and a submodule at a commit are described, never fetched or entered", async () => {
   const { loadTree, loadBlob } = await import("../src/core/tree.ts");
   const t = { cwd: await realpath(await mkdtemp(join(tmpdir(), "gitdeck-lfs-"))), on: null as string | null };
   try {
-    for (const a of [["init", "-q", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "Tess"], ["config", "commit.gpgsign", "false"]]) await git(t, a);
+    for (const a of [["init", "-q", "--template=", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "Tess"], ["config", "commit.gpgsign", "false"]]) await git(t, a);
     await writeFile(join(t.cwd, "big.bin"), `version https://git-lfs.github.com/spec/v1\noid sha256:${"d".repeat(64)}\nsize 999\n`);
     await writeFile(join(t.cwd, ".gitmodules"), '[submodule "lib"]\n\tpath = lib\n\turl = https://example.com/lib.git\n');
     await git(t, ["add", "big.bin", ".gitmodules"]);
@@ -130,7 +120,7 @@ test("an image diff writes both versions byte for byte, once each", async () => 
   const t = { cwd: await realpath(await mkdtemp(join(tmpdir(), "gitdeck-img-"))), on: null as string | null };
   const cacheDir = await mkdtemp(join(tmpdir(), "gitdeck-cache-"));
   try {
-    for (const a of [["init", "-q", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "Tess"], ["config", "commit.gpgsign", "false"]]) await git(t, a);
+    for (const a of [["init", "-q", "--template=", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "Tess"], ["config", "commit.gpgsign", "false"]]) await git(t, a);
     const v1 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xff, 0x00, 0x01]);
     const v2 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0xfe, 0x80, 0x02, 0x03]);
     await writeFile(join(t.cwd, "pic.png"), v1);

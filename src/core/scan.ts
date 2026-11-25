@@ -1,7 +1,7 @@
 // Reading the herd from disk: which repos, and each one's status.
 
 import { GitError, type Exec, type Git, type Target } from "./git/runner.ts";
-import { parseStatus, STATUS_ARGS } from "./git/status.ts";
+import { NEW_FOLDERS_ARGS, ownUpstream, parseNewFolders, parseStatus, STATUS_ARGS } from "./git/status.ts";
 import { FILTER_CHECK_ARGS, repoFilterCommands } from "./git/trust.ts";
 import type { ScanResult, StatusResult } from "./herd.ts";
 import { isInside } from "./paths.ts";
@@ -50,12 +50,25 @@ async function repoFilters(git: Git, target: Target): Promise<string[]> {
   }
 }
 
+/** origin's branch of the same name, for a branch with no upstream; null when origin hasn't it. */
+async function sameOnOrigin(git: Git, target: Target, branch: string): Promise<string | null> {
+  try {
+    await git(target, ["rev-parse", "--verify", "--quiet", `refs/remotes/origin/${branch}`]);
+    return `origin/${branch}`;
+  } catch {
+    return null;
+  }
+}
+
 /** Never runs status where the repo's own config could make it run a program; fails closed. */
 export async function loadStatus(git: Git, target: Target): Promise<StatusResult> {
   try {
     const untrusted = await repoFilters(git, target);
     if (untrusted.length > 0) return { status: null, error: null, untrusted };
-    return { status: parseStatus(await git(target, [...STATUS_ARGS])), error: null };
+    const parsed = ownUpstream(parseStatus(await git(target, [...STATUS_ARGS])));
+    const status = parsed.upstream === null && parsed.branch !== null ? { ...parsed, remoteBranch: await sameOnOrigin(git, target, parsed.branch) } : parsed;
+    if (!status.entries.some((e) => e.kind === "untracked")) return { status, error: null };
+    return { status: { ...status, newFolders: parseNewFolders(await git(target, [...NEW_FOLDERS_ARGS])) }, error: null };
   } catch (error) {
     return { status: null, error: message(error) };
   }

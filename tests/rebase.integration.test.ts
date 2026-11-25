@@ -1,4 +1,4 @@
-// Real git: an interactive rebase run from gitdeck's own todo list.
+// Real git: squashing later commits, run from gitdeck's own todo list.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
@@ -6,9 +6,10 @@ import { mkdtemp, writeFile, readFile, readdir, rm, realpath } from "node:fs/pro
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createGit, type Exec } from "../src/core/git/runner.ts";
-import { cycleStep, loadPlan, moveStep, runPlan } from "../src/core/rebase.ts";
+import { loadPlan, runPlan, squashBase, squashPlan } from "../src/core/rebase.ts";
 
-const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+// GIT_CONFIG_GLOBAL keeps the user's ~/.gitconfig (hook templates, trace2 targets) out of the test repos.
+const env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_"))), GIT_CONFIG_GLOBAL: "/dev/null" };
 const exec: Exec = (command, args, options) =>
   new Promise((resolve, reject) => {
     execFile(command, args, { cwd: options.cwd, encoding: "utf8", env }, (error, stdout, stderr) => {
@@ -27,7 +28,7 @@ const subjects = async () => (await git(at, ["log", "--format=%s"])).trim().spli
 
 before(async () => {
   at = { cwd: await realpath(await mkdtemp(join(tmpdir(), "gitdeck-rebase-"))), on: null };
-  for (const a of [["init", "-q", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "t"], ["config", "commit.gpgsign", "false"]]) await git(at, a);
+  for (const a of [["init", "-q", "--template=", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "t"], ["config", "commit.gpgsign", "false"]]) await git(at, a);
   for (const n of ["base", "one", "two", "three"]) {
     await writeFile(join(at.cwd, `${n}.txt`), `${n}\n`);
     await git(at, ["add", `${n}.txt`]);
@@ -37,28 +38,18 @@ before(async () => {
 
 after(() => rm(at.cwd, { recursive: true, force: true }));
 
-test("reorder and drop, with no editor", async () => {
-  const base = (await git(at, ["rev-parse", "HEAD~3"])).trim();
-  const loaded = await loadPlan(git, at, base);
+test("squashing B keeps A and one commit B' with B's message and D's files", async () => {
+  const b = (await git(at, ["rev-parse", "HEAD~2"])).trim();
+  const tree = (await git(at, ["rev-parse", "HEAD^{tree}"])).trim();
+  const loaded = await loadPlan(git, at, squashBase(b, 1));
   assert.ok(loaded.plan);
   assert.deepEqual(loaded.plan.steps.map((s) => s.subject), ["one", "two", "three"]);
-  let plan = cycleStep(cycleStep(loaded.plan, 1), 1); // two: fixup
-  plan = moveStep(plan, 2, -1); // three before two
-  plan = cycleStep(plan, 2); // two: fixup -> drop
-  assert.deepEqual(plan.steps.map((s) => `${s.action} ${s.subject}`), ["pick one", "pick three", "drop two"]);
-  assert.equal(await runPlan(git, files, at, plan), null);
-  assert.deepEqual(await subjects(), ["three", "one", "base"]);
+  assert.equal(await runPlan(git, files, at, squashPlan(loaded.plan)), null);
+  assert.deepEqual(await subjects(), ["one", "base"]);
+  assert.equal((await git(at, ["log", "-1", "--format=%B"])).trim(), "one");
+  assert.equal((await git(at, ["rev-parse", "HEAD^{tree}"])).trim(), tree, "the files are D's");
   const gitDir = (await git(at, ["rev-parse", "--absolute-git-dir"])).trim();
   assert.deepEqual((await readdir(gitDir)).filter((n) => n.startsWith("gitdeck")), [], "todo file removed");
-});
-
-test("a squash keeps both messages without opening an editor", async () => {
-  const loaded = await loadPlan(git, at, (await git(at, ["rev-parse", "HEAD~2"])).trim());
-  assert.ok(loaded.plan);
-  assert.equal(await runPlan(git, files, at, cycleStep(loaded.plan, 1)), null);
-  const message = await git(at, ["log", "-1", "--format=%B"]);
-  assert.match(message, /one/);
-  assert.match(message, /three/);
 });
 
 test("a remote repo is refused before anything runs", async () => {

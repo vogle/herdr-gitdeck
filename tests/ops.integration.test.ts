@@ -12,7 +12,8 @@ import {
 } from "../src/core/ops.ts";
 
 // A commit hook runs with GIT_INDEX_FILE and friends set; the test repos must not inherit them.
-const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+// GIT_CONFIG_GLOBAL keeps the user's ~/.gitconfig (hook templates, trace2 targets) out of the test repos.
+const env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_"))), GIT_CONFIG_GLOBAL: "/dev/null" };
 
 const exec: Exec = (command, args, options) =>
   new Promise((resolve, reject) => {
@@ -37,11 +38,11 @@ const commit = async (file: string, text: string, msg: string, t = at) => {
 
 before(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "gitdeck-ops-")));
-  await git({ cwd: root, on: null }, ["init", "-q", "--bare", "-b", "main", "remote.git"]);
+  await git({ cwd: root, on: null }, ["init", "-q", "--template=", "--bare", "-b", "main", "remote.git"]);
   for (const name of ["a", "b"]) {
     await mkdir(join(root, name));
     const t = { cwd: join(root, name), on: null };
-    for (const args of [["init", "-q", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "t"], ["config", "commit.gpgsign", "false"], ["remote", "add", "origin", join(root, "remote.git")]]) await git(t, args);
+    for (const args of [["init", "-q", "--template=", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "t"], ["config", "commit.gpgsign", "false"], ["remote", "add", "origin", join(root, "remote.git")]]) await git(t, args);
   }
   at = { cwd: join(root, "a"), on: null };
   other = { cwd: join(root, "b"), on: null };

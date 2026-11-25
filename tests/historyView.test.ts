@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   emptyView, forRepo, withHistory, rebuild, selectCommit, withCommit, openFile, withDiff, closeFile,
-  setQuery, toggleSidebar, showMore, jumpTo, PAGE,
+  setQuery, showMore, jumpTo, PAGE,
 } from "../src/core/historyView.ts";
 import { EMPTY_HISTORY, UNCOMMITTED, type History } from "../src/core/history.ts";
 import type { Commit } from "../src/core/git/log.ts";
@@ -18,7 +18,6 @@ test("forRepo starts over for another repo and keeps the view for the same one",
   assert.equal(other.repo, "/other");
   assert.equal(other.history, null);
   assert.equal(other.selected, null);
-  assert.equal(other.sidebar, v.sidebar);
 });
 
 test("withHistory ignores a history for a repo no longer shown", () => {
@@ -79,13 +78,29 @@ test("late answers for another commit or file are ignored", () => {
   assert.equal(closeFile(f).file, null);
 });
 
-test("sidebar, paging and jumping to a ref", () => {
+test("paging and jumping to a ref", () => {
   const v = view();
-  assert.equal(toggleSidebar(toggleSidebar(v)).sidebar, v.sidebar);
   assert.equal(showMore(v).limit, v.limit + PAGE);
   const j = jumpTo(setQuery(v, "zzz"), "h1");
   assert.equal(j.selected, "h1");
   assert.equal(j.query, "", "jumping clears the search so the commit is visible");
   assert.equal(j.scrollTo, 1);
   assert.equal(jumpTo(v, "nope"), v);
+});
+
+test("withAgents keeps a commit's agent sessions, and a new selection clears them", async () => {
+  const { withAgents } = await import("../src/core/historyView.ts");
+  const s = { id: "s", source: "entire", confidence: "exact", agent: "Claude Code", model: null, time: 0, tokens: null, prompt: null } as const;
+  const v = withAgents(selectCommit(view(), "h2"), "h2", [s]);
+  assert.deepEqual(v.agents, [s]);
+  assert.equal(withAgents(v, "h1", []), v);
+  assert.equal(selectCommit(v, "h1").agents, null);
+});
+
+test("withLinked marks the commits with a recorded agent session, for the shown repo only", async () => {
+  const { withLinked } = await import("../src/core/historyView.ts");
+  const v = withLinked(view(), "/r", new Set(["h1"]));
+  assert.ok(v.linked.has("h1"));
+  assert.equal(withLinked(v, "/old", new Set()), v);
+  assert.equal(forRepo(v, "/other").linked.size, 0);
 });

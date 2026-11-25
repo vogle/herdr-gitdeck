@@ -31,3 +31,9 @@ export function relative(folder: string, path: string): string {
   if (p === f) return "";
   return f === "/" ? p.slice(1) : p.slice(f.length + 1);
 }
+
+/** A repo path as a file name and the folder before it; an untracked folder ("docs/") keeps its slash in the name. */
+export function nameAndFolder(path: string): { name: string; folder: string } {
+  const cut = path.lastIndexOf("/", path.endsWith("/") ? path.length - 2 : path.length - 1);
+  return { name: path.slice(cut + 1), folder: path.slice(0, cut + 1) };
+}

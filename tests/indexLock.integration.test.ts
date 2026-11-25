@@ -12,7 +12,8 @@ import { STATUS_ARGS } from "../src/core/git/status.ts";
 import { worktreeDiffArgs } from "../src/core/git/show.ts";
 import { unstagedDiffArgs } from "../src/core/stage.ts";
 
-const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+// GIT_CONFIG_GLOBAL keeps the user's ~/.gitconfig (hook templates, trace2 targets) out of the test repos.
+const env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_"))), GIT_CONFIG_GLOBAL: "/dev/null" };
 const exec: Exec = (command, args, options) =>
   new Promise((resolve, reject) => {
     execFile(command, args, { cwd: options.cwd, encoding: "utf8", env }, (error, stdout, stderr) => {
@@ -25,7 +26,7 @@ let at = { cwd: "", on: null as string | null };
 
 before(async () => {
   at = { cwd: await realpath(await mkdtemp(join(tmpdir(), "gitdeck-index-"))), on: null };
-  for (const a of [["init", "-q", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "t"], ["config", "commit.gpgsign", "false"]]) await git(at, a);
+  for (const a of [["init", "-q", "--template=", "-b", "main"], ["config", "user.email", "t@x.io"], ["config", "user.name", "t"], ["config", "commit.gpgsign", "false"]]) await git(at, a);
   await writeFile(join(at.cwd, "f.txt"), "one\n");
   await git(at, ["add", "f.txt"]);
   await git(at, ["commit", "-q", "-m", "first"]);

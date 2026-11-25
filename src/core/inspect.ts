@@ -3,24 +3,33 @@
 
 import { logArgs, parseLog, type Commit } from "./git/log.ts";
 import type { Git, Target } from "./git/runner.ts";
-import type { BlobView, TreeFile } from "./tree.ts";
-import type { Stats } from "./stats.ts";
+import type { TreeFile } from "./tree.ts";
 import type { PrList } from "./forge/index.ts";
 
 /** A commit's version of the file: the work-tree one would run clean filters. */
 export const blameArgs = (rev: string, path: string): string[] =>
   ["blame", "--porcelain", "--no-textconv", "--no-progress", rev, "--", path];
 
+/** The revision to blame a commit diff's file at: before the commit when the commit deleted it (it isn't there after). */
+export function blameRev(source: { hash: string; parents: readonly string[] }, deleted: boolean): string {
+  return deleted ? (source.parents[0] ?? source.hash) : source.hash;
+}
+
 export interface BlameLine {
   hash: string;
   /** The line's number in this version. */
   line: number;
+  /** Its number and file in the commit that wrote it, where Git AI's notes name lines. */
+  origLine: number;
+  origPath: string;
   text: string;
   author: string;
   time: number;
   summary: string;
   /** The first line of a run from the same commit. */
   first: boolean;
+  /** The agent that wrote the line, when Git AI recorded it. */
+  agent?: string;
 }
 
 interface CommitInfo {
@@ -29,7 +38,7 @@ interface CommitInfo {
   summary: string;
 }
 
-const HEADER = /^([0-9a-f]{40,64}) \d+ (\d+)(?: \d+)?$/;
+const HEADER = /^([0-9a-f]{40,64}) (\d+) (\d+)(?: \d+)?$/;
 
 /** `--porcelain` names a commit's details once, at its first line. */
 export function parseBlame(output: string): BlameLine[] {
@@ -37,11 +46,14 @@ export function parseBlame(output: string): BlameLine[] {
   const lines: BlameLine[] = [];
   let hash = "";
   let line = 0;
+  let origLine = 0;
+  let origPath = "";
   for (const raw of output.split("\n")) {
     const header = HEADER.exec(raw);
     if (header) {
       hash = header[1] ?? "";
-      line = Number(header[2]);
+      origLine = Number(header[2]);
+      line = Number(header[3]);
       if (!info.has(hash)) info.set(hash, { author: "", time: 0, summary: "" });
       continue;
     }
@@ -49,12 +61,21 @@ export function parseBlame(output: string): BlameLine[] {
     if (!current) continue;
     if (raw.startsWith("\t")) {
       const prev = lines.at(-1);
-      lines.push({ hash, line, text: raw.slice(1), ...current, first: prev?.hash !== hash });
+      lines.push({ hash, line, origLine, origPath, text: raw.slice(1), ...current, first: prev?.hash !== hash });
     } else if (raw.startsWith("author ")) current.author = raw.slice(7);
     else if (raw.startsWith("author-time ")) current.time = Number(raw.slice(12)) || 0;
     else if (raw.startsWith("summary ")) current.summary = raw.slice(8);
+    // Only a block's first line names the file; the lines after it share it.
+    else if (raw.startsWith("filename ")) origPath = raw.slice(9);
   }
   return lines;
+}
+
+/** A blame line's head cell: the commit at a block's first line, and the agent on each line one wrote. */
+export function blameHead(l: BlameLine): string {
+  const who = l.agent ?? l.author;
+  if (l.first) return `${l.hash.slice(0, 7)} ${who}`;
+  return l.agent ?? "";
 }
 
 /** The commits that changed a file, following its renames, from `rev` back. */
@@ -114,6 +135,5 @@ export type InspectView =
   | { kind: "blame"; path: string; rev: string; data: Loaded<BlameLine> | null }
   | { kind: "file-log"; path: string; rev: string; data: Loaded<Commit> | null }
   | { kind: "reflog"; data: Loaded<ReflogEntry> | null }
-  | { kind: "stats"; data: Stats | null }
   | { kind: "prs"; data: PrList | null }
-  | { kind: "tree"; rev: string; data: Loaded<TreeFile> | null; file: TreeFile | null; blob: BlobView | null };
+  | { kind: "tree"; rev: string; data: Loaded<TreeFile> | null; open: ReadonlySet<string> };
